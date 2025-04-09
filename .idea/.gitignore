@@ -1,0 +1,54 @@
+# Default ignored files
+/shelf/
+/workspace.xml
+# Editor-based HTTP Client requests
+/httpRequests/
+# Datasource local storage ignored files
+/dataSources/
+/dataSources.local.xml
+
+# Virtual environment
+venv/
+
+# Secret environment variables
+.env
+
+# Compiled Python files
+__pycache__/
+*.pyc
+*.pyo
+
+# Django-specific files
+db.sqlite3  # Ignore if using SQLite (PostgreSQL users should exclude this)
+*.log
+
+# Node.js dependencies (Vue.js frontend)
+frontend/node_modules/
+frontend/dist/
+
+# Vue.js build files
+frontend/.vite/
+frontend/.nuxt/
+frontend/.eslintcache
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# IDE and macOS system files
+.idea/
+.vscode/
+.DS_Store
+
+# Migrations (optional)
+**/migrations/*.pyc
+
+# Vue.js config files (optional, avoid tracking unless necessary)
+frontend/package-lock.json
+frontend/yarn.lock
+
+# Exclude local development settings
+frontend/config/local.js
+frontend/config/*.local.js
+
