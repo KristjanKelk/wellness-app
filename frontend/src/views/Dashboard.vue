@@ -1,3 +1,4 @@
+<!-- Dashboard.vue -->
 <template>
   <div class="dashboard">
     <h1>Health Dashboard</h1>
@@ -36,7 +37,7 @@ export default {
       return this.$store.state.auth.user;
     }
   },
-  mounted() {
+  created() {
     if (!this.currentUser) {
       this.$router.push('/login');
     }

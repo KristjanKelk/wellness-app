@@ -23,9 +23,13 @@ export default {
   name: 'AppHeader',
   computed: {
     isLoggedIn() {
-      return this.$store.state.auth && this.$store.state.auth.status &&
-          this.$store.state.auth.status.loggedIn;
+      const authState = this.$store.state.auth;
+      console.log('Auth state:', authState);
+      return authState && authState.status && authState.status.loggedIn;
     }
+  },
+  created() {
+    console.log('AppHeader created, loggedIn status:', this.isLoggedIn);
   },
   methods: {
     logout() {

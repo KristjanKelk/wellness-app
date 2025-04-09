@@ -12,7 +12,13 @@ class AuthService {
             })
             .then(response => {
                 if (response.data.access) {
-                    localStorage.setItem('user', JSON.stringify(response.data));
+                    const userData = {
+                        ...response.data,
+                        username: username
+                    };
+                    localStorage.setItem('user', JSON.stringify(userData));
+                    console.log('User data stored in localStorage:', userData);
+                    return userData;
                 }
                 return response.data;
             });
@@ -20,6 +26,7 @@ class AuthService {
 
     logout() {
         localStorage.removeItem('user');
+        console.log('User data removed from localStorage');
     }
 
     register(username, email, password, password2) {
@@ -32,31 +39,53 @@ class AuthService {
     }
 
     refreshToken() {
-        const user = JSON.parse(localStorage.getItem('user'));
+        const userStr = localStorage.getItem('user');
 
-        if (!user || !user.refresh) {
+        if (!userStr) {
+            console.error('No user found in localStorage');
             return Promise.reject('No refresh token available');
         }
 
-        return axios
-            .post(API_URL + 'token/refresh/', {
-                refresh: user.refresh
-            })
-            .then(response => {
-                if (response.data.access) {
-                    const updatedUser = {
-                        ...user,
-                        access: response.data.access
-                    };
-                    localStorage.setItem('user', JSON.stringify(updatedUser));
-                    return response.data;
-                }
-                return Promise.reject('Failed to refresh token');
-            });
+        try {
+            const user = JSON.parse(userStr);
+
+            if (!user.refresh) {
+                console.error('No refresh token found in user data');
+                return Promise.reject('No refresh token available');
+            }
+
+            return axios
+                .post(API_URL + 'token/refresh/', {
+                    refresh: user.refresh
+                })
+                .then(response => {
+                    if (response.data.access) {
+                        const updatedUser = {
+                            ...user,
+                            access: response.data.access
+                        };
+                        localStorage.setItem('user', JSON.stringify(updatedUser));
+                        console.log('Token refreshed and stored:', updatedUser);
+                        return response.data;
+                    }
+                    return Promise.reject('Failed to refresh token');
+                });
+        } catch (e) {
+            console.error('Error parsing user data:', e);
+            return Promise.reject('Invalid user data');
+        }
     }
 
     getCurrentUser() {
-        return JSON.parse(localStorage.getItem('user'));
+        const userStr = localStorage.getItem('user');
+        if (!userStr) return null;
+
+        try {
+            return JSON.parse(userStr);
+        } catch (e) {
+            console.error('Error parsing current user:', e);
+            return null;
+        }
     }
 }
 

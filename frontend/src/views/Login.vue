@@ -60,17 +60,17 @@ export default {
   },
   computed: {
     loggedIn() {
-      // Add null/undefined checks to prevent errors
       return this.$store &&
-      this.$store.state &&
-      this.$store.state.auth &&
-      this.$store.state.auth.status ?
-          this.$store.state.auth.status.loggedIn :
-          false;
+          this.$store.state &&
+          this.$store.state.auth &&
+          this.$store.state.auth.status &&
+          this.$store.state.auth.status.loggedIn;
     }
   },
   created() {
+    console.log('Login component created, checking logged in status');
     if (this.loggedIn) {
+      console.log('Already logged in, redirecting to dashboard');
       this.$router.push('/dashboard');
     }
   },
@@ -78,16 +78,26 @@ export default {
     handleLogin() {
       this.loading = true;
       this.message = '';
+      console.log(`Attempting to login with username: ${this.username}`);
 
       this.$store.dispatch('auth/login', {
         username: this.username,
         password: this.password
       }).then(
-          () => {
-            this.$router.push('/dashboard');
+          (userData) => {
+            console.log('Login successful in component, user data:', userData);
+            this.successful = true;
+            this.message = 'Login successful! Redirecting...';
+
+            // Short delay before redirect for better UX
+            setTimeout(() => {
+              this.$router.push('/dashboard');
+            }, 500);
           },
           error => {
             this.loading = false;
+            this.successful = false;
+            console.error('Login error:', error);
             this.message = (error.response && error.response.data && error.response.data.detail) ||
                 'Failed to login. Please check your credentials.';
           }

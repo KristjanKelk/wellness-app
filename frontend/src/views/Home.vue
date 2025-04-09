@@ -4,8 +4,9 @@
       <h1>Wellness Platform</h1>
       <p>Track your health metrics and get personalized insights</p>
       <div class="hero-actions">
-        <router-link to="/register" class="btn btn-primary">Get Started</router-link>
-        <router-link to="/login" class="btn btn-secondary">Login</router-link>
+        <router-link v-if="!isLoggedIn" to="/register" class="btn btn-primary">Get Started</router-link>
+        <router-link v-if="!isLoggedIn" to="/login" class="btn btn-secondary">Login</router-link>
+        <router-link v-if="isLoggedIn" to="/dashboard" class="btn btn-primary">My Dashboard</router-link>
       </div>
     </div>
     <div class="features">
@@ -27,7 +28,16 @@
 
 <script>
 export default {
-  name: 'Home'
+  name: 'Home',
+  computed: {
+    isLoggedIn() {
+      return this.$store &&
+          this.$store.state &&
+          this.$store.state.auth &&
+          this.$store.state.auth.status &&
+          this.$store.state.auth.status.loggedIn;
+    }
+  }
 }
 </script>
 
