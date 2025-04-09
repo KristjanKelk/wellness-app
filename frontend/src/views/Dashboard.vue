@@ -2,7 +2,7 @@
 <template>
   <div class="dashboard">
     <h1>Health Dashboard</h1>
-    <p>Welcome, {{ currentUser && currentUser.username }}!</p>
+    <p>Welcome, {{ getUsernameDisplay() }}!</p>
 
     <div class="dashboard-content">
       <div class="card">
@@ -34,12 +34,43 @@ export default {
   name: 'Dashboard',
   computed: {
     currentUser() {
-      return this.$store.state.auth.user;
+      if (this.$store && this.$store.state && this.$store.state.auth) {
+        console.log('Auth state in dashboard:', this.$store.state.auth);
+        return this.$store.state.auth.user;
+      }
+      return null;
     }
   },
   created() {
     if (!this.currentUser) {
       this.$router.push('/login');
+    } else {
+      console.log('Current user in dashboard:', this.currentUser);
+    }
+  },
+  methods: {
+    getUsernameDisplay() {
+      if (this.currentUser) {
+        if (this.currentUser.username) {
+          return this.currentUser.username;
+        }
+        if (this.currentUser.access) {
+          try {
+            const base64Url = this.currentUser.access.split('.')[1];
+            const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+            const jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
+              return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+            }).join(''));
+
+            const payload = JSON.parse(jsonPayload);
+            if (payload.username) return payload.username;
+            if (payload.user_id) return `User #${payload.user_id}`;
+          } catch (e) {
+            console.error("Error extracting username from token:", e);
+          }
+        }
+      }
+      return "User";
     }
   }
 }
