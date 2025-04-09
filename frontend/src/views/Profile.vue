@@ -116,16 +116,26 @@ export default {
   methods: {
     fetchProfile() {
       this.loading = true;
+      this.message = '';
+
       HealthProfileService.getHealthProfile()
           .then(response => {
-            if (response.data && response.data.length > 0) {
-              this.profile = response.data[0];
+            console.log('Profile data received:', response.data);
+            if (response.data) {
+              this.profile = response.data;
             }
             this.loading = false;
           })
           .catch(error => {
             console.error('Error fetching profile:', error);
             this.loading = false;
+            if (error.response && error.response.status === 404) {
+              console.log('No profile found, using default values');
+              // Just use the default values from data()
+            } else {
+              this.message = 'Failed to load profile. Please try again.';
+              this.successful = false;
+            }
           });
     },
     saveProfile() {
@@ -133,15 +143,17 @@ export default {
       this.message = '';
 
       HealthProfileService.updateHealthProfile(this.profile)
-          .then(() => {
+          .then(response => {
+            console.log('Profile saved successfully:', response.data);
             this.successful = true;
             this.message = 'Profile saved successfully!';
             this.loading = false;
+            this.profile = response.data;
           })
           .catch(error => {
+            console.error('Error saving profile:', error);
             this.successful = false;
             this.message = 'Failed to save profile. Please try again.';
-            console.error('Error saving profile:', error);
             this.loading = false;
           });
     }

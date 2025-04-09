@@ -1,5 +1,6 @@
 // src/services/http.service.js
 import axios from 'axios';
+import AuthService from './auth.services';
 
 // Create axios instance
 const apiClient = axios.create({
@@ -12,13 +13,11 @@ const apiClient = axios.create({
 // Add request interceptor
 apiClient.interceptors.request.use(
     config => {
-        const userStr = localStorage.getItem('user');
-        if (userStr) {
-            const user = JSON.parse(userStr);
-            if (user && user.access) {
-                config.headers['Authorization'] = 'Bearer ' + user.access;
-            }
+        const user = JSON.parse(localStorage.getItem('user'));
+        if (user && user.access) {
+            config.headers['Authorization'] = 'Bearer ' + user.access;
         }
+        console.log('API Request:', config.method.toUpperCase(), config.url);
         return config;
     },
     error => {
@@ -31,35 +30,23 @@ apiClient.interceptors.response.use(
     response => response,
     async error => {
         const originalRequest = error.config;
-
-        if (error.response.status === 401 && !originalRequest._retry) {
+        if (error.response && error.response.status === 401 && !originalRequest._retry) {
             originalRequest._retry = true;
 
             try {
-                const userStr = localStorage.getItem('user');
-                if (userStr) {
-                    const user = JSON.parse(userStr);
-                    const response = await axios.post('http://localhost:8000/api/token/refresh/', {
-                        refresh: user.refresh
-                    });
+                const refreshResult = await AuthService.refreshToken();
 
-                    if (response.data.access) {
-                        localStorage.setItem('user', JSON.stringify({
-                            ...user,
-                            access: response.data.access
-                        }));
-
-                        apiClient.defaults.headers.common['Authorization'] = 'Bearer ' + response.data.access;
-                        return apiClient(originalRequest);
-                    }
+                if (refreshResult && refreshResult.access) {
+                    originalRequest.headers['Authorization'] = 'Bearer ' + refreshResult.access;
+                    return axios(originalRequest);
                 }
-            } catch (_error) {
-                localStorage.removeItem('user');
-                window.location = '/login';
-                return Promise.reject(_error);
+            } catch (refreshError) {
+                console.error('Token refresh failed:', refreshError);
+                AuthService.logout();
+                window.location.href = '/login';
+                return Promise.reject(refreshError);
             }
         }
-
         return Promise.reject(error);
     }
 );

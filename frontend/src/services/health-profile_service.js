@@ -1,24 +1,25 @@
 // src/services/health-profile.service.js
-import axios from 'axios';
-import authHeader from './auth-header';
-
-const API_URL = 'http://localhost:8000/api/';
+import apiClient from './http.service';
 
 class HealthProfileService {
     getHealthProfile() {
-        return axios.get(API_URL + 'health-profiles/my-profile/', { headers: authHeader() });
+        return apiClient.get('health-profiles/my_profile/');
     }
 
     updateHealthProfile(profileData) {
-        return axios.put(API_URL + 'health-profiles/my-profile/', profileData, { headers: authHeader() });
+        return apiClient.put('health-profiles/my_profile/', profileData);
+    }
+
+    createHealthProfile(profileData) {
+        return apiClient.post('health-profiles/', profileData);
     }
 
     addWeightEntry(weight) {
-        return axios.post(API_URL + 'weight-history/', { weight_kg: weight }, { headers: authHeader() });
+        return apiClient.post('weight-history/', { weight_kg: weight });
     }
 
     getWeightHistory() {
-        return axios.get(API_URL + 'weight-history/', { headers: authHeader() });
+        return apiClient.get('weight-history/');
     }
 }
 

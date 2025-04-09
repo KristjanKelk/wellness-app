@@ -2,8 +2,8 @@
 from rest_framework import viewsets, permissions, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from .models import HealthProfile, WeightHistory  # Changed from WeightEntry to WeightHistory
-from .serializers import HealthProfileSerializer, WeightHistorySerializer  # Update this too
+from .models import HealthProfile, WeightHistory
+from .serializers import HealthProfileSerializer, WeightHistorySerializer
 
 class HealthProfileViewSet(viewsets.ModelViewSet):
     """
@@ -13,11 +13,9 @@ class HealthProfileViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
-        # Only return the user's own health profile
         return HealthProfile.objects.filter(user=self.request.user)
 
     def perform_create(self, serializer):
-        # Associate the health profile with the current user
         serializer.save(user=self.request.user)
 
     @action(detail=False, methods=['get'])
@@ -32,24 +30,49 @@ class HealthProfileViewSet(viewsets.ModelViewSet):
         except HealthProfile.DoesNotExist:
             return Response({'detail': 'Health profile not found'}, status=status.HTTP_404_NOT_FOUND)
 
+    @action(detail=False, methods=['get', 'put', 'patch'])
+    def my_profile(self, request):
+        """
+        Get or update the current user's health profile
+        """
+        try:
+            profile = HealthProfile.objects.get(user=request.user)
 
-class WeightHistoryViewSet(viewsets.ModelViewSet):  # Changed from WeightEntry to WeightHistory
+            if request.method in ['PUT', 'PATCH']:
+                serializer = self.get_serializer(profile, data=request.data, partial=request.method=='PATCH')
+                if serializer.is_valid():
+                    serializer.save()
+                    return Response(serializer.data)
+                return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+            serializer = self.get_serializer(profile)
+            return Response(serializer.data)
+
+        except HealthProfile.DoesNotExist:
+            if request.method == 'GET':
+                return Response({'detail': 'Health profile not found'}, status=status.HTTP_404_NOT_FOUND)
+
+            serializer = self.get_serializer(data=request.data)
+            if serializer.is_valid():
+                serializer.save(user=request.user)
+                return Response(serializer.data, status=status.HTTP_201_CREATED)
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+class WeightHistoryViewSet(viewsets.ModelViewSet):
     """
     ViewSet for managing weight history
     """
-    serializer_class = WeightHistorySerializer  # Changed from WeightEntrySerializer
+    serializer_class = WeightHistorySerializer
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
-        # Only return weight entries for the user's health profile
         try:
             health_profile = HealthProfile.objects.get(user=self.request.user)
-            return WeightHistory.objects.filter(health_profile=health_profile)  # Changed from WeightEntry
+            return WeightHistory.objects.filter(health_profile=health_profile)
         except HealthProfile.DoesNotExist:
-            return WeightHistory.objects.none()  # Changed from WeightEntry
+            return WeightHistory.objects.none()
 
     def perform_create(self, serializer):
-        # Associate the weight entry with the user's health profile
         try:
             health_profile = HealthProfile.objects.get(user=self.request.user)
             serializer.save(health_profile=health_profile)

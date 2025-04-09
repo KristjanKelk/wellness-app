@@ -1,17 +1,36 @@
 <!-- AppHeader.vue -->
-<button @click="logout" class="btn btn-danger">Logout</button>
+<template>
+  <header class="app-header">
+    <div class="container">
+      <router-link to="/" class="logo">Wellness Platform</router-link>
+      <nav class="nav-menu">
+        <template v-if="isLoggedIn">
+          <router-link to="/dashboard">Dashboard</router-link>
+          <router-link to="/profile">Profile</router-link>
+          <button @click="logout" class="btn btn-danger">Logout</button>
+        </template>
+        <template v-else>
+          <router-link to="/login">Login</router-link>
+          <router-link to="/register">Register</router-link>
+        </template>
+      </nav>
+    </div>
+  </header>
+</template>
+
 <script>
 export default {
   name: 'AppHeader',
   computed: {
     isLoggedIn() {
-      return this.$store.getters.isAuthenticated
+      return this.$store.state.auth && this.$store.state.auth.status &&
+          this.$store.state.auth.status.loggedIn;
     }
   },
   methods: {
     logout() {
-      this.$store.dispatch('auth/logout')
-      this.$router.push('/login')
+      this.$store.dispatch('auth/logout');
+      this.$router.push('/login');
     }
   }
 }
@@ -43,6 +62,7 @@ export default {
 .nav-menu {
   display: flex;
   gap: 1.5rem;
+  align-items: center;
 }
 
 .nav-menu a {
@@ -59,5 +79,18 @@ export default {
 .nav-menu a.router-link-exact-active {
   color: #4CAF50;
   border-bottom: 2px solid #4CAF50;
+}
+
+.btn {
+  cursor: pointer;
+  padding: 0.5rem 1rem;
+  border: none;
+  border-radius: 4px;
+  font-weight: bold;
+}
+
+.btn-danger {
+  background-color: #dc3545;
+  color: white;
 }
 </style>

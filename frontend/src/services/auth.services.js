@@ -49,9 +49,14 @@ class AuthService {
                         access: response.data.access
                     };
                     localStorage.setItem('user', JSON.stringify(updatedUser));
+                    return response.data;
                 }
-                return response.data;
+                return Promise.reject('Failed to refresh token');
             });
+    }
+
+    getCurrentUser() {
+        return JSON.parse(localStorage.getItem('user'));
     }
 }
 

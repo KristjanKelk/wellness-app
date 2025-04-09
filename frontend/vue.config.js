@@ -22,7 +22,17 @@ module.exports = defineConfig({
         target: 'http://localhost:8000',
         changeOrigin: true
       }
+    },
+    webSocketServer: {
+      options: {
+        host: '0.0.0.0'
+      }
+    },
+    client: {
+      webSocketURL: {
+        hostname: 'localhost',
+        port: 8080
+      },
     }
   }
 })
-
