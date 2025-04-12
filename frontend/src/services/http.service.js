@@ -1,6 +1,6 @@
 // src/services/http.service.js
 import axios from 'axios';
-import AuthService from './auth.services';
+import AuthService from './auth.service';
 import store from '../store';
 
 // Create axios instance
@@ -15,72 +15,72 @@ const apiClient = axios.create({
 // Add request interceptor
 apiClient.interceptors.request.use(
     config => {
-        let token = null;
-        if (store && store.state && store.state.auth && store.state.auth.user) {
-            token = store.state.auth.user.access;
-        }
-        if (!token) {
-            const userStr = localStorage.getItem('user') || sessionStorage.getItem('user');
-            if (userStr) {
-                try {
-                    const user = JSON.parse(userStr);
-                    if (user && user.access) {
-                        token = user.access;
-                    }
-                } catch (e) {
-                    console.error('Error parsing user data in HTTP interceptor:', e);
-                }
-            }
-        }
-
+        const token = getAccessToken();
         if (token) {
             config.headers['Authorization'] = 'Bearer ' + token;
         }
 
-        console.log('API Request:', config.method.toUpperCase(), config.url);
         return config;
     },
     error => {
-        console.error('Request error in interceptor:', error);
+        console.error('API request error:', error);
         return Promise.reject(error);
     }
 );
 
 apiClient.interceptors.response.use(
-    response => {
-        return response;
-    },
+    response => response,
     async error => {
         const originalRequest = error.config;
-        if (error.response && error.response.status === 401 && !originalRequest._retry) {
-            console.log('Token expired, attempting refresh...');
+        if (error.response?.status === 401 && !originalRequest._retry) {
             originalRequest._retry = true;
 
             try {
-                const refreshResult = await AuthService.refreshToken();
+                const response = await AuthService.refreshToken();
+                if (response?.access) {
+                    originalRequest.headers['Authorization'] = 'Bearer ' + response.access;
 
-                if (refreshResult && refreshResult.access) {
-                    console.log('Token refreshed successfully');
-                    originalRequest.headers['Authorization'] = 'Bearer ' + refreshResult.access;
+                    if (store?.state?.auth?.status?.loggedIn) {
+                        await store.dispatch('auth/refreshToken', response.access);
+                    }
                     return axios(originalRequest);
-                } else {
-                    console.error('Token refresh response incomplete');
-                    throw new Error('Token refresh failed');
                 }
             } catch (refreshError) {
-                console.error('Token refresh failed:', refreshError);
                 AuthService.logout();
+
+                if (store?.state?.auth?.status?.loggedIn) {
+                    store.commit('auth/logout');
+                }
                 setTimeout(() => {
                     window.location.href = '/login';
                 }, 100);
                 return Promise.reject(refreshError);
             }
         }
-        console.error('API Response Error:',
-            error.response ? `${error.response.status} ${error.response.statusText}` : error.message);
+        if (error.response) {
+            console.error(
+                `API Error: ${error.response.status} ${error.response.statusText}`,
+                error.response.data
+            );
+        } else {
+            console.error('API Error:', error.message);
+        }
 
         return Promise.reject(error);
     }
 );
+
+/**
+ * Get the current access token from store or storage
+ * @returns {string|null} Access token or null
+ */
+function getAccessToken() {
+    // Try to get token from store
+    if (store?.state?.auth?.user?.access) {
+        return store.state.auth.user.access;
+    }
+    const user = AuthService.getCurrentUser();
+    return user?.access || null;
+}
 
 export default apiClient;

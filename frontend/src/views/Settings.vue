@@ -267,8 +267,12 @@ export default {
     };
   },
   computed: {
+    //TODO isnt in use yet
     currentUser() {
-      return this.$store.state.auth.user;
+      return this.$store.getters['auth/currentUser'];
+    },
+    hasTwoFactorEnabled() {
+      return this.$store.getters['auth/hasTwoFactorEnabled'];
     }
   },
   mounted() {

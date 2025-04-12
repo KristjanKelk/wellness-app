@@ -56,14 +56,17 @@ export default {
   },
   computed: {
     currentUser() {
-      return this.$store.state.auth.user;
+      return this.$store.getters['auth/currentUser'];
+    },
+    //TODO isn in use yet
+    isEmailVerified() {
+      return this.$store.getters['auth/isEmailVerified'];
     },
     userEmail() {
       return this.currentUser?.email || 'your email address';
     }
   },
   created() {
-    // Redirect to login if not logged in
     if (!this.currentUser) {
       this.$router.push('/login');
     }
@@ -100,16 +103,15 @@ export default {
         const user = response.data;
 
         if (user.email_verified) {
-          // Update user in store with verified status
           this.$store.commit('auth/updateUser', { email_verified: true });
 
           this.successful = true;
           this.message = 'Email verified successfully! Redirecting...';
 
-          // Redirect after short delay
           setTimeout(() => {
             this.$router.push('/dashboard');
           }, 1500);
+
         } else {
           this.successful = false;
           this.message = 'Your email is not verified yet. Please check your inbox and click the verification link.';

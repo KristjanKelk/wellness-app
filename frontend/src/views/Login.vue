@@ -106,11 +106,7 @@ export default {
   },
   computed: {
     loggedIn() {
-      return this.$store &&
-          this.$store.state &&
-          this.$store.state.auth &&
-          this.$store.state.auth.status &&
-          this.$store.state.auth.status.loggedIn;
+      return this.$store.getters['auth/isLoggedIn'];
     }
   },
   created() {

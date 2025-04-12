@@ -24,9 +24,7 @@ export default {
   name: 'AppHeader',
   computed: {
     isLoggedIn() {
-      const authState = this.$store.state.auth;
-      console.log('Auth state:', authState);
-      return authState && authState.status && authState.status.loggedIn;
+      return this.$store.getters['auth/isLoggedIn'];
     }
   },
   created() {

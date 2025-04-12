@@ -105,10 +105,7 @@ export default {
   },
   computed: {
     currentUser() {
-      if (this.$store && this.$store.state && this.$store.state.auth) {
-        return this.$store.state.auth.user;
-      }
-      return null;
+      return this.$store.getters['auth/currentUser'];
     },
     hasProfileData() {
       return this.profile && this.profile.height_cm && this.profile.weight_kg;

@@ -147,7 +147,7 @@ router.beforeEach((to, from, next) => {
         }
     }
 
-    const loggedIn = isValidToken && store.state.auth.status && store.state.auth.status.loggedIn;
+    const loggedIn = isValidToken && store.getters['auth/isLoggedIn'];
 
     console.log(`Route navigation: ${from.path} -> ${to.path}, auth status: ${loggedIn ? 'logged in' : 'not logged in'}`);
     console.log(`Store logged in: ${storeLoggedIn}, valid token: ${isValidToken}`);
@@ -159,6 +159,7 @@ router.beforeEach((to, from, next) => {
         } else {
             const user = store.state.auth.user;
 
+            //should change user && user.email_verified === false to this:!store.getters['auth/isEmailVerified']
             if (user && user.email_verified === false && to.name !== 'VerifyPrompt') {
                 console.log('Email not verified, redirecting to verification prompt');
                 next({ path: '/verify-prompt' });
