@@ -91,7 +91,7 @@ class AuthService {
     }
   }
 
-  /**
+    /**
    * Verify two-factor authentication
    * @param {string} code - 2FA verification code
    * @param {Object} tempAuthData - Temporary auth data from login
@@ -99,26 +99,44 @@ class AuthService {
    */
   async verifyTwoFactorLogin(code, tempAuthData) {
     try {
-      const response = await axios.post(API_URL + 'token/2fa-verify/', {
-        token: tempAuthData.access,
-        code: code
-      });
 
-      if (response.data.access) {
+      // Make sure we have all required data
+      if (!code || !tempAuthData || !tempAuthData.access) {
+        return Promise.reject(new Error('Missing required 2FA verification data'));
+      }
+
+      console.log('Verifying 2FA with code:', code, 'and token data:', {
+      token_length: tempAuthData?.access?.length || 0,
+      has_token: !!tempAuthData?.access
+    });
+
+    // In auth.service.js, modify verifyTwoFactorLogin
+    const response = await axios.post(API_URL + 'token/2fa-verify/', {
+      token: tempAuthData.access,  // Make sure this is the raw token
+      code: code
+    }, {
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    });
+
+      if (response.data && response.data.access) {
         const userData = {
           ...tempAuthData,
           ...response.data,
           two_factor_verified: true
         };
 
+        // Store the user data
         this.storeUser(userData, true);
         return userData;
+      } else {
+        console.error('Incomplete 2FA response:', response.data);
+        return Promise.reject(new Error('Invalid 2FA verification response'));
       }
-
-      return response.data;
     } catch (error) {
       console.error('2FA verification error:', error);
-      throw error;
+      return Promise.reject(error);
     }
   }
 

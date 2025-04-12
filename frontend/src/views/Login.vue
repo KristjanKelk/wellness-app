@@ -186,8 +186,19 @@ export default {
             this.loginSuccess(userData);
           },
           error => {
-            this.handleLoginError(error);
-            // Don't reset the form on 2FA failure to allow retries
+            this.loading = false;
+            this.successful = false;
+            console.error('Login error:', error);
+
+            if (error.response && error.response.data) {
+              if (error.response.data.detail) {
+                this.message = error.response.data.detail;
+              } else {
+                this.message = 'Invalid verification code. Please try again.';
+              }
+            } else {
+              this.message = 'Failed to verify code. Please try again.';
+            }
           }
       );
     },

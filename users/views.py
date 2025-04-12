@@ -440,6 +440,8 @@ class TwoFactorTokenView(APIView):
         """Verify 2FA code and complete login"""
         token = request.data.get('token')
         code = request.data.get('code')
+        print(f"Received token: {token[:10]}... (length: {len(token if token else '')})")
+        print(f"Received code: {code}")
 
         if not token or not code:
             return Response(
@@ -450,11 +452,11 @@ class TwoFactorTokenView(APIView):
         # Validate token
         try:
             from rest_framework_simplejwt.tokens import AccessToken
-            from jose import jwt
+            import jwt
 
             # Decode token without verification
             # (We're just extracting the user ID to look up the 2FA secret)
-            decoded_token = jwt.decode(token, options={"verify_signature": False})
+            decoded_token = jwt.decode(token, options={"verify_signature": False}, algorithms=["HS256"])
             user_id = decoded_token.get('user_id')
 
             if not user_id:
