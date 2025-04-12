@@ -204,6 +204,7 @@ class AuthService {
       const payload = JSON.parse(atob(parts[1]));
       const now = Math.floor(Date.now() / 1000);
 
+      // Make sure to return true if the token is NOT expired
       return !(payload.exp && payload.exp < now);
     } catch (e) {
       console.error('Error validating token:', e);

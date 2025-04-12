@@ -192,8 +192,15 @@ export default {
       );
     },
 
+    // In Login.vue, update the loginSuccess method:
     loginSuccess(userData) {
       console.log('Login successful in component, user data:', userData);
+
+      // Make sure we commit the login success if it hasn't been done yet
+      if (!this.$store.getters['auth/isLoggedIn']) {
+        this.$store.commit('auth/loginSuccess', userData);
+      }
+
       this.successful = true;
       this.message = 'Login successful! Redirecting...';
 
