@@ -13,6 +13,18 @@ export default {
   name: 'App',
   components: {
     AppHeader
+  },
+  created() {
+    // Check authentication status on app load
+    if (this.$store.state.auth &&
+        this.$store.state.auth.status &&
+        this.$store.state.auth.status.loggedIn) {
+      this.$store.dispatch('auth/checkAuth')
+          .catch(() => {
+            // If token validation fails, redirect to login
+            this.$router.push('/login');
+          });
+    }
   }
 }
 </script>

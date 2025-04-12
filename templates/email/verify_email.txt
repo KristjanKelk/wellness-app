@@ -1,0 +1,18 @@
+WELLNESS PLATFORM
+====================
+
+VERIFY YOUR EMAIL ADDRESS
+
+Hello {{ user.first_name|default:user.username }},
+
+Thank you for registering with Wellness Platform. To complete your registration and access all features, please verify your email address by visiting the link below:
+
+{{ verification_url }}
+
+This verification link will expire in 24 hours.
+
+If you did not create an account, you can safely ignore this email.
+
+---
+© {% now "Y" %} Wellness Platform. All rights reserved.
+This is an automated message. Please do not reply to this email.

@@ -7,6 +7,7 @@
         <template v-if="isLoggedIn">
           <router-link to="/dashboard">Dashboard</router-link>
           <router-link to="/profile">Profile</router-link>
+          <router-link to="/settings">Settings</router-link>
           <button @click="logout" class="btn btn-danger">Logout</button>
         </template>
         <template v-else>

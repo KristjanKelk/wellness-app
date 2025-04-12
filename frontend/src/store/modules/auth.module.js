@@ -13,6 +13,15 @@ const validateToken = () => {
         const parts = user.access.split('.');
         if (parts.length !== 3) return false;
 
+        // Check if token is expired
+        const payload = JSON.parse(atob(parts[1]));
+        const now = Math.floor(Date.now() / 1000);
+
+        if (payload.exp && payload.exp < now) {
+            // Token expired
+            return false;
+        }
+
         return true;
     } catch (e) {
         console.error('Error validating token:', e);
@@ -31,15 +40,32 @@ export default {
     state: initialState,
     actions: {
         login({ commit }, user) {
-            return AuthService.login(user.username, user.password).then(
+            return AuthService.login(user.username, user.password, user.remember).then(
                 userData => {
-                    commit('loginSuccess', userData);
+                    // If 2FA is not required, we commit loginSuccess
+                    // Otherwise, the calling component will handle the 2FA flow
+                    if (!userData.two_factor_enabled) {
+                        commit('loginSuccess', userData);
+                    }
                     console.log('Login successful, user data:', userData);
                     return Promise.resolve(userData);
                 },
                 error => {
                     commit('loginFailure');
                     console.error('Login failed:', error);
+                    return Promise.reject(error);
+                }
+            );
+        },
+        verifyTwoFactor({ commit }, { code, tempAuthData }) {
+            return AuthService.verifyTwoFactorLogin(code, tempAuthData).then(
+                userData => {
+                    commit('loginSuccess', userData);
+                    console.log('Two-factor verification successful');
+                    return Promise.resolve(userData);
+                },
+                error => {
+                    console.error('Two-factor verification failed:', error);
                     return Promise.reject(error);
                 }
             );
@@ -66,6 +92,35 @@ export default {
         refreshToken({ commit }, accessToken) {
             commit('refreshToken', accessToken);
             console.log('Token refreshed');
+        },
+        checkAuth({ commit, state }) {
+            // This action will check if the user is still authenticated
+            // and can be called when the app initializes
+            if (state.status.loggedIn && state.user) {
+                if (!validateToken()) {
+                    // Token is invalid, try to refresh
+                    return AuthService.refreshToken().then(
+                        response => {
+                            if (response && response.access) {
+                                const user = { ...state.user, access: response.access };
+                                commit('loginSuccess', user);
+                                return Promise.resolve(user);
+                            } else {
+                                commit('logout');
+                                return Promise.reject(new Error('Failed to refresh token'));
+                            }
+                        },
+                        error => {
+                            commit('logout');
+                            return Promise.reject(error);
+                        }
+                    );
+                }
+                return Promise.resolve(state.user);
+            } else {
+                commit('logout');
+                return Promise.reject(new Error('Not authenticated'));
+            }
         }
     },
     mutations: {
@@ -90,7 +145,18 @@ export default {
         },
         refreshToken(state, accessToken) {
             state.status.loggedIn = true;
-            state.user = { ...state.user, accessToken: accessToken };
+            state.user = { ...state.user, access: accessToken };
+        },
+        updateUser(state, userData) {
+            state.user = { ...state.user, ...userData };
+
+            // Update in storage too
+            const storageKey = localStorage.getItem('user') ? 'localStorage' : 'sessionStorage';
+            const storage = window[storageKey];
+            if (storage) {
+                const storedUser = JSON.parse(storage.getItem('user') || '{}');
+                storage.setItem('user', JSON.stringify({ ...storedUser, ...userData }));
+            }
         }
     }
 }
