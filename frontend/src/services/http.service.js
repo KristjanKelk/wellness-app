@@ -1,6 +1,7 @@
 // src/services/http.service.js
 import axios from 'axios';
 import AuthService from './auth.services';
+import store from '../store';
 
 // Create axios instance
 const apiClient = axios.create({
@@ -14,17 +15,28 @@ const apiClient = axios.create({
 // Add request interceptor
 apiClient.interceptors.request.use(
     config => {
-        const userStr = localStorage.getItem('user');
-        if (userStr) {
-            try {
-                const user = JSON.parse(userStr);
-                if (user && user.access) {
-                    config.headers['Authorization'] = 'Bearer ' + user.access;
+        let token = null;
+        if (store && store.state && store.state.auth && store.state.auth.user) {
+            token = store.state.auth.user.access;
+        }
+        if (!token) {
+            const userStr = localStorage.getItem('user') || sessionStorage.getItem('user');
+            if (userStr) {
+                try {
+                    const user = JSON.parse(userStr);
+                    if (user && user.access) {
+                        token = user.access;
+                    }
+                } catch (e) {
+                    console.error('Error parsing user data in HTTP interceptor:', e);
                 }
-            } catch (e) {
-                console.error('Error parsing user data in HTTP interceptor:', e);
             }
         }
+
+        if (token) {
+            config.headers['Authorization'] = 'Bearer ' + token;
+        }
+
         console.log('API Request:', config.method.toUpperCase(), config.url);
         return config;
     },
@@ -34,7 +46,6 @@ apiClient.interceptors.request.use(
     }
 );
 
-// Add response interceptor
 apiClient.interceptors.response.use(
     response => {
         return response;

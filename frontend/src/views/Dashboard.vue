@@ -120,6 +120,8 @@ export default {
       return;
     }
 
+    await new Promise(resolve => setTimeout(resolve, 100));
+
     try {
       await this.fetchHealthData();
       if (this.hasProfileData) {

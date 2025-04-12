@@ -15,15 +15,24 @@ export default {
     AppHeader
   },
   created() {
-    // Check authentication status on app load
-    if (this.$store.state.auth &&
-        this.$store.state.auth.status &&
-        this.$store.state.auth.status.loggedIn) {
+    const userStr = localStorage.getItem('user') || sessionStorage.getItem('user');
+    const storeHasUser = this.$store.state.auth &&
+                         this.$store.state.auth.status &&
+                         this.$store.state.auth.status.loggedIn;
+
+    if (userStr && !storeHasUser) {
+      console.log('Inconsistent auth state detected, attempting to restore session');
       this.$store.dispatch('auth/checkAuth')
-          .catch(() => {
-            // If token validation fails, redirect to login
-            this.$router.push('/login');
-          });
+        .catch(() => {
+          console.log('Failed to restore session, continuing as unauthenticated');
+        });
+    } else if (storeHasUser) {
+      this.$store.dispatch('auth/checkAuth')
+        .catch(() => {
+          console.log('Session validation failed, logging out');
+          this.$store.dispatch('auth/logout');
+          this.$router.push('/login');
+        });
     }
   }
 }

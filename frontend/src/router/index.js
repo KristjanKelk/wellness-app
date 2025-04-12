@@ -11,6 +11,28 @@ import ResetPassword from '../views/ResetPassword.vue'
 import VerifyPrompt from '../views/VerifyPrompt.vue'
 import store from '../store'
 
+const validateToken = () => {
+    const userStr = localStorage.getItem('user') || sessionStorage.getItem('user');
+    if (!userStr) return false;
+
+    try {
+        const user = JSON.parse(userStr);
+        if (!user.access) return false;
+
+        const parts = user.access.split('.');
+        if (parts.length !== 3) return false;
+
+        // Check if token is expired
+        const payload = JSON.parse(atob(parts[1]));
+        const now = Math.floor(Date.now() / 1000);
+
+        return !(payload.exp && payload.exp < now);
+    } catch (e) {
+        console.error('Error validating token:', e);
+        return false;
+    }
+}
+
 const routes = [
     {
         path: '/',
@@ -99,40 +121,43 @@ const router = createRouter({
 router.$store = store;
 
 router.beforeEach((to, from, next) => {
-    // Use both Vuex store and localStorage to check login status
-    // This ensures we catch authentication from both sources
-    const storeLoggedIn = store.state.auth && store.state.auth.status && store.state.auth.status.loggedIn;
-    const localStorageLoggedIn = localStorage.getItem('user') !== null || sessionStorage.getItem('user') !== null;
+    if (!store || !store.state || !store.state.auth) {
+        console.log('Store not fully initialized, proceeding to route');
+        next();
+        return;
+    }
 
-    // User is logged in if either source indicates they are
-    const loggedIn = storeLoggedIn || localStorageLoggedIn;
+    const isValidToken = validateToken();
+    const storeLoggedIn = store.state.auth.status && store.state.auth.status.loggedIn;
+
+    if (storeLoggedIn && !isValidToken) {
+        console.log('Inconsistent state: store logged in but token invalid');
+        store.commit('auth/logout');
+    }
+
+    if (isValidToken && !storeLoggedIn) {
+        console.log('Inconsistent state: valid token but store not logged in');
+        const userStr = localStorage.getItem('user') || sessionStorage.getItem('user');
+        try {
+            const userData = JSON.parse(userStr);
+            store.commit('auth/loginSuccess', userData);
+            console.log('Restored user session from storage to store');
+        } catch (e) {
+            console.error('Failed to restore user session:', e);
+        }
+    }
+
+    const loggedIn = isValidToken && store.state.auth.status && store.state.auth.status.loggedIn;
 
     console.log(`Route navigation: ${from.path} -> ${to.path}, auth status: ${loggedIn ? 'logged in' : 'not logged in'}`);
-    console.log(`Store logged in: ${storeLoggedIn}, localStorage logged in: ${localStorageLoggedIn}`);
+    console.log(`Store logged in: ${storeLoggedIn}, valid token: ${isValidToken}`);
 
     if (to.matched.some(record => record.meta.requiresAuth)) {
         if (!loggedIn) {
             console.log('Auth required but not logged in, redirecting to login');
             next({ path: '/login' });
         } else {
-            // Check if email is verified when it's a protected route
-            let user = null;
-
-            // Try to get user from store first
-            if (store.state.auth && store.state.auth.user) {
-                user = store.state.auth.user;
-            }
-            // If not in store, try localStorage
-            else {
-                const userStr = localStorage.getItem('user') || sessionStorage.getItem('user');
-                if (userStr) {
-                    try {
-                        user = JSON.parse(userStr);
-                    } catch (e) {
-                        console.error('Error parsing user data:', e);
-                    }
-                }
-            }
+            const user = store.state.auth.user;
 
             if (user && user.email_verified === false && to.name !== 'VerifyPrompt') {
                 console.log('Email not verified, redirecting to verification prompt');

@@ -3,7 +3,7 @@ import AuthService from '../../services/auth.services'
 
 // Check if the token in localStorage is still valid
 const validateToken = () => {
-    const userStr = localStorage.getItem('user');
+    const userStr = localStorage.getItem('user') || sessionStorage.getItem('user');
     if (!userStr) return false;
 
     try {
@@ -17,19 +17,21 @@ const validateToken = () => {
         const payload = JSON.parse(atob(parts[1]));
         const now = Math.floor(Date.now() / 1000);
 
-        if (payload.exp && payload.exp < now) {
-            // Token expired
-            return false;
+        if (!(payload.exp && payload.exp < now)) {
+            return true;
         }
 
-        return true;
+        localStorage.removeItem('user');
+        sessionStorage.removeItem('user');
+        return false;
     } catch (e) {
         console.error('Error validating token:', e);
         return false;
     }
 }
 
-const userStr = localStorage.getItem('user');
+// Get user from both possible storage locations
+const userStr = localStorage.getItem('user') || sessionStorage.getItem('user');
 const initialState = validateToken()
     ? { status: { loggedIn: true }, user: JSON.parse(userStr) }
     : { status: { loggedIn: false }, user: null };
@@ -46,7 +48,16 @@ export default {
                     // Otherwise, the calling component will handle the 2FA flow
                     if (!userData.two_factor_enabled) {
                         commit('loginSuccess', userData);
+
+                        // Force a small delay before continuing to allow the token to be properly set
+                        return new Promise(resolve => {
+                            setTimeout(() => {
+                                console.log('Login successful, user data:', userData);
+                                resolve(userData);
+                            }, 50);
+                        });
                     }
+
                     console.log('Login successful, user data:', userData);
                     return Promise.resolve(userData);
                 },
@@ -61,8 +72,14 @@ export default {
             return AuthService.verifyTwoFactorLogin(code, tempAuthData).then(
                 userData => {
                     commit('loginSuccess', userData);
-                    console.log('Two-factor verification successful');
-                    return Promise.resolve(userData);
+
+                    // Same delay after 2FA login success
+                    return new Promise(resolve => {
+                        setTimeout(() => {
+                            console.log('Two-factor verification successful');
+                            resolve(userData);
+                        }, 50);
+                    });
                 },
                 error => {
                     console.error('Two-factor verification failed:', error);
@@ -118,6 +135,18 @@ export default {
                 }
                 return Promise.resolve(state.user);
             } else {
+                // Check if we have a valid token in storage but not in state
+                if (validateToken()) {
+                    const userStr = localStorage.getItem('user') || sessionStorage.getItem('user');
+                    try {
+                        const userData = JSON.parse(userStr);
+                        commit('loginSuccess', userData);
+                        return Promise.resolve(userData);
+                    } catch (e) {
+                        console.error('Error parsing user data:', e);
+                    }
+                }
+
                 commit('logout');
                 return Promise.reject(new Error('Not authenticated'));
             }
