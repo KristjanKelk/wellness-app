@@ -11,4 +11,4 @@ class WeightHistorySerializer(serializers.ModelSerializer):  # Changed from Weig
 class HealthProfileSerializer(serializers.ModelSerializer):
     class Meta:
         model = HealthProfile
-        exclude = ['user']  # Exclude user as it's set automatically
+        exclude = ['user']
