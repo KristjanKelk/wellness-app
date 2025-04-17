@@ -18,18 +18,6 @@ class HealthProfileViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
 
-    @action(detail=False, methods=['get'])
-    def my_profile(self, request):
-        """
-        Get the current user's health profile
-        """
-        try:
-            profile = HealthProfile.objects.get(user=request.user)
-            serializer = self.get_serializer(profile)
-            return Response(serializer.data)
-        except HealthProfile.DoesNotExist:
-            return Response({'detail': 'Health profile not found'}, status=status.HTTP_404_NOT_FOUND)
-
     @action(detail=False, methods=['get', 'put', 'patch'])
     def my_profile(self, request):
         """
