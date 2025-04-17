@@ -1,7 +1,15 @@
+<!-- src/components/dashboard/BmiStatusCard.vue -->
 <template>
-  <div class="card">
-    <h2>BMI Status</h2>
-    <div v-if="bmi !== null" class="bmi-container">
+  <dashboard-card
+    title="BMI Status"
+    :isEmpty="bmi === null"
+  >
+    <template v-slot:empty>
+      <p>Your BMI will be calculated once you've added your height and weight.</p>
+      <router-link to="/profile" class="btn btn-primary">Update Profile</router-link>
+    </template>
+
+    <div class="bmi-container">
       <div class="bmi-value">{{ bmi.toFixed(1) }}</div>
       <div class="bmi-category">{{ bmiCategory }}</div>
       <div class="bmi-scale">
@@ -16,18 +24,18 @@
         </div>
       </div>
     </div>
-    <div v-else>
-      <p>Your BMI will be calculated once you've added your height and weight.</p>
-      <router-link to="/profile" class="btn btn-primary">Update Profile</router-link>
-    </div>
-  </div>
+  </dashboard-card>
 </template>
 
 <script>
+import DashboardCard from './DashboardCard.vue';
 import WellnessService from '../../services/wellness-service';
 
 export default {
   name: 'BmiStatusCard',
+  components: {
+    DashboardCard
+  },
   props: {
     bmi: {
       type: Number,

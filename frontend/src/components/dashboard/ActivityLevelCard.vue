@@ -1,7 +1,15 @@
+<!-- src/components/dashboard/ActivityLevelCard.vue -->
 <template>
-  <div class="card">
-    <h2>Activity Level</h2>
-    <div v-if="profile && profile.activity_level" class="activity-container">
+  <dashboard-card
+    title="Activity Level"
+    :isEmpty="!profile || !profile.activity_level"
+  >
+    <template v-slot:empty>
+      <p>Your activity tracking will appear once you've updated your profile.</p>
+      <router-link to="/profile" class="btn btn-primary">Update Profile</router-link>
+    </template>
+
+    <div class="activity-container">
       <div class="activity-level">{{ activityLevelDisplay }}</div>
       <p>{{ activityDescription }}</p>
       <div class="activity-suggestions">
@@ -13,18 +21,18 @@
         </ul>
       </div>
     </div>
-    <div v-else>
-      <p>Your activity tracking will appear once you've updated your profile.</p>
-      <router-link to="/profile" class="btn btn-primary">Update Profile</router-link>
-    </div>
-  </div>
+  </dashboard-card>
 </template>
 
 <script>
+import DashboardCard from './DashboardCard.vue';
 import WellnessService from '../../services/wellness-service';
 
 export default {
   name: 'ActivityLevelCard',
+  components: {
+    DashboardCard
+  },
   props: {
     profile: {
       type: Object,

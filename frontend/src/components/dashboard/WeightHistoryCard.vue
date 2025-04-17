@@ -1,7 +1,18 @@
+<!-- src/components/dashboard/WeightHistoryCard.vue -->
 <template>
-  <div class="card">
-    <h2>Weight History</h2>
-    <div v-if="weightHistory && weightHistory.length > 0" class="weight-container">
+  <dashboard-card
+    title="Weight History"
+    :isEmpty="!weightHistory || weightHistory.length === 0"
+    :error="error"
+  >
+    <template v-slot:empty>
+      <p>Your weight history will appear once you start tracking your weight.</p>
+      <button @click="$emit('add-weight')" class="btn btn-primary">
+        Start Tracking Weight
+      </button>
+    </template>
+
+    <div class="weight-container">
       <div class="weight-summary">
         <div class="weight-item">
           <span class="weight-label">Current:</span>
@@ -39,20 +50,18 @@
         Log New Weight
       </button>
     </div>
-    <div v-else>
-      <p>Your weight history will appear once you start tracking your weight.</p>
-      <button @click="$emit('add-weight')" class="btn btn-primary">
-        Start Tracking Weight
-      </button>
-    </div>
-  </div>
+  </dashboard-card>
 </template>
 
 <script>
+import DashboardCard from './DashboardCard.vue';
 import WellnessService from '../../services/wellness-service';
 
 export default {
   name: 'WeightHistoryCard',
+  components: {
+    DashboardCard
+  },
   props: {
     profile: {
       type: Object,
@@ -64,6 +73,10 @@ export default {
     },
     weightChange: {
       type: Number,
+      default: null
+    },
+    error: {
+      type: String,
       default: null
     }
   },
@@ -91,26 +104,3 @@ export default {
   }
 };
 </script>
-
-<style scoped>
-.weight-table {
-  width: 100%;
-  border-collapse: collapse;
-  margin-bottom: 1rem;
-}
-
-.weight-table th, .weight-table td {
-  text-align: left;
-  padding: 0.5rem;
-  border-bottom: 1px solid #eee;
-}
-
-.weight-trend {
-  margin-bottom: 1rem;
-}
-
-.weight-trend h3 {
-  font-size: 1rem;
-  margin-bottom: 0.5rem;
-}
-</style>

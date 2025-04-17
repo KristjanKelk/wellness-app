@@ -1,7 +1,15 @@
+<!-- src/components/dashboard/WellnessScoreCard.vue -->
 <template>
-  <div class="card">
-    <h2>Wellness Score</h2>
-    <div v-if="hasProfileData" class="score-container">
+  <dashboard-card
+    title="Wellness Score"
+    :isEmpty="!hasProfileData"
+  >
+    <template v-slot:empty>
+      <p>Your wellness score will be calculated once you've completed your health profile.</p>
+      <router-link to="/profile" class="btn btn-primary">Complete Profile</router-link>
+    </template>
+
+    <div class="score-container">
       <div class="score-circle" :class="scoreClass">
         <span class="score-number">{{ score }}</span>
       </div>
@@ -32,18 +40,18 @@
         </div>
       </div>
     </div>
-    <div v-else>
-      <p>Your wellness score will be calculated once you've completed your health profile.</p>
-      <router-link to="/profile" class="btn btn-primary">Complete Profile</router-link>
-    </div>
-  </div>
+  </dashboard-card>
 </template>
 
 <script>
+import DashboardCard from './DashboardCard.vue';
 import WellnessService from '../../services/wellness-service';
 
 export default {
   name: 'WellnessScoreCard',
+  components: {
+    DashboardCard
+  },
   props: {
     profile: {
       type: Object,
