@@ -1,5 +1,6 @@
 // src/store/modules/auth.module.js
 import AuthService from '../../services/auth.service';
+import OAuthService from '../../services/oauth.service';
 
 // Initialize state from storage
 const initialState = (() => {
@@ -54,6 +55,32 @@ export default {
           return userData;
         })
         .catch(error => {
+          return Promise.reject(error);
+        });
+    },
+
+    /**
+     * OAuth login actions
+     */
+    loginWithGoogle() {
+      return OAuthService.loginWithGoogle();
+    },
+
+    loginWithGitHub() {
+      return OAuthService.loginWithGitHub();
+    },
+
+    /**
+     * Process OAuth callback
+     */
+    processOAuthCallback({ commit }, urlParams) {
+      return OAuthService.processCallback(urlParams)
+        .then(userData => {
+          commit('loginSuccess', userData);
+          return userData;
+        })
+        .catch(error => {
+          commit('loginFailure');
           return Promise.reject(error);
         });
     },

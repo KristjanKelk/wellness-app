@@ -10,6 +10,8 @@ import VerifyEmail from '../views/VerifyEmail.vue'
 import ResetPassword from '../views/ResetPassword.vue'
 import VerifyPrompt from '../views/VerifyPrompt.vue'
 import store from '../store'
+import OAuthCallback from '../views/OAuthCallback.vue'
+import OAuthSuccess from '../views/OAuthSuccess.vue'
 
 const validateToken = () => {
   const userStr = localStorage.getItem('user') || sessionStorage.getItem('user');
@@ -110,6 +112,16 @@ const routes = [
         meta: {
             guest: true
         }
+    },
+    {
+        path: '/auth/callback',
+        name: 'OAuthCallback',
+        component: OAuthCallback
+    },
+    {
+        path: '/auth/success',
+        name: 'OAuthSuccess',
+        component: OAuthSuccess,
     }
 ]
 

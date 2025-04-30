@@ -63,7 +63,7 @@
         <button class="btn btn-primary btn-block" :disabled="loading">
           <span v-if="loading">
             <span class="loading-spinner-sm"></span>
-            {{ showTwoFactorForm ? 'Verifying...' : 'Signing in...' }}
+            {{ showTwoFactorForm ? 'Verifying...' : 'Sign In' }}
           </span>
           <span v-else>{{ showTwoFactorForm ? 'Verify' : 'Sign In' }}</span>
         </button>
@@ -73,6 +73,21 @@
         <button type="button" class="btn-text" @click="cancelTwoFactor">
           Cancel
         </button>
+      </div>
+
+      <!-- OAuth login options -->
+      <div class="oauth-options">
+        <p class="oauth-divider"><span>Or continue with</span></p>
+        <div class="oauth-buttons">
+          <button type="button" @click="loginWithGoogle" class="btn btn-oauth btn-google" :disabled="loading">
+            <img src="@/assets/google-icon.svg" alt="Google" />
+            Google
+          </button>
+          <button type="button" @click="loginWithGitHub" class="btn btn-oauth btn-github" :disabled="loading">
+            <img src="@/assets/github-icon.svg" alt="GitHub" />
+            GitHub
+          </button>
+        </div>
       </div>
 
       <div class="form-group text-center">
@@ -89,6 +104,8 @@
 </template>
 
 <script>
+import OAuthService from '../services/oauth.service';
+
 export default {
   name: 'Login',
   data() {
@@ -249,6 +266,17 @@ export default {
       this.showTwoFactorForm = false;
       this.twoFactorCode = '';
       this.tempAuthData = null;
+    },
+
+    // OAuth login methods
+    loginWithGoogle() {
+      this.loading = true;
+      OAuthService.loginWithGoogle();
+    },
+
+    loginWithGitHub() {
+      this.loading = true;
+      OAuthService.loginWithGitHub();
     }
   }
 };
@@ -388,6 +416,64 @@ input[id="twoFactorCode"] {
   animation: spin 1s ease-in-out infinite;
   margin-right: 0.5rem;
   vertical-align: middle;
+}
+
+/* OAuth styling */
+.oauth-options {
+  margin: 1.5rem 0;
+}
+
+.oauth-divider {
+  display: flex;
+  align-items: center;
+  text-align: center;
+  color: #666;
+  font-size: 0.9rem;
+  margin: 1.5rem 0;
+}
+
+.oauth-divider::before,
+.oauth-divider::after {
+  content: '';
+  flex: 1;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.oauth-divider span {
+  padding: 0 10px;
+}
+
+.oauth-buttons {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.btn-oauth {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  background-color: #fff;
+  border: 1px solid #ddd;
+  padding: 0.75rem;
+  transition: all 0.3s ease;
+}
+
+.btn-oauth img {
+  width: 20px;
+  height: 20px;
+  margin-right: 8px;
+}
+
+.btn-google:hover {
+  background-color: #f8f8f8;
+  border-color: #db4437;
+}
+
+.btn-github:hover {
+  background-color: #f8f8f8;
+  border-color: #333;
 }
 
 @keyframes spin {

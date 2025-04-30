@@ -21,7 +21,11 @@ from users.views import (
     ResetPasswordConfirmView,
     NotificationSettingsView,
     ExportUserDataView,
-    TwoFactorTokenView
+    TwoFactorTokenView,
+    GoogleLoginView,
+    GitHubLoginView,
+    SocialLoginCallbackView
+
 )
 from users.jwt import CustomTokenObtainPairView
 
@@ -63,4 +67,13 @@ urlpatterns = [
     # User data management
     path('api/users/notification-settings/', NotificationSettingsView.as_view(), name='notification-settings'),
     path('api/users/export-data/', ExportUserDataView.as_view(), name='export-user-data'),
-    ]
+
+
+    # OAuth authentication endpoints
+    path('api/auth/google/', GoogleLoginView.as_view(), name='google_login'),
+    path('api/auth/github/', GitHubLoginView.as_view(), name='github_login'),
+    path('api/auth/callback/', SocialLoginCallbackView.as_view(), name='social_callback'),
+
+    # Django AllAuth URLs
+    path('accounts/', include('allauth.urls')),
+]

@@ -4,16 +4,19 @@ import qrcode
 import io
 import base64
 import uuid
+import jwt
 from django.utils import timezone
 from datetime import timedelta
 from django.conf import settings
 from django.core.mail import send_mail
 from django.template.loader import render_to_string
+from django.shortcuts import redirect
 from rest_framework import status, permissions
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
+from rest_framework_simplejwt.tokens import RefreshToken
 from .serializers import (
     UserSerializer,
     UserRegistrationSerializer,
@@ -21,8 +24,13 @@ from .serializers import (
     NotificationSettingsSerializer
 )
 from django.contrib.auth import get_user_model
+from allauth.socialaccount.models import SocialAccount
+from allauth.socialaccount.providers.google.views import GoogleOAuth2Adapter
+from allauth.socialaccount.providers.github.views import GitHubOAuth2Adapter
+from allauth.socialaccount.providers.oauth2.client import OAuth2Client
 
 User = get_user_model()
+
 
 class RegisterView(APIView):
     permission_classes = [permissions.AllowAny]
@@ -73,6 +81,7 @@ class RegisterView(APIView):
         except Exception as e:
             print(f"Failed to send verification email: {str(e)}")
 
+
 class UserProfileView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -88,6 +97,7 @@ class UserProfileView(APIView):
             serializer.save()
             return Response(serializer.data)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
 
 class VerifyEmailView(APIView):
     permission_classes = [permissions.AllowAny]
@@ -124,6 +134,7 @@ class VerifyEmailView(APIView):
                 {"detail": "Invalid verification token."},
                 status=status.HTTP_400_BAD_REQUEST
             )
+
 
 class ResendVerificationEmailView(APIView):
     permission_classes = [IsAuthenticated]
@@ -182,6 +193,7 @@ class ResendVerificationEmailView(APIView):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
+
 class GenerateTwoFactorView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -221,6 +233,7 @@ class GenerateTwoFactorView(APIView):
             "qr_code": f"data:image/png;base64,{qr_code_base64}"
         })
 
+
 class VerifyTwoFactorView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -253,6 +266,7 @@ class VerifyTwoFactorView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
+
 class DisableTwoFactorView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -272,6 +286,7 @@ class DisableTwoFactorView(APIView):
 
         return Response({"message": "Two-factor authentication disabled successfully."})
 
+
 class ChangePasswordView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -282,6 +297,7 @@ class ChangePasswordView(APIView):
             serializer.save()
             return Response({"message": "Password updated successfully."})
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
 
 class ResetPasswordRequestView(APIView):
     permission_classes = [permissions.AllowAny]
@@ -331,6 +347,7 @@ class ResetPasswordRequestView(APIView):
             # Return same message as success case to prevent email enumeration
             return Response({"message": "If your email is registered, you will receive a password reset link shortly."})
 
+
 class ResetPasswordConfirmView(APIView):
     permission_classes = [permissions.AllowAny]
 
@@ -370,6 +387,7 @@ class ResetPasswordConfirmView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
+
 class NotificationSettingsView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -390,6 +408,7 @@ class NotificationSettingsView(APIView):
             request.user.save()
             return Response(serializer.validated_data)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
 
 class ExportUserDataView(APIView):
     permission_classes = [IsAuthenticated]
@@ -429,6 +448,7 @@ class ExportUserDataView(APIView):
         user_data['ai_insights'] = AIInsightSerializer(insights, many=True).data
 
         return Response(user_data)
+
 
 class TwoFactorTokenView(APIView):
     """
@@ -506,5 +526,137 @@ class TwoFactorTokenView(APIView):
         except Exception as e:
             return Response(
                 {'detail': f'Failed to verify two-factor authentication: {str(e)}'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+
+# OAuth views - Add these new classes at the end of your file
+
+class GoogleLoginView(APIView):
+    """
+    View for initiating Google OAuth login
+    """
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request):
+        redirect_uri = f"{settings.FRONTEND_URL}/auth/callback"
+        google_client_id = settings.SOCIALACCOUNT_PROVIDERS['google']['APP']['client_id']
+
+        return redirect(
+            f"https://accounts.google.com/o/oauth2/auth"
+            f"?client_id={google_client_id}"
+            f"&redirect_uri={redirect_uri}"
+            f"&response_type=code"
+            f"&scope=profile email"
+        )
+
+
+class GitHubLoginView(APIView):
+    """
+    View for initiating GitHub OAuth login
+    """
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request):
+        redirect_uri = f"{settings.FRONTEND_URL}/auth/callback"
+        github_client_id = settings.SOCIALACCOUNT_PROVIDERS['github']['APP']['client_id']
+
+        return redirect(
+            f"https://github.com/login/oauth/authorize"
+            f"?client_id={github_client_id}"
+            f"&redirect_uri={redirect_uri}"
+            f"&scope=user email"
+        )
+
+
+class SocialLoginCallbackView(APIView):
+    """
+    View for handling OAuth callback and generating JWT tokens
+    """
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request):
+        code = request.query_params.get('code')
+        provider = request.query_params.get('provider')
+
+        if not code or not provider:
+            return Response(
+                {"detail": "Missing code or provider parameter."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Process OAuth response based on provider
+        if provider == 'google':
+            adapter = GoogleOAuth2Adapter()
+        elif provider == 'github':
+            adapter = GitHubOAuth2Adapter()
+        else:
+            return Response(
+                {"detail": "Unsupported provider."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            # Exchange code for access token
+            callback_url = f"{settings.FRONTEND_URL}/auth/callback"
+            client = OAuth2Client(request, adapter.client_id, adapter.client_secret, callback_url)
+            token = client.get_access_token(code)
+
+            # Get user info from provider
+            social_token = token['access_token']
+            user_data = adapter.get_user_info(social_token)
+
+            # Get or create user account
+            try:
+                social_account = SocialAccount.objects.get(
+                    provider=provider,
+                    uid=user_data['id']
+                )
+                user = social_account.user
+            except SocialAccount.DoesNotExist:
+                # Create new user if doesn't exist
+                email = user_data.get('email')
+                if not email:
+                    return Response(
+                        {"detail": "Email not provided by OAuth provider."},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+
+                try:
+                    user = User.objects.get(email=email)
+                except User.DoesNotExist:
+                    username = f"{provider}_{user_data['id']}"
+                    user = User.objects.create_user(
+                        username=username,
+                        email=email,
+                        email_verified=True,  # OAuth providers verify email already
+                    )
+
+                # Create social account
+                SocialAccount.objects.create(
+                    user=user,
+                    provider=provider,
+                    uid=user_data['id'],
+                    extra_data=user_data
+                )
+
+            # Generate JWT tokens
+            refresh = RefreshToken.for_user(user)
+            refresh['email_verified'] = user.email_verified
+            refresh['two_factor_enabled'] = user.two_factor_enabled
+            refresh['username'] = user.username
+
+            # Redirect to frontend with tokens
+            token_data = {
+                'refresh': str(refresh),
+                'access': str(refresh.access_token),
+            }
+
+            redirect_url = f"{settings.FRONTEND_URL}/auth/success?tokens={token_data}"
+            return redirect(redirect_url)
+
+        except Exception as e:
+            return Response(
+                {"detail": f"OAuth authentication failed: {str(e)}"},
                 status=status.HTTP_400_BAD_REQUEST
             )
