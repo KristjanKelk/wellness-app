@@ -115,8 +115,14 @@ const routes = [
     },
     {
         path: '/auth/callback',
-        name: 'OAuthCallback',
+        name: 'GenericOAuthCallback',
         component: OAuthCallback
+    },
+    {
+        path: '/auth/callback/:provider',
+        name: 'ProviderOAuthCallback',
+        component: OAuthCallback,
+        props: true
     },
     {
         path: '/auth/success',

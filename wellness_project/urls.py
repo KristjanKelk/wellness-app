@@ -28,6 +28,7 @@ from users.views import (
 
 )
 from users.jwt import CustomTokenObtainPairView
+from users.oauth import GoogleAuthAPI
 
 router = DefaultRouter()
 router.register(r'health-profiles', HealthProfileViewSet, basename='health-profile')
@@ -70,7 +71,8 @@ urlpatterns = [
 
 
     # OAuth authentication endpoints
-    path('api/auth/google/', GoogleLoginView.as_view(), name='google_login'),
+    path('api/oauth/google/authorize/', GoogleAuthAPI.as_view(), name='google-authorize'),
+    path('api/oauth/google/callback/', GoogleAuthAPI.as_view(), name='google-callback'),
     path('api/auth/github/', GitHubLoginView.as_view(), name='github_login'),
     path('api/auth/callback/', SocialLoginCallbackView.as_view(), name='social_callback'),
 

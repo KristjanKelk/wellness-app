@@ -9,7 +9,20 @@
         <div class="error-icon">!</div>
         <h2>Authentication Failed</h2>
         <p>{{ error }}</p>
-        <router-link to="/login" class="btn btn-primary">Return to Login</router-link>
+        <div v-if="debugInfo" class="debug-info">
+          <details>
+            <summary>Technical Details (For Developers)</summary>
+            <pre>{{ debugInfo }}</pre>
+          </details>
+        </div>
+        <div class="action-buttons">
+          <button @click="retryAuthentication" class="btn btn-primary">
+            Try Again
+          </button>
+          <router-link to="/login" class="btn btn-secondary">
+            Return to Login
+          </router-link>
+        </div>
       </div>
       <div v-else class="success">
         <div class="success-icon">✓</div>
@@ -22,40 +35,115 @@
 
 <script>
 import OAuthService from '../services/oauth.service';
+import OAuthDebug from '../utils/oauth-debug';
 
 export default {
   name: 'OAuthCallback',
+  props: {
+    provider: {
+      type: String,
+      default: 'google'
+    }
+  },
   data() {
     return {
       loading: true,
-      error: null
+      error: null,
+      debugInfo: null
     };
   },
   mounted() {
+    console.log("OAuth Callback Component Mounted");
+    console.log("Full URL:", window.location.href);
+    console.log("Route params:", this.$route.params);
+
+    // Check if we have localStorage data to prevent duplicate processing
+    OAuthDebug.checkStorage();
+
+    // Process the callback
     this.processCallback();
   },
   methods: {
     processCallback() {
-      const queryParams = new URLSearchParams(window.location.search);
+      try {
+        // Extract query parameters
+        const queryParams = new URLSearchParams(window.location.search);
 
-      OAuthService.processCallback(queryParams)
-        .then(userData => {
-          console.log('OAuth login successful:', userData);
+        // Debug OAuth response
+        const debugData = OAuthDebug.logAuthResponse(queryParams);
 
-          // Store the user data
-          this.$store.commit('auth/loginSuccess', userData);
+        // Determine provider from route or default
+        const provider = this.$route.params.provider || 'google';
 
+        // Create debug info
+        this.debugInfo = JSON.stringify({
+          url: window.location.href,
+          search: window.location.search,
+          pathname: window.location.pathname,
+          debugData,
+          provider: provider,
+          routeParams: this.$route.params,
+          timestamp: new Date().toISOString()
+        }, null, 2);
+
+        console.log("Processing OAuth callback with params:");
+        console.log("Provider:", provider);
+        console.log("Code:", queryParams.get('code') ? "Present (hidden for security)" : "Not present");
+        console.log("State:", queryParams.get('state') ? "Present" : "Not present");
+        console.log("Error:", queryParams.get('error'));
+
+        // Handle OAuth error in the URL
+        if (queryParams.get('error')) {
+          const errorMsg = queryParams.get('error_description') || queryParams.get('error');
+          this.error = `Authentication error: ${errorMsg}`;
           this.loading = false;
+          return;
+        }
 
-          // Redirect to dashboard after a short delay
-          setTimeout(() => {
-            this.$router.push('/dashboard');
-          }, 1500);
-        })
+        // Handle missing code in the URL
+        if (!queryParams.get('code')) {
+          this.error = 'No authorization code received. Please try again.';
+          this.loading = false;
+          return;
+        }
+
+        // Process the callback
+        OAuthService.processCallback(queryParams, provider)
+          .then(userData => {
+            console.log('OAuth login successful:', userData);
+
+            // Store the user data
+            this.$store.commit('auth/loginSuccess', userData);
+
+            this.loading = false;
+
+            // Redirect to dashboard after a short delay
+            setTimeout(() => {
+              this.$router.push('/dashboard');
+            }, 1000);
+          })
+          .catch(error => {
+            console.error('OAuth callback error:', error);
+            this.error = error.message || 'Failed to complete authentication. Please try again.';
+            this.loading = false;
+          });
+      } catch (err) {
+        console.error('Error in processCallback:', err);
+        this.error = `Authentication processing error: ${err.message}`;
+        this.loading = false;
+      }
+    },
+
+    retryAuthentication() {
+      // Clear any error state
+      localStorage.removeItem('oauth_error');
+      sessionStorage.removeItem('auth_in_progress');
+
+      // Try the authentication flow again
+      OAuthService.loginWithGoogle()
         .catch(error => {
-          console.error('OAuth callback error:', error);
-          this.error = error.message || 'Failed to complete authentication. Please try again.';
-          this.loading = false;
+          console.error('Failed to restart authentication:', error);
+          this.error = `Failed to restart authentication: ${error.message}`;
         });
     }
   }
@@ -128,6 +216,41 @@ p {
   color: #666;
 }
 
+.action-buttons {
+  display: flex;
+  gap: 1rem;
+  margin-top: 1rem;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.debug-info {
+  margin: 1rem 0;
+  width: 100%;
+  text-align: left;
+}
+
+.debug-info details {
+  margin-bottom: 1rem;
+}
+
+.debug-info summary {
+  cursor: pointer;
+  color: #007bff;
+  font-size: 0.9rem;
+}
+
+.debug-info pre {
+  background-color: #f8f9fa;
+  padding: 1rem;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  white-space: pre-wrap;
+  word-break: break-all;
+  overflow-x: auto;
+  text-align: left;
+}
+
 .btn {
   cursor: pointer;
   padding: 0.75rem 1.5rem;
@@ -141,6 +264,12 @@ p {
 .btn-primary {
   background-color: #4CAF50;
   color: white;
+}
+
+.btn-secondary {
+  background-color: #f5f5f5;
+  color: #333;
+  border: 1px solid #ddd;
 }
 
 @keyframes spin {
