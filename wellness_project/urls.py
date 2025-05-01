@@ -29,6 +29,7 @@ from users.views import (
 )
 from users.jwt import CustomTokenObtainPairView
 from users.oauth import GoogleAuthAPI
+from users.github_oauth import GitHubAuthAPI
 
 router = DefaultRouter()
 router.register(r'health-profiles', HealthProfileViewSet, basename='health-profile')
@@ -70,11 +71,16 @@ urlpatterns = [
     path('api/users/export-data/', ExportUserDataView.as_view(), name='export-user-data'),
 
 
+
+
     # OAuth authentication endpoints
+
+    path('api/oauth/github/authorize/', GitHubAuthAPI.as_view(), name='github-authorize'),
+    path('api/oauth/github/callback/', GitHubAuthAPI.as_view(), name='github-callback'),
+
     path('api/oauth/google/authorize/', GoogleAuthAPI.as_view(), name='google-authorize'),
     path('api/oauth/google/callback/', GoogleAuthAPI.as_view(), name='google-callback'),
-    path('api/auth/github/', GitHubLoginView.as_view(), name='github_login'),
-    path('api/auth/callback/', SocialLoginCallbackView.as_view(), name='social_callback'),
+
 
     # Django AllAuth URLs
     path('accounts/', include('allauth.urls')),

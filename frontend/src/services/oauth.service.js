@@ -38,6 +38,35 @@ class OAuthService {
   }
 
   /**
+   * Redirect to GitHub OAuth
+   * This uses a direct window.location approach rather than axios
+   * to avoid CORS issues with GitHub's OAuth flow
+   */
+  async loginWithGitHub() {
+    try {
+      localStorage.removeItem('oauth_state');
+      sessionStorage.removeItem('auth_in_progress');
+      sessionStorage.setItem('auth_in_progress', 'true');
+
+      console.log('Starting GitHub authentication flow');
+
+      // Direct browser redirect to our backend endpoint
+      // The backend will redirect to GitHub's OAuth page
+      window.location.href = `${API_URL}oauth/github/authorize/`;
+
+      // This is just to satisfy the async function signature
+      // The browser will be redirected before this promise resolves
+      return new Promise(resolve => {
+        setTimeout(() => resolve(true), 100);
+      });
+    } catch (error) {
+      console.error('GitHub OAuth login error:', error);
+      sessionStorage.removeItem('auth_in_progress');
+      throw error;
+    }
+  }
+
+  /**
    * Process OAuth callback
    * @param {URLSearchParams} queryParams - URL query parameters
    * @param {string} provider - OAuth provider name (default: 'google')
@@ -108,7 +137,7 @@ class OAuthService {
     } catch (error) {
       console.error('OAuth callback processing error:', error);
 
-      // Handle specific Google OAuth errors
+      // Handle specific OAuth errors
       if (error.response && error.response.data) {
         console.log('Backend error response:', error.response.data);
 

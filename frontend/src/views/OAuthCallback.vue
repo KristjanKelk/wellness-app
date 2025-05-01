@@ -1,3 +1,4 @@
+<!-- src/views/OAuthCallback.vue -->
 <template>
   <div class="oauth-callback">
     <div class="callback-container">
@@ -42,7 +43,7 @@ export default {
   props: {
     provider: {
       type: String,
-      default: 'google'
+      default: null
     }
   },
   data() {
@@ -72,8 +73,22 @@ export default {
         // Debug OAuth response
         const debugData = OAuthDebug.logAuthResponse(queryParams);
 
-        // Determine provider from route or default
-        const provider = this.$route.params.provider || 'google';
+        // Determine provider from route, URL path, or default
+        let provider = this.provider || this.$route.params.provider;
+
+        // Extract provider from URL path if not in params
+        if (!provider) {
+          const pathParts = window.location.pathname.split('/');
+          if (pathParts.includes('callback')) {
+            const providerIndex = pathParts.indexOf('callback') - 1;
+            if (providerIndex >= 0 && pathParts[providerIndex]) {
+              provider = pathParts[providerIndex];
+            }
+          }
+        }
+
+        // Default to google if still not found
+        provider = provider || 'google';
 
         // Create debug info
         this.debugInfo = JSON.stringify({
@@ -139,12 +154,31 @@ export default {
       localStorage.removeItem('oauth_error');
       sessionStorage.removeItem('auth_in_progress');
 
+      // Determine which provider to use based on the current URL
+      const pathParts = window.location.pathname.split('/');
+      let provider = 'google'; // Default
+
+      if (pathParts.includes('callback')) {
+        const providerIndex = pathParts.indexOf('callback') - 1;
+        if (providerIndex >= 0 && pathParts[providerIndex]) {
+          provider = pathParts[providerIndex];
+        }
+      }
+
       // Try the authentication flow again
-      OAuthService.loginWithGoogle()
-        .catch(error => {
-          console.error('Failed to restart authentication:', error);
-          this.error = `Failed to restart authentication: ${error.message}`;
-        });
+      if (provider === 'github') {
+        OAuthService.loginWithGitHub()
+          .catch(error => {
+            console.error('Failed to restart GitHub authentication:', error);
+            this.error = `Failed to restart authentication: ${error.message}`;
+          });
+      } else {
+        OAuthService.loginWithGoogle()
+          .catch(error => {
+            console.error('Failed to restart Google authentication:', error);
+            this.error = `Failed to restart authentication: ${error.message}`;
+          });
+      }
     }
   }
 };
