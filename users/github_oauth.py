@@ -20,20 +20,22 @@ class GitHubAuthAPI(APIView):
     def get(self, request, *args, **kwargs):
         """Generate authorization URL for GitHub OAuth"""
         try:
-            # Get credentials from environment
-            client_id = os.environ.get('GITHUB_CLIENT_ID', '')
+            # Get credentials from environment using python-decouple
+            from decouple import config
+            client_id = config('GITHUB_CLIENT_ID')
 
-            # For debugging - check if client ID is available
+            # Check that we found the client ID
             if not client_id:
-                print("WARNING: GITHUB_CLIENT_ID environment variable is not set!")
+                print("ERROR: Could not retrieve GITHUB_CLIENT_ID")
+                return Response(
+                    {'detail': "GitHub OAuth configuration missing"},
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                )
 
             redirect_uri = f"{settings.FRONTEND_URL}/auth/callback/github"
 
             # Generate state for CSRF protection
             state = secrets.token_urlsafe(32)
-
-            # Store state in session for verification later (optional)
-            request.session['github_oauth_state'] = state
 
             # Build auth params
             params = {
@@ -44,13 +46,15 @@ class GitHubAuthAPI(APIView):
                 'allow_signup': 'true'
             }
 
-            # Create the authorization URL
+            # Log the params for debugging
+            print(f"GitHub OAuth params: {params}")
+
             auth_url = f"https://github.com/login/oauth/authorize?{urlencode(params)}"
 
-            # IMPORTANT CHANGE: Directly redirect the user's browser
-            # instead of returning a JSON response
-            return redirect(auth_url)
-
+            return Response({
+                'authorization_url': auth_url,
+                'state': state,
+            })
         except Exception as e:
             print(f"Error generating GitHub auth URL: {str(e)}")
             return Response(
@@ -70,13 +74,21 @@ class GitHubAuthAPI(APIView):
                     status=status.HTTP_400_BAD_REQUEST
                 )
 
-            # Get credentials from environment
-            client_id = os.environ.get('GITHUB_CLIENT_ID', '')
-            client_secret = os.environ.get('GITHUB_CLIENT_SECRET', '')
+            # Get credentials from environment using decouple
+            from decouple import config
+            client_id = config('GITHUB_CLIENT_ID')
+            client_secret = config('GITHUB_CLIENT_SECRET')
 
-            # Debug log to check if credentials are available
+            # Debug log
+            print(f"GitHub OAuth callback with client_id: {client_id[:5]}... and code: {code[:5]}...")
+
+            # Check if credentials are loaded properly
             if not client_id or not client_secret:
-                print("WARNING: GitHub OAuth credentials are missing!")
+                print(f"GitHub OAuth credentials check - ID: {bool(client_id)}, Secret: {bool(client_secret)}")
+                return Response(
+                    {'detail': 'GitHub OAuth configuration missing'},
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                )
 
             redirect_uri = f"{settings.FRONTEND_URL}/auth/callback/github"
 
@@ -95,15 +107,20 @@ class GitHubAuthAPI(APIView):
 
             # Make token request
             token_url = "https://github.com/login/oauth/access_token"
+            print(f"Making GitHub token request to {token_url} with data: {token_data}")
             token_response = requests.post(
                 token_url,
                 data=token_data,
                 headers=headers
             )
 
+            # Log token response status and content
+            print(f"GitHub token response status: {token_response.status_code}")
+            print(f"GitHub token response content (preview): {str(token_response.content)[:100]}")
+
             # Handle error response
             if token_response.status_code != 200:
-                print(f"GitHub token error: {token_response.text}")
+                print(f"GitHub token error response: {token_response.text}")
                 return Response(
                     {'detail': 'Failed to obtain access token from GitHub'},
                     status=status.HTTP_400_BAD_REQUEST

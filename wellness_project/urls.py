@@ -80,7 +80,8 @@ urlpatterns = [
 
     path('api/oauth/google/authorize/', GoogleAuthAPI.as_view(), name='google-authorize'),
     path('api/oauth/google/callback/', GoogleAuthAPI.as_view(), name='google-callback'),
-
+    # path('api/auth/github/', GitHubLoginView.as_view(), name='github_login'),
+    path('api/auth/callback/', SocialLoginCallbackView.as_view(), name='social_callback'),
 
     # Django AllAuth URLs
     path('accounts/', include('allauth.urls')),

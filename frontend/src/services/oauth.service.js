@@ -43,28 +43,35 @@ class OAuthService {
    * to avoid CORS issues with GitHub's OAuth flow
    */
   async loginWithGitHub() {
-    try {
-      localStorage.removeItem('oauth_state');
-      sessionStorage.removeItem('auth_in_progress');
-      sessionStorage.setItem('auth_in_progress', 'true');
+  try {
+    localStorage.removeItem('oauth_state');
+    sessionStorage.removeItem('auth_in_progress');
+    sessionStorage.setItem('auth_in_progress', 'true');
 
-      console.log('Starting GitHub authentication flow');
+    // Get the authorization URL from our backend
+    const response = await axios.get(`${API_URL}oauth/github/authorize/`);
 
-      // Direct browser redirect to our backend endpoint
-      // The backend will redirect to GitHub's OAuth page
-      window.location.href = `${API_URL}oauth/github/authorize/`;
+    if (response.data && response.data.authorization_url) {
+      console.log('Redirecting to GitHub authorization URL');
 
-      // This is just to satisfy the async function signature
-      // The browser will be redirected before this promise resolves
-      return new Promise(resolve => {
-        setTimeout(() => resolve(true), 100);
-      });
-    } catch (error) {
-      console.error('GitHub OAuth login error:', error);
-      sessionStorage.removeItem('auth_in_progress');
-      throw error;
+      // Store state parameter to prevent CSRF (if provided)
+      if (response.data.state) {
+        localStorage.setItem('oauth_state', response.data.state);
+      }
+
+      // Redirect to GitHub authorization page
+      window.location.href = response.data.authorization_url;
+      return true;
+    } else {
+      console.error('Invalid OAuth response:', response.data);
+      throw new Error('Failed to start GitHub authentication');
     }
+  } catch (error) {
+    console.error('GitHub OAuth login error:', error);
+    sessionStorage.removeItem('auth_in_progress');
+    throw error;
   }
+}
 
   /**
    * Process OAuth callback
@@ -73,69 +80,38 @@ class OAuthService {
    * @returns {Promise} Promise resolving to user data
    */
   async processCallback(queryParams, provider = 'google') {
-    try {
-      if (!sessionStorage.getItem('auth_in_progress')) {
-        console.warn('OAuth callback called when no authentication was in progress');
-        const userStr = localStorage.getItem('user');
-        if (userStr) {
-          const userData = JSON.parse(userStr);
-          if (userData.access) {
-            return userData;
-          }
-        }
-      }
+  try {
+    // Log parameters for debugging
+    console.log(`Processing ${provider} OAuth callback with params:`,
+      Object.fromEntries(queryParams.entries()));
 
-      // Log parameters for debugging
-      console.log(`Processing ${provider} OAuth callback with query params:`,
-        Object.fromEntries(queryParams.entries()));
+    // Get authorization code
+    const code = queryParams.get('code');
+    if (!code) {
+      throw new Error('Missing authorization code in callback');
+    }
 
-      // Clear the in-progress flag
-      sessionStorage.removeItem('auth_in_progress');
+    // Exchange code for tokens via our backend
+    console.log(`Exchanging code for tokens via ${provider} endpoint...`);
+    console.log(`Code: ${code.substring(0, 5)}...`); // Only log part of the code
 
-      // Check for errors returned from OAuth provider
-      const error = queryParams.get('error');
-      if (error) {
-        console.error('OAuth error:', error);
-        throw new Error(`Authentication error: ${error}`);
-      }
+    const response = await axios.post(`${API_URL}oauth/${provider}/callback/`, {
+      code,
+      state: queryParams.get('state')
+    });
 
-      // Get authorization code
-      const code = queryParams.get('code');
-      if (!code) {
-        console.error('No authorization code in callback');
-        throw new Error('Missing authorization code in callback');
-      }
+    // Check if we have the expected data
+    if (!response.data || !response.data.access) {
+      console.error('Invalid backend response:', response.data);
+      throw new Error('Invalid authentication response from server');
+    }
 
-      // Optional: Verify state parameter to prevent CSRF
-      const state = queryParams.get('state');
-      const savedState = localStorage.getItem('oauth_state');
-      if (savedState && state && savedState !== state) {
-        console.error('State mismatch - possible CSRF attack');
-        throw new Error('Security verification failed');
-      }
+    // Store user data
+    localStorage.setItem('user', JSON.stringify(response.data));
 
-      // Clear saved state
-      localStorage.removeItem('oauth_state');
-
-      // Exchange code for tokens via our backend
-      console.log(`Exchanging code for tokens via ${provider} endpoint...`);
-      const response = await axios.post(`${API_URL}oauth/${provider}/callback/`, {
-        code,
-        state
-      });
-
-      // Check if we have the expected data
-      if (!response.data || !response.data.access) {
-        console.error('Invalid backend response:', response.data);
-        throw new Error('Invalid authentication response from server');
-      }
-
-      // Store user data (JWT token, etc.)
-      localStorage.setItem('user', JSON.stringify(response.data));
-
-      return response.data;
-    } catch (error) {
-      console.error('OAuth callback processing error:', error);
+    return response.data;
+  } catch (error) {
+    console.error('OAuth callback processing error:', error);
 
       // Handle specific OAuth errors
       if (error.response && error.response.data) {
