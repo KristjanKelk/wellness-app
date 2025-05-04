@@ -1,39 +1,27 @@
-# users/views.py
-import pyotp
-import qrcode
-import io
-import base64
-import uuid
-import jwt
+# users/views.py - Refactored authentication views
+
 from django.utils import timezone
-from datetime import timedelta
-from django.conf import settings
-from django.core.mail import send_mail
-from django.template.loader import render_to_string
-from django.shortcuts import redirect
 from rest_framework import status, permissions
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from rest_framework.decorators import api_view, permission_classes
-from rest_framework.permissions import IsAuthenticated
-from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework.permissions import IsAuthenticated, AllowAny
+from django.contrib.auth import get_user_model
+
 from .serializers import (
     UserSerializer,
     UserRegistrationSerializer,
     ChangePasswordSerializer,
-    NotificationSettingsSerializer
+    NotificationSettingsSerializer,
+    TwoFactorVerifySerializer
 )
-from django.contrib.auth import get_user_model
-from allauth.socialaccount.models import SocialAccount
-from allauth.socialaccount.providers.google.views import GoogleOAuth2Adapter
-from allauth.socialaccount.providers.github.views import GitHubOAuth2Adapter
-from allauth.socialaccount.providers.oauth2.client import OAuth2Client
+from .auth import AuthHelper
 
 User = get_user_model()
 
 
 class RegisterView(APIView):
-    permission_classes = [permissions.AllowAny]
+    """User registration view"""
+    permission_classes = [AllowAny]
 
     def post(self, request):
         serializer = UserRegistrationSerializer(data=request.data)
@@ -41,13 +29,13 @@ class RegisterView(APIView):
             user = serializer.save()
 
             # Generate verification token
-            token = str(uuid.uuid4())
+            token = AuthHelper.generate_token()
             user.email_verification_token = token
             user.email_verification_sent_at = timezone.now()
             user.save()
 
             # Send verification email
-            self.send_verification_email(user, token)
+            AuthHelper.send_verification_email(user, token)
 
             return Response(
                 {"message": "User registered successfully. Please verify your email."},
@@ -55,34 +43,9 @@ class RegisterView(APIView):
             )
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-    def send_verification_email(self, user, token):
-        """Send verification email to the user"""
-        subject = "Verify your email address"
-        verification_url = f"{settings.FRONTEND_URL}/verify-email/{token}"
-
-        # Create email content
-        context = {
-            'user': user,
-            'verification_url': verification_url
-        }
-        email_html = render_to_string('email/verify_email.html', context)
-        email_text = render_to_string('email/verify_email.txt', context)
-
-        # Send email
-        try:
-            send_mail(
-                subject=subject,
-                message=email_text,
-                from_email=settings.DEFAULT_FROM_EMAIL,
-                recipient_list=[user.email],
-                html_message=email_html,
-                fail_silently=False
-            )
-        except Exception as e:
-            print(f"Failed to send verification email: {str(e)}")
-
 
 class UserProfileView(APIView):
+    """User profile management view"""
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
@@ -99,8 +62,26 @@ class UserProfileView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
-class VerifyEmailView(APIView):
-    permission_classes = [permissions.AllowAny]
+class EmailManagementMixin:
+    """Mixin for email verification functionality"""
+
+    def validate_token(self, token):
+        """Validate a token and return the user"""
+        try:
+            user = User.objects.get(email_verification_token=token)
+
+            # Check if token is expired (24 hours)
+            if AuthHelper.check_token_expiry(user.email_verification_sent_at):
+                return None, "Verification link has expired. Please request a new one."
+
+            return user, None
+        except User.DoesNotExist:
+            return None, "Invalid verification token."
+
+
+class VerifyEmailView(APIView, EmailManagementMixin):
+    """Email verification view"""
+    permission_classes = [AllowAny]
 
     def post(self, request):
         """Verify user email with token"""
@@ -111,32 +92,22 @@ class VerifyEmailView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        try:
-            user = User.objects.get(email_verification_token=token)
-
-            # Check if token is expired (24 hours)
-            if user.email_verification_sent_at:
-                expiration = user.email_verification_sent_at + timedelta(hours=24)
-                if timezone.now() > expiration:
-                    return Response(
-                        {"detail": "Verification link has expired. Please request a new one."},
-                        status=status.HTTP_400_BAD_REQUEST
-                    )
-
-            user.email_verified = True
-            user.email_verification_token = None
-            user.save()
-
-            return Response({"message": "Email verified successfully."})
-
-        except User.DoesNotExist:
+        user, error = self.validate_token(token)
+        if error:
             return Response(
-                {"detail": "Invalid verification token."},
+                {"detail": error},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
+        user.email_verified = True
+        user.email_verification_token = None
+        user.save()
+
+        return Response({"message": "Email verified successfully."})
+
 
 class ResendVerificationEmailView(APIView):
+    """Resend verification email view"""
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
@@ -151,102 +122,63 @@ class ResendVerificationEmailView(APIView):
 
         # Check if we've sent an email recently (prevent abuse)
         if user.email_verification_sent_at:
-            last_sent = user.email_verification_sent_at
-            cooldown = last_sent + timedelta(minutes=5)
+            cooldown_minutes = 5
+            cooldown = user.email_verification_sent_at + timezone.timedelta(minutes=cooldown_minutes)
 
             if timezone.now() < cooldown:
                 return Response(
-                    {"detail": "Please wait a few minutes before requesting another email."},
+                    {"detail": f"Please wait at least {cooldown_minutes} minutes before requesting another email."},
                     status=status.HTTP_400_BAD_REQUEST
                 )
 
         # Generate new token
-        token = str(uuid.uuid4())
+        token = AuthHelper.generate_token()
         user.email_verification_token = token
         user.email_verification_sent_at = timezone.now()
         user.save()
 
         # Send verification email
-        subject = "Verify your email address"
-        verification_url = f"{settings.FRONTEND_URL}/verify-email/{token}"
+        success = AuthHelper.send_verification_email(user, token)
 
-        context = {
-            'user': user,
-            'verification_url': verification_url
-        }
-        email_html = render_to_string('email/verify_email.html', context)
-        email_text = render_to_string('email/verify_email.txt', context)
-
-        try:
-            send_mail(
-                subject=subject,
-                message=email_text,
-                from_email=settings.DEFAULT_FROM_EMAIL,
-                recipient_list=[user.email],
-                html_message=email_html,
-                fail_silently=False
-            )
+        if success:
             return Response({"message": "Verification email sent successfully."})
-        except Exception as e:
+        else:
             return Response(
-                {"detail": f"Failed to send email: {str(e)}"},
+                {"detail": "Failed to send verification email. Please try again later."},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
 
-class GenerateTwoFactorView(APIView):
+class TwoFactorAuthView(APIView):
+    """Base view for 2FA operations"""
     permission_classes = [IsAuthenticated]
+
+
+class GenerateTwoFactorView(TwoFactorAuthView):
+    """Generate 2FA setup view"""
 
     def post(self, request):
         """Generate new 2FA secret and QR code"""
         user = request.user
 
-        # Generate new secret key
-        secret_key = pyotp.random_base32()
-        user.two_factor_secret = secret_key
-        user.save()
-
-        # Create OTP provisioning URI
-        totp = pyotp.TOTP(secret_key)
-        provisioning_uri = totp.provisioning_uri(
-            name=user.email,
-            issuer_name="Wellness Platform"
-        )
-
         # Generate QR code
-        qr = qrcode.QRCode(
-            version=1,
-            error_correction=qrcode.constants.ERROR_CORRECT_L,
-            box_size=10,
-            border=4,
-        )
-        qr.add_data(provisioning_uri)
-        qr.make(fit=True)
+        qr_data = AuthHelper.generate_2fa_qr_code(user)
 
-        img = qr.make_image(fill_color="black", back_color="white")
-        buffer = io.BytesIO()
-        img.save(buffer, format="PNG")
-        qr_code_base64 = base64.b64encode(buffer.getvalue()).decode()
-
-        return Response({
-            "secret_key": secret_key,
-            "qr_code": f"data:image/png;base64,{qr_code_base64}"
-        })
+        return Response(qr_data)
 
 
-class VerifyTwoFactorView(APIView):
-    permission_classes = [IsAuthenticated]
+class VerifyTwoFactorView(TwoFactorAuthView):
+    """Verify and enable 2FA view"""
 
     def post(self, request):
         """Verify and enable 2FA with verification code"""
         user = request.user
-        code = request.data.get('code')
+        serializer = TwoFactorVerifySerializer(data=request.data)
 
-        if not code:
-            return Response(
-                {"detail": "Verification code is required."},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        code = serializer.validated_data['code']
 
         if not user.two_factor_secret:
             return Response(
@@ -255,8 +187,7 @@ class VerifyTwoFactorView(APIView):
             )
 
         # Verify the code
-        totp = pyotp.TOTP(user.two_factor_secret)
-        if totp.verify(code):
+        if AuthHelper.verify_2fa_code(user, code):
             user.two_factor_enabled = True
             user.save()
             return Response({"message": "Two-factor authentication enabled successfully."})
@@ -267,8 +198,8 @@ class VerifyTwoFactorView(APIView):
             )
 
 
-class DisableTwoFactorView(APIView):
-    permission_classes = [IsAuthenticated]
+class DisableTwoFactorView(TwoFactorAuthView):
+    """Disable 2FA view"""
 
     def post(self, request):
         """Disable 2FA for current user"""
@@ -288,6 +219,7 @@ class DisableTwoFactorView(APIView):
 
 
 class ChangePasswordView(APIView):
+    """Change password view"""
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
@@ -299,8 +231,26 @@ class ChangePasswordView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
+class PasswordResetMixin:
+    """Mixin for password reset functionality"""
+
+    def validate_reset_token(self, token):
+        """Validate a password reset token and return the user"""
+        try:
+            user = User.objects.get(password_reset_token=token)
+
+            # Check if token is expired (24 hours)
+            if AuthHelper.check_token_expiry(user.password_reset_sent_at):
+                return None, "Reset link has expired. Please request a new one."
+
+            return user, None
+        except User.DoesNotExist:
+            return None, "Invalid password reset token."
+
+
 class ResetPasswordRequestView(APIView):
-    permission_classes = [permissions.AllowAny]
+    """Request password reset view"""
+    permission_classes = [AllowAny]
 
     def post(self, request):
         """Request password reset email"""
@@ -315,41 +265,28 @@ class ResetPasswordRequestView(APIView):
             user = User.objects.get(email=email)
 
             # Generate reset token
-            token = str(uuid.uuid4())
+            token = AuthHelper.generate_token()
             user.password_reset_token = token
             user.password_reset_sent_at = timezone.now()
             user.save()
 
             # Send reset email
-            subject = "Reset your password"
-            reset_url = f"{settings.FRONTEND_URL}/reset-password/{token}"
-
-            context = {
-                'user': user,
-                'reset_url': reset_url
-            }
-            email_html = render_to_string('email/reset_password.html', context)
-            email_text = render_to_string('email/reset_password.txt', context)
-
-            send_mail(
-                subject=subject,
-                message=email_text,
-                from_email=settings.DEFAULT_FROM_EMAIL,
-                recipient_list=[user.email],
-                html_message=email_html,
-                fail_silently=False
-            )
-
-            # Always return success even if user not found (security best practice)
-            return Response({"message": "If your email is registered, you will receive a password reset link shortly."})
+            AuthHelper.send_password_reset_email(user, token)
 
         except User.DoesNotExist:
-            # Return same message as success case to prevent email enumeration
-            return Response({"message": "If your email is registered, you will receive a password reset link shortly."})
+            # We still return a success message even if user doesn't exist
+            # This prevents email enumeration attacks
+            pass
+
+        # Always return success to prevent email enumeration
+        return Response({
+            "message": "If your email is registered, you will receive a password reset link shortly."
+        })
 
 
-class ResetPasswordConfirmView(APIView):
-    permission_classes = [permissions.AllowAny]
+class ResetPasswordConfirmView(APIView, PasswordResetMixin):
+    """Confirm password reset view"""
+    permission_classes = [AllowAny]
 
     def post(self, request):
         """Confirm password reset with token and set new password"""
@@ -362,33 +299,87 @@ class ResetPasswordConfirmView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        try:
-            user = User.objects.get(password_reset_token=token)
-
-            # Check if token is expired (24 hours)
-            if user.email_verification_sent_at:
-                expiration = user.email_verification_sent_at + timedelta(hours=24)
-                if timezone.now() > expiration:
-                    return Response(
-                        {"detail": "Verification link has expired. Please request a new one."},
-                        status=status.HTTP_400_BAD_REQUEST
-                    )
-
-            # Set new password
-            user.set_password(new_password)
-            user.password_reset_token = None
-            user.save()
-
-            return Response({"message": "Password has been reset successfully."})
-
-        except User.DoesNotExist:
+        user, error = self.validate_reset_token(token)
+        if error:
             return Response(
-                {"detail": "Invalid password reset token."},
+                {"detail": error},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Set new password
+        user.set_password(new_password)
+        user.password_reset_token = None
+        user.save()
+
+        return Response({"message": "Password has been reset successfully."})
+
+
+class TwoFactorTokenView(APIView):
+    """2FA verification during login"""
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        """Verify 2FA code and complete login"""
+        token = request.data.get('token')
+        code = request.data.get('code')
+
+        if not token or not code:
+            return Response(
+                {'detail': 'Token and verification code are required.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Validate token
+        try:
+            import jwt
+
+            # Decode token without verification
+            # (We're just extracting the user ID to look up the 2FA secret)
+            decoded_token = jwt.decode(token, options={"verify_signature": False}, algorithms=["HS256"])
+            user_id = decoded_token.get('user_id')
+
+            if not user_id:
+                return Response(
+                    {'detail': 'Invalid token.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            # Get user
+            try:
+                user = User.objects.get(id=user_id)
+            except User.DoesNotExist:
+                return Response(
+                    {'detail': 'User not found.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            # Verify 2FA code
+            if not user.two_factor_secret:
+                return Response(
+                    {'detail': 'Two-factor authentication not set up for this user.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            # Verify the code
+            if AuthHelper.verify_2fa_code(user, code):
+                # Generate new token pair
+                tokens = AuthHelper.generate_tokens_for_user(user)
+                return Response(tokens)
+            else:
+                return Response(
+                    {'detail': 'Invalid verification code.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+        except Exception as e:
+            return Response(
+                {'detail': f'Failed to verify two-factor authentication: {str(e)}'},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
 
 class NotificationSettingsView(APIView):
+    """User notification settings view"""
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
@@ -405,12 +396,13 @@ class NotificationSettingsView(APIView):
         if serializer.is_valid():
             request.user.email_notifications_enabled = serializer.validated_data.get('email_enabled')
             request.user.weekly_summary_enabled = serializer.validated_data.get('weekly_summary')
-            request.user.save()
+            request.user.save(update_fields=['email_notifications_enabled', 'weekly_summary_enabled'])
             return Response(serializer.validated_data)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
 class ExportUserDataView(APIView):
+    """Export all user data view"""
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
@@ -448,215 +440,3 @@ class ExportUserDataView(APIView):
         user_data['ai_insights'] = AIInsightSerializer(insights, many=True).data
 
         return Response(user_data)
-
-
-class TwoFactorTokenView(APIView):
-    """
-    API view for verifying two-factor authentication during login
-    """
-    permission_classes = [permissions.AllowAny]
-
-    def post(self, request):
-        """Verify 2FA code and complete login"""
-        token = request.data.get('token')
-        code = request.data.get('code')
-        print(f"Received token: {token[:10]}... (length: {len(token if token else '')})")
-        print(f"Received code: {code}")
-
-        if not token or not code:
-            return Response(
-                {'detail': 'Token and verification code are required.'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        # Validate token
-        try:
-            from rest_framework_simplejwt.tokens import AccessToken
-            import jwt
-
-            # Decode token without verification
-            # (We're just extracting the user ID to look up the 2FA secret)
-            decoded_token = jwt.decode(token, options={"verify_signature": False}, algorithms=["HS256"])
-            user_id = decoded_token.get('user_id')
-
-            if not user_id:
-                return Response(
-                    {'detail': 'Invalid token.'},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-
-            # Get user
-            try:
-                user = User.objects.get(id=user_id)
-            except User.DoesNotExist:
-                return Response(
-                    {'detail': 'User not found.'},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-
-            # Verify 2FA code
-            if not user.two_factor_secret:
-                return Response(
-                    {'detail': 'Two-factor authentication not set up for this user.'},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-
-            totp = pyotp.TOTP(user.two_factor_secret)
-            if not totp.verify(code):
-                return Response(
-                    {'detail': 'Invalid verification code.'},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-
-            # Generate new token pair
-            from rest_framework_simplejwt.tokens import RefreshToken
-            refresh = RefreshToken.for_user(user)
-
-            # Add custom claims
-            refresh['email_verified'] = user.email_verified
-            refresh['two_factor_enabled'] = user.two_factor_enabled
-            refresh['username'] = user.username
-
-            # Return new tokens
-            return Response({
-                'refresh': str(refresh),
-                'access': str(refresh.access_token),
-            })
-
-        except Exception as e:
-            return Response(
-                {'detail': f'Failed to verify two-factor authentication: {str(e)}'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-
-# OAuth views - Add these new classes at the end of your file
-
-class GoogleLoginView(APIView):
-    """
-    View for initiating Google OAuth login
-    """
-    permission_classes = [permissions.AllowAny]
-
-    def get(self, request):
-        redirect_uri = f"{settings.FRONTEND_URL}/auth/callback"
-        google_client_id = settings.SOCIALACCOUNT_PROVIDERS['google']['APP']['client_id']
-
-        return redirect(
-            f"https://accounts.google.com/o/oauth2/auth"
-            f"?client_id={google_client_id}"
-            f"&redirect_uri={redirect_uri}"
-            f"&response_type=code"
-            f"&scope=profile email"
-        )
-
-
-class GitHubLoginView(APIView):
-    """
-    View for initiating GitHub OAuth login
-    """
-    permission_classes = [permissions.AllowAny]
-
-    def get(self, request):
-        redirect_uri = f"{settings.FRONTEND_URL}/auth/callback"
-        github_client_id = settings.SOCIALACCOUNT_PROVIDERS['github']['APP']['client_id']
-
-        return redirect(
-            f"https://github.com/login/oauth/authorize"
-            f"?client_id={github_client_id}"
-            f"&redirect_uri={redirect_uri}"
-            f"&scope=user email"
-        )
-
-
-class SocialLoginCallbackView(APIView):
-    """
-    View for handling OAuth callback and generating JWT tokens
-    """
-    permission_classes = [permissions.AllowAny]
-
-    def get(self, request):
-        code = request.query_params.get('code')
-        provider = request.query_params.get('provider')
-
-        if not code or not provider:
-            return Response(
-                {"detail": "Missing code or provider parameter."},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        # Process OAuth response based on provider
-        if provider == 'google':
-            adapter = GoogleOAuth2Adapter()
-        elif provider == 'github':
-            adapter = GitHubOAuth2Adapter()
-        else:
-            return Response(
-                {"detail": "Unsupported provider."},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        try:
-            # Exchange code for access token
-            callback_url = f"{settings.FRONTEND_URL}/auth/callback"
-            client = OAuth2Client(request, adapter.client_id, adapter.client_secret, callback_url)
-            token = client.get_access_token(code)
-
-            # Get user info from provider
-            social_token = token['access_token']
-            user_data = adapter.get_user_info(social_token)
-
-            # Get or create user account
-            try:
-                social_account = SocialAccount.objects.get(
-                    provider=provider,
-                    uid=user_data['id']
-                )
-                user = social_account.user
-            except SocialAccount.DoesNotExist:
-                # Create new user if doesn't exist
-                email = user_data.get('email')
-                if not email:
-                    return Response(
-                        {"detail": "Email not provided by OAuth provider."},
-                        status=status.HTTP_400_BAD_REQUEST
-                    )
-
-                try:
-                    user = User.objects.get(email=email)
-                except User.DoesNotExist:
-                    username = f"{provider}_{user_data['id']}"
-                    user = User.objects.create_user(
-                        username=username,
-                        email=email,
-                        email_verified=True,  # OAuth providers verify email already
-                    )
-
-                # Create social account
-                SocialAccount.objects.create(
-                    user=user,
-                    provider=provider,
-                    uid=user_data['id'],
-                    extra_data=user_data
-                )
-
-            # Generate JWT tokens
-            refresh = RefreshToken.for_user(user)
-            refresh['email_verified'] = user.email_verified
-            refresh['two_factor_enabled'] = user.two_factor_enabled
-            refresh['username'] = user.username
-
-            # Redirect to frontend with tokens
-            token_data = {
-                'refresh': str(refresh),
-                'access': str(refresh.access_token),
-            }
-
-            redirect_url = f"{settings.FRONTEND_URL}/auth/success?tokens={token_data}"
-            return redirect(redirect_url)
-
-        except Exception as e:
-            return Response(
-                {"detail": f"OAuth authentication failed: {str(e)}"},
-                status=status.HTTP_400_BAD_REQUEST
-            )

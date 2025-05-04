@@ -52,6 +52,33 @@ class AuthService {
   }
 
   /**
+   * Validate the current token
+   * @returns {boolean} Whether token is valid
+   */
+  validateToken() {
+    const userStr = localStorage.getItem(TOKEN_KEY) || sessionStorage.getItem(TOKEN_KEY);
+    if (!userStr) return false;
+
+    try {
+      const user = JSON.parse(userStr);
+      if (!user.access) return false;
+
+      const parts = user.access.split('.');
+      if (parts.length !== 3) return false;
+
+      // Check if token is expired
+      const payload = JSON.parse(atob(parts[1]));
+      const now = Math.floor(Date.now() / 1000);
+
+      // Make sure to return true if the token is NOT expired
+      return !(payload.exp && payload.exp < now);
+    } catch (e) {
+      console.error('Error validating token:', e);
+      return false;
+    }
+  }
+
+  /**
    * Log in a user
    * @param {string} username - Username
    * @param {string} password - Password
@@ -61,64 +88,37 @@ class AuthService {
   async login(username, password, remember = false) {
     try {
       const response = await axios.post(API_URL + 'token/', { username, password });
+      const userData = response.data;
 
-      if (response.data.access) {
-        // Extract user info from token
-        const tokenParts = response.data.access.split('.');
-        const payload = JSON.parse(atob(tokenParts[1]));
-
-        // Prepare user data
-        const userData = {
-          ...response.data,
-          username: username,
-          user_id: payload.user_id,
-          email_verified: payload.email_verified,
-          two_factor_enabled: payload.two_factor_enabled
-        };
-
-        // If 2FA is not required, store user data
-        if (!userData.two_factor_enabled) {
-          this.storeUser(userData, remember);
-        }
-
-        return userData;
+      // If 2FA is not required, store user data
+      if (!userData.two_factor_enabled) {
+        this.storeUser(userData, remember);
       }
 
-      return response.data;
+      return userData;
     } catch (error) {
       console.error('Login error:', error);
       throw error;
     }
   }
 
-    /**
+  /**
    * Verify two-factor authentication
    * @param {string} code - 2FA verification code
    * @param {Object} tempAuthData - Temporary auth data from login
    * @returns {Promise} Promise resolving to user data
    */
-  async verifyTwoFactorLogin(code, tempAuthData) {
+  async verifyTwoFactor(code, tempAuthData) {
     try {
-
       // Make sure we have all required data
       if (!code || !tempAuthData || !tempAuthData.access) {
         return Promise.reject(new Error('Missing required 2FA verification data'));
       }
 
-      console.log('Verifying 2FA with code:', code, 'and token data:', {
-      token_length: tempAuthData?.access?.length || 0,
-      has_token: !!tempAuthData?.access
-    });
-
-    // In auth.service.js, modify verifyTwoFactorLogin
-    const response = await axios.post(API_URL + 'token/2fa-verify/', {
-      token: tempAuthData.access,  // Make sure this is the raw token
-      code: code
-    }, {
-      headers: {
-        'Content-Type': 'application/json'
-      }
-    });
+      const response = await axios.post(API_URL + 'token/2fa-verify/', {
+        token: tempAuthData.access,
+        code: code
+      });
 
       if (response.data && response.data.access) {
         const userData = {
@@ -127,7 +127,7 @@ class AuthService {
           two_factor_verified: true
         };
 
-        // Store the user data
+        // Store the complete user data
         this.storeUser(userData, true);
         return userData;
       } else {
@@ -200,33 +200,6 @@ class AuthService {
     } catch (error) {
       console.error('Token refresh error:', error);
       throw error;
-    }
-  }
-
-  /**
-   * Validate the current token
-   * @returns {boolean} Whether token is valid
-   */
-  validateToken() {
-    const userStr = localStorage.getItem(TOKEN_KEY) || sessionStorage.getItem(TOKEN_KEY);
-    if (!userStr) return false;
-
-    try {
-      const user = JSON.parse(userStr);
-      if (!user.access) return false;
-
-      const parts = user.access.split('.');
-      if (parts.length !== 3) return false;
-
-      // Check if token is expired
-      const payload = JSON.parse(atob(parts[1]));
-      const now = Math.floor(Date.now() / 1000);
-
-      // Make sure to return true if the token is NOT expired
-      return !(payload.exp && payload.exp < now);
-    } catch (e) {
-      console.error('Error validating token:', e);
-      return false;
     }
   }
 }

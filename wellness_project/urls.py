@@ -22,14 +22,9 @@ from users.views import (
     NotificationSettingsView,
     ExportUserDataView,
     TwoFactorTokenView,
-    GoogleLoginView,
-    GitHubLoginView,
-    SocialLoginCallbackView
-
 )
 from users.jwt import CustomTokenObtainPairView
-from users.oauth import GoogleAuthAPI
-from users.github_oauth import GitHubAuthAPI
+from users.oauth import GoogleOAuthAPI, GitHubOAuthAPI
 
 router = DefaultRouter()
 router.register(r'health-profiles', HealthProfileViewSet, basename='health-profile')
@@ -70,19 +65,7 @@ urlpatterns = [
     path('api/users/notification-settings/', NotificationSettingsView.as_view(), name='notification-settings'),
     path('api/users/export-data/', ExportUserDataView.as_view(), name='export-user-data'),
 
-
-
-
     # OAuth authentication endpoints
-
-    path('api/oauth/github/authorize/', GitHubAuthAPI.as_view(), name='github-authorize'),
-    path('api/oauth/github/callback/', GitHubAuthAPI.as_view(), name='github-callback'),
-
-    path('api/oauth/google/authorize/', GoogleAuthAPI.as_view(), name='google-authorize'),
-    path('api/oauth/google/callback/', GoogleAuthAPI.as_view(), name='google-callback'),
-    # path('api/auth/github/', GitHubLoginView.as_view(), name='github_login'),
-    path('api/auth/callback/', SocialLoginCallbackView.as_view(), name='social_callback'),
-
-    # Django AllAuth URLs
-    path('accounts/', include('allauth.urls')),
+    path('api/oauth/google/', GoogleOAuthAPI.as_view(), name='google-oauth'),
+    path('api/oauth/github/', GitHubOAuthAPI.as_view(), name='github-oauth'),
 ]
