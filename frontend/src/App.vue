@@ -1,8 +1,9 @@
-<!-- App.vue -->
 <template>
   <div id="app">
     <AppHeader />
-    <router-view></router-view>
+    <main class="main-content">
+      <router-view></router-view>
+    </main>
   </div>
 </template>
 
@@ -38,19 +39,8 @@ export default {
 }
 </script>
 
-<style>
-* {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
-}
-
-body {
-  font-family: Arial, sans-serif;
-  background-color: #f5f5f5;
-  color: #333;
-  line-height: 1.6;
-}
+<style lang="scss">
+@import '@/assets/styles/main.scss';
 
 #app {
   min-height: 100vh;
@@ -58,9 +48,7 @@ body {
   flex-direction: column;
 }
 
-.container {
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 0 2rem;
+.main-content {
+  flex: 1;
 }
 </style>

@@ -128,6 +128,16 @@ const routes = [
         path: '/auth/success',
         name: 'OAuthSuccess',
         component: OAuthSuccess,
+    },
+    {
+        path: '/auth/success',
+        name: 'OAuthSuccess',
+        component: OAuthSuccess,
+    },
+    {
+        path: '/design-system',
+        name: 'DesignSystem',
+        component: () => import('@/views/DesignSystem.vue')
     }
 ]
 

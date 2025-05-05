@@ -1,0 +1,209 @@
+// Main styles
+@import './_variables';
+@import './_utilities';
+
+// Global styles
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body {
+  height: 100%;
+  font-family: $font-family-base;
+  font-size: $font-size-base;
+  color: $secondary;
+  background-color: #f7fafc;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-weight: $font-weight-semibold;
+  margin-bottom: $spacing-4;
+  color: $secondary;
+}
+
+h1 {
+  font-size: $font-size-2xl;
+  line-height: 1.2;
+}
+
+h2 {
+  font-size: $font-size-xl;
+  line-height: 1.25;
+}
+
+a {
+  color: $primary;
+  text-decoration: none;
+  transition: $transition-base;
+
+  &:hover {
+    color: $primary-dark;
+  }
+}
+
+p {
+  margin-bottom: $spacing-4;
+}
+
+.container {
+  @include container;
+}
+
+.btn {
+  &-primary {
+    @include button-primary;
+  }
+
+  &-secondary {
+    @include button-secondary;
+  }
+
+  &-text {
+    @include button-text;
+  }
+
+  &-block {
+    width: 100%;
+  }
+}
+
+.form {
+  &-group {
+    margin-bottom: $spacing-6;
+  }
+
+  &-label {
+    @include form-label;
+  }
+
+  &-control {
+    @include form-control;
+  }
+}
+
+.card {
+  @include card;
+}
+
+.loading-spinner {
+  @include spinner;
+  display: inline-block;
+  margin-right: $spacing-2;
+}
+
+.text-center {
+  text-align: center;
+}
+
+.divider {
+  @include divider;
+}
+
+// Flexbox utility classes
+.flex {
+  display: flex;
+}
+
+.flex-col {
+  flex-direction: column;
+}
+
+.items-center {
+  align-items: center;
+}
+
+.justify-center {
+  justify-content: center;
+}
+
+.justify-between {
+  justify-content: space-between;
+}
+
+.flex-wrap {
+  flex-wrap: wrap;
+}
+
+.flex-grow {
+  flex-grow: 1;
+}
+
+// Gap utilities
+.gap-1 {
+  gap: $spacing-1;
+}
+
+.gap-2 {
+  gap: $spacing-2;
+}
+
+.gap-4 {
+  gap: $spacing-4;
+}
+
+.gap-6 {
+  gap: $spacing-6;
+}
+
+// Margin utilities
+.mt-2 {
+  margin-top: $spacing-2;
+}
+
+.mt-4 {
+  margin-top: $spacing-4;
+}
+
+.mt-6 {
+  margin-top: $spacing-6;
+}
+
+.mb-2 {
+  margin-bottom: $spacing-2;
+}
+
+.mb-4 {
+  margin-bottom: $spacing-4;
+}
+
+.mb-6 {
+  margin-bottom: $spacing-6;
+}
+
+.my-4 {
+  margin-top: $spacing-4;
+  margin-bottom: $spacing-4;
+}
+
+.my-6 {
+  margin-top: $spacing-6;
+  margin-bottom: $spacing-6;
+}
+
+// Responsive containers
+.auth-container {
+  min-height: 100vh;
+  @include flex(column, center, center);
+  padding: $spacing-4;
+
+  @include responsive('md') {
+    padding: $spacing-8;
+  }
+}
+
+.auth-form-container {
+  width: 100%;
+  max-width: 400px;
+  @include card;
+}
+
+.social-login-container {
+  width: 100%;
+  max-width: 400px;
+  margin-top: $spacing-6;
+}
