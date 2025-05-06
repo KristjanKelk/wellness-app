@@ -2,7 +2,6 @@
 import AuthService from '../../services/auth.service';
 import OAuthService from '../../services/oauth.service';
 
-// Initialize state from storage
 const initialState = (() => {
   if (AuthService.validateToken()) {
     return {
@@ -33,7 +32,6 @@ export default {
     login({ commit }, { username, password, remember }) {
       return AuthService.login(username, password, remember)
         .then(userData => {
-          // Complete login if 2FA is not enabled
           if (!userData.two_factor_enabled) {
             commit('loginSuccess', userData);
           }
@@ -68,21 +66,6 @@ export default {
 
     loginWithGitHub() {
       return OAuthService.loginWithGitHub();
-    },
-
-    /**
-     * Process OAuth callback
-     */
-    processOAuthCallback({ commit }, urlParams) {
-      return OAuthService.processCallback(urlParams)
-        .then(userData => {
-          commit('loginSuccess', userData);
-          return userData;
-        })
-        .catch(error => {
-          commit('loginFailure');
-          return Promise.reject(error);
-        });
     },
 
     /**
@@ -131,9 +114,7 @@ export default {
         return Promise.reject(new Error('Not authenticated'));
       }
 
-      // We have a logged in state, validate the token
       if (!AuthService.validateToken()) {
-        // Token is invalid, try to refresh
         return AuthService.refreshToken()
           .then(response => {
             if (response?.access) {
@@ -153,13 +134,6 @@ export default {
 
       return Promise.resolve(state.user);
     },
-
-    /**
-     * Update user data in store
-     */
-    updateUser({ commit }, userData) {
-      commit('updateUser', userData);
-    }
   },
 
   mutations: {
@@ -191,7 +165,6 @@ export default {
       if (state.user) {
         state.user = { ...state.user, ...userData };
 
-        // Update storage
         if (localStorage.getItem('user')) {
           const storedUser = JSON.parse(localStorage.getItem('user'));
           localStorage.setItem('user', JSON.stringify({ ...storedUser, ...userData }));

@@ -372,25 +372,30 @@ export default {
         this.loading.verification = false;
       }
     },
-    async disableTwoFactor() {
+     async disableTwoFactor() {
       if (!confirm('Are you sure you want to disable two-factor authentication? This will make your account less secure.')) {
         return;
       }
 
       this.loading.twoFactor = true;
+
       try {
         await UserService.disableTwoFactor();
         this.user.two_factor_enabled = false;
-        this.$toast.success('Two-factor authentication disabled.', {
-          position: 'top-right',
-          duration: 5000
-        });
-      } catch (error) {
-        console.error('Error disabling 2FA:', error);
-        this.$toast.error('Failed to disable two-factor authentication. Please try again later.', {
-          position: 'top-right',
-          duration: 5000
-        });
+
+        if (this.$toast) {
+          this.$toast.success('Two-factor authentication disabled.', {
+            position: 'top-right',
+            duration: 5000
+          });
+        }
+      } catch (err) {
+        if (this.$toast) {
+          this.$toast.error('Failed to disable two-factor authentication. Please try again later.', {
+            position: 'top-right',
+            duration: 5000
+          });
+        }
       } finally {
         this.loading.twoFactor = false;
       }

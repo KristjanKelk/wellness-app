@@ -4,7 +4,6 @@
     :type="type"
     :disabled="disabled || loading"
     @click="$emit('click', $event)">
-    <div v-if="loading" class="loading-spinner"></div>
     <span v-if="loading && loadingText">{{ loadingText }}</span>
     <span v-else><slot></slot></span>
   </button>

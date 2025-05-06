@@ -12,29 +12,7 @@ import VerifyPrompt from '../views/VerifyPrompt.vue'
 import store from '../store'
 import OAuthCallback from '../views/OAuthCallback.vue'
 import OAuthSuccess from '../views/OAuthSuccess.vue'
-
-const validateToken = () => {
-  const userStr = localStorage.getItem('user') || sessionStorage.getItem('user');
-  if (!userStr) return false;
-
-  try {
-    const user = JSON.parse(userStr);
-    if (!user.access) return false;
-
-    const parts = user.access.split('.');
-    if (parts.length !== 3) return false;
-
-    // Check if token is expired
-    const payload = JSON.parse(atob(parts[1]));
-    const now = Math.floor(Date.now() / 1000);
-
-    // Make sure to return true if token is NOT expired
-    return !(payload.exp && payload.exp < now);
-  } catch (e) {
-    console.error('Error validating token:', e);
-    return false;
-  }
-}
+import AuthService from '../services/auth.service'
 
 const routes = [
     {
@@ -157,7 +135,7 @@ router.beforeEach((to, from, next) => {
     return;
   }
 
-  const isValidToken = validateToken();
+  const isValidToken = AuthService.validateToken();
   const storeLoggedIn = store.getters['auth/isLoggedIn'];
 
   console.log(`Route navigation: ${from.path} -> ${to.path}, token valid: ${isValidToken}, store logged in: ${storeLoggedIn}`);

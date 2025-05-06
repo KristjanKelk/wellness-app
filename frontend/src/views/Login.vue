@@ -140,8 +140,6 @@ import { ref, computed, watch, nextTick } from 'vue';
 import { useStore } from 'vuex';
 import { useRouter } from 'vue-router';
 import OAuthService from '@/services/oauth.service';
-
-// Import UI components
 import BaseButton from '@/components/ui/BaseButton.vue';
 import FormInput from '@/components/ui/FormInput.vue';
 import FormCheckbox from '@/components/ui/FormCheckbox.vue';
@@ -263,9 +261,7 @@ export default {
     };
 
     const loginSuccess = (userData) => {
-      console.log('Login successful in component');
 
-      // Make sure we commit the login success if it hasn't been done yet
       if (!store.getters['auth/isLoggedIn']) {
         store.commit('auth/loginSuccess', userData);
       }
@@ -273,7 +269,6 @@ export default {
       successful.value = true;
       message.value = 'Login successful! Redirecting...';
 
-      // Short delay before redirect for better UX
       setTimeout(() => {
         router.push('/dashboard');
       }, 500);
@@ -309,7 +304,6 @@ export default {
       tempAuthData.value = null;
     };
 
-    // OAuth login methods
     const loginWithGoogle = async () => {
       try {
         message.value = '';

@@ -108,7 +108,7 @@ class AuthService {
    * @param {Object} tempAuthData - Temporary auth data from login
    * @returns {Promise} Promise resolving to user data
    */
-  async verifyTwoFactor(code, tempAuthData) {
+  async verifyTwoFactorLogin(code, tempAuthData) {
     try {
       // Make sure we have all required data
       if (!code || !tempAuthData || !tempAuthData.access) {
