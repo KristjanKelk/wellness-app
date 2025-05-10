@@ -9,31 +9,46 @@
       <router-link to="/profile" class="btn btn-primary">Complete Profile</router-link>
     </template>
 
-    <div class="score-container">
+    <div class="score-card">
       <div class="score-circle" :class="scoreClass">
         <span class="score-number">{{ score }}</span>
       </div>
       <div class="score-breakdown">
         <div class="score-component">
-          <span>BMI: {{ bmiScore }} ({{ (bmiScore * 0.3).toFixed(1) }} pts)</span>
+          <div class="component-info">
+            <span class="component-label">BMI Score</span>
+            <span class="component-value">{{ bmiScore }}% ({{ (bmiScore * 0.3).toFixed(1) }}pts)</span>
+          </div>
           <div class="progress-bar">
             <div class="progress" :style="{ width: bmiScore + '%' }"></div>
           </div>
         </div>
+
         <div class="score-component">
-          <span>Activity: {{ activityScore }} ({{ (activityScore * 0.3).toFixed(1) }} pts)</span>
+          <div class="component-info">
+            <span class="component-label">Activity</span>
+            <span class="component-value">{{ activityScore }}% ({{ (activityScore * 0.3).toFixed(1) }}pts)</span>
+          </div>
           <div class="progress-bar">
             <div class="progress" :style="{ width: activityScore + '%' }"></div>
           </div>
         </div>
+
         <div class="score-component">
-          <span>Progress: {{ progressScore }} ({{ (progressScore * 0.2).toFixed(1) }} pts)</span>
+          <div class="component-info">
+            <span class="component-label">Progress</span>
+            <span class="component-value">{{ progressScore }}% ({{ (progressScore * 0.2).toFixed(1) }}pts)</span>
+          </div>
           <div class="progress-bar">
             <div class="progress" :style="{ width: progressScore + '%' }"></div>
           </div>
         </div>
+
         <div class="score-component">
-          <span>Habits: {{ habitsScore }} ({{ (habitsScore * 0.2).toFixed(1) }} pts)</span>
+          <div class="component-info">
+            <span class="component-label">Habits</span>
+            <span class="component-value">{{ habitsScore }}% ({{ (habitsScore * 0.2).toFixed(1) }}pts)</span>
+          </div>
           <div class="progress-bar">
             <div class="progress" :style="{ width: habitsScore + '%' }"></div>
           </div>
@@ -88,3 +103,49 @@ export default {
   }
 };
 </script>
+
+<style lang="scss" scoped>
+@import '@/assets/styles/_variables.scss';
+
+.score-card {
+  .score-component {
+    margin-bottom: $spacing-3;
+
+    &:last-child {
+      margin-bottom: 0;
+    }
+
+    .component-info {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: $spacing-1;
+
+      .component-label {
+        font-weight: $font-weight-medium;
+        color: $secondary;
+        font-size: $font-size-sm;
+      }
+
+      .component-value {
+        color: $gray-dark;
+        font-size: $font-size-sm;
+      }
+    }
+
+    .progress-bar {
+      height: 6px;
+      background-color: $gray-lighter;
+      border-radius: 3px;
+      overflow: hidden;
+
+      .progress {
+        height: 100%;
+        border-radius: 3px;
+        background-color: $primary;
+        transition: width 0.6s ease-in-out;
+      }
+    }
+  }
+}
+</style>

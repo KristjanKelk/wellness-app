@@ -1,0 +1,314 @@
+// Profile layout styles
+
+.profile {
+  &-container {
+    max-width: 850px;
+    margin: 0 auto;
+    padding: $spacing-6;
+
+    @include responsive('md') {
+      padding: $spacing-8;
+    }
+  }
+
+  &-header {
+    text-align: center;
+    margin-bottom: $spacing-8;
+
+    h1 {
+      margin-bottom: $spacing-4;
+
+      &:after {
+        content: '';
+        display: block;
+        width: 60px;
+        height: 3px;
+        background-color: $primary;
+        margin: $spacing-4 auto 0;
+      }
+    }
+
+    .profile-description {
+      color: $gray;
+      max-width: 600px;
+      margin: 0 auto;
+    }
+  }
+
+  &-loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 400px;
+
+    .loading-spinner {
+      margin-bottom: $spacing-4;
+    }
+  }
+
+  &-form {
+    background: $white;
+    border-radius: $border-radius-xl;
+    padding: $spacing-8;
+    box-shadow: $shadow-lg;
+  }
+
+  &-section {
+    margin-bottom: $spacing-10;
+    padding-bottom: $spacing-8;
+    border-bottom: 1px solid $gray-lighter;
+
+    &:last-child {
+      margin-bottom: 0;
+      padding-bottom: 0;
+      border-bottom: none;
+    }
+
+    h2 {
+      display: flex;
+      align-items: center;
+      margin-bottom: $spacing-6;
+      color: $primary-dark;
+      font-weight: $font-weight-semibold;
+      font-size: $font-size-xl;
+
+      &:before {
+        content: "";
+        display: inline-block;
+        width: 6px;
+        height: 24px;
+        background-color: $primary;
+        margin-right: $spacing-3;
+        border-radius: 3px;
+      }
+    }
+
+    h3 {
+      margin-bottom: $spacing-4;
+      font-size: $font-size-lg;
+      color: $gray-dark;
+      font-weight: $font-weight-medium;
+    }
+
+    .section-description {
+      color: $gray;
+      margin-bottom: $spacing-6;
+      line-height: 1.6;
+    }
+
+    .subsection {
+      background-color: #f8f9fa;
+      border-radius: $border-radius-lg;
+      padding: $spacing-6;
+      margin-bottom: $spacing-6;
+
+      h3 {
+        color: $primary-dark;
+        border-bottom: 2px solid $gray-lighter;
+        padding-bottom: $spacing-2;
+        margin-bottom: $spacing-4;
+      }
+    }
+  }
+
+  &-metrics {
+    &-summary {
+      margin-top: $spacing-6;
+      background-color: #f8fcfc;
+      padding: $spacing-4;
+      border-radius: $border-radius;
+      border-left: 4px solid $primary;
+
+      .metric-item {
+        display: flex;
+        align-items: center;
+        gap: $spacing-2;
+
+        .metric-label {
+          color: $gray;
+        }
+
+        .metric-value {
+          font-weight: $font-weight-bold;
+          font-size: $font-size-lg;
+        }
+
+        .metric-category {
+          font-size: $font-size-sm;
+          padding: $spacing-1 $spacing-2;
+          border-radius: $border-radius-sm;
+          color: $white;
+          background-color: $primary;
+        }
+      }
+    }
+  }
+
+  &-avatar {
+    width: 120px;
+    height: 120px;
+    border-radius: 50%;
+    background-color: $gray-lighter;
+    margin: 0 auto $spacing-6;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    overflow: hidden;
+
+    img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .avatar-placeholder {
+      color: $gray;
+      font-size: 3rem;
+    }
+
+    .avatar-upload {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background-color: rgba($black, 0.7);
+      color: $white;
+      padding: $spacing-2;
+      text-align: center;
+      cursor: pointer;
+      font-size: $font-size-sm;
+
+      &:hover {
+        background-color: rgba($black, 0.85);
+      }
+    }
+  }
+
+  &-stats {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: $spacing-4;
+    margin-bottom: $spacing-8;
+
+    @include responsive('sm') {
+      grid-template-columns: repeat(2, 1fr);
+    }
+
+    @include responsive('md') {
+      grid-template-columns: repeat(4, 1fr);
+    }
+
+    .stat-card {
+      background: $white;
+      padding: $spacing-4;
+      border-radius: $border-radius-lg;
+      box-shadow: $shadow;
+      text-align: center;
+
+      .stat-value {
+        font-size: 1.75rem;
+        font-weight: $font-weight-bold;
+        margin-bottom: $spacing-1;
+        color: $primary;
+      }
+
+      .stat-label {
+        color: $gray;
+        font-size: $font-size-sm;
+      }
+    }
+  }
+
+  &-tabs {
+    display: flex;
+    border-bottom: 1px solid $gray-lighter;
+    margin-bottom: $spacing-6;
+
+    .tab-item {
+      padding: $spacing-3 $spacing-6;
+      color: $gray;
+      text-decoration: none;
+      font-weight: $font-weight-medium;
+      border-bottom: 2px solid transparent;
+      margin-bottom: -1px;
+      transition: $transition-base;
+
+      &:hover {
+        color: $secondary;
+      }
+
+      &.is-active {
+        color: $primary;
+        border-bottom-color: $primary;
+      }
+    }
+  }
+
+  &-completion {
+    margin-bottom: $spacing-8;
+
+    .completion-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: $spacing-2;
+
+      .completion-percentage {
+        font-weight: $font-weight-bold;
+        color: $primary;
+      }
+    }
+
+    .completion-bar {
+      height: 8px;
+      background-color: $gray-lighter;
+      border-radius: 4px;
+      overflow: hidden;
+
+      .completion-progress {
+        height: 100%;
+        background-color: $primary;
+        border-radius: 4px;
+        transition: width 0.5s ease-in-out;
+      }
+    }
+
+    .completion-tips {
+      margin-top: $spacing-4;
+      padding: $spacing-4;
+      background-color: mix(white, $primary, 95%);
+      border-radius: $border-radius;
+      border-left: 3px solid $primary;
+
+      h4 {
+        margin-bottom: $spacing-2;
+        color: $primary-dark;
+      }
+
+      ul {
+        margin: 0;
+        padding-left: $spacing-4;
+
+        li {
+          color: $gray-dark;
+          margin-bottom: $spacing-1;
+        }
+      }
+    }
+  }
+}
+
+// Privacy settings
+.privacy-checkbox {
+  border: 1px solid $gray-lighter;
+  border-radius: $border-radius;
+  padding: $spacing-4;
+  background-color: #f8f9fa;
+
+  &:hover {
+    border-color: $primary;
+    background-color: #f1faf9;
+  }
+}

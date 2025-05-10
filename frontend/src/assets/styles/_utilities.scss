@@ -22,12 +22,18 @@
   align-items: center;
 }
 
+@mixin flex-column {
+  display: flex;
+  flex-direction: column;
+}
+
 // Typography
 @mixin heading-1 {
   font-size: $font-size-2xl;
   font-weight: $font-weight-bold;
   line-height: 1.2;
   margin-bottom: $spacing-6;
+  color: $secondary;
 }
 
 @mixin heading-2 {
@@ -35,6 +41,15 @@
   font-weight: $font-weight-semibold;
   line-height: 1.25;
   margin-bottom: $spacing-4;
+  color: $secondary;
+}
+
+@mixin heading-3 {
+  font-size: $font-size-lg;
+  font-weight: $font-weight-semibold;
+  line-height: 1.3;
+  margin-bottom: $spacing-3;
+  color: $secondary;
 }
 
 @mixin body-text {
@@ -91,6 +106,16 @@
   }
 }
 
+@mixin button-danger {
+  @include button-base;
+  background-color: $error;
+  color: $white;
+
+  &:hover:not(:disabled) {
+    background-color: darken($error, 10%);
+  }
+}
+
 @mixin button-text {
   background: none;
   border: none;
@@ -110,19 +135,23 @@
   }
 }
 
+@mixin button-block {
+  width: 100%;
+}
+
 // Form elements
 @mixin form-control {
   width: 100%;
-  padding: $spacing-3 $spacing-4;
-  border: 1px solid $gray-light;
-  border-radius: $border-radius;
+  padding: $input-padding;
+  border: 1px solid $input-border-color;
+  border-radius: $input-radius;
   font-size: $font-size-base;
   transition: $transition-base;
   background-color: $white;
 
   &:focus {
-    border-color: $primary;
-    box-shadow: 0 0 0 3px rgba($primary, 0.1);
+    border-color: $input-focus-border-color;
+    box-shadow: $input-focus-shadow;
     outline: none;
   }
 
@@ -139,12 +168,54 @@
   color: $secondary;
 }
 
-// Card
+@mixin form-group {
+  margin-bottom: $spacing-6;
+}
+
+@mixin form-container {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: $spacing-8;
+}
+
+@mixin help-text {
+  display: block;
+  color: $gray;
+  font-size: $font-size-sm;
+  margin-top: $spacing-1;
+}
+
+@mixin error-text {
+  display: block;
+  color: $error;
+  font-size: $font-size-sm;
+  margin-top: $spacing-1;
+}
+
+// Card layouts
 @mixin card {
   background: $white;
-  border-radius: $border-radius-lg;
+  border-radius: $card-border-radius;
   box-shadow: $shadow;
-  padding: $spacing-6;
+  padding: $card-padding;
+  margin-bottom: $card-margin-bottom;
+}
+
+@mixin card-header {
+  margin-bottom: $spacing-4;
+  padding-bottom: $spacing-3;
+  border-bottom: 1px solid $gray-lighter;
+
+  h2, h3 {
+    margin-bottom: 0;
+  }
+}
+
+@mixin dashboard-card {
+  @include card;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
 }
 
 // Alert
@@ -158,27 +229,37 @@
 }
 
 .alert-error {
-  background-color: mix(white, $error, 85%);
-  border: 1px solid $error;
-  color: mix(black, $error, 10%);
+  @include alert(mix(white, $error, 85%), $error, mix(black, $error, 10%));
 }
 
 .alert-success {
-  background-color: mix(white, $success, 90%);
-  border: 1px solid $success;
-  color: mix(black, $success, 10%);
+  @include alert(mix(white, $success, 90%), $success, mix(black, $success, 10%));
 }
 
 .alert-warning {
-  background-color: mix(white, $warning, 80%);
-  border: 1px solid $warning;
-  color: mix(black, $warning, 15%);
+  @include alert(mix(white, $warning, 80%), $warning, mix(black, $warning, 15%));
 }
 
 .alert-info {
-  background-color: mix(white, $info, 85%);
-  border: 1px solid $info;
-  color: mix(black, $info, 10%);
+  @include alert(mix(white, $info, 85%), $info, mix(black, $info, 10%));
+}
+
+// Status indicators
+@mixin status-indicator($color) {
+  font-weight: $font-weight-semibold;
+  color: $color;
+  display: inline-flex;
+  align-items: center;
+
+  &::before {
+    content: "";
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background-color: $color;
+    margin-right: $spacing-2;
+  }
 }
 
 // Animations
@@ -193,6 +274,29 @@
   border-radius: 50%;
   border-top-color: $color;
   animation: spin 0.8s ease-in-out infinite;
+}
+
+@mixin loading-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 200px;
+
+  .loading-spinner {
+    @include spinner(2.5rem, 3px, $primary);
+    margin-bottom: $spacing-4;
+  }
+}
+
+@mixin empty-container {
+  text-align: center;
+  padding: $spacing-8 $spacing-4;
+
+  p {
+    color: $gray;
+    margin-bottom: $spacing-4;
+  }
 }
 
 // Containers
@@ -217,6 +321,45 @@
 
   @media (min-width: 1280px) {
     max-width: 1280px;
+  }
+}
+
+// Modal container
+@mixin modal-container {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba($secondary, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: $z-index-modal;
+}
+
+@mixin modal-content {
+  background-color: $white;
+  padding: $spacing-6;
+  border-radius: $card-border-radius;
+  width: 90%;
+  max-width: 500px;
+  position: relative;
+  box-shadow: $shadow-lg;
+}
+
+@mixin modal-close-button {
+  position: absolute;
+  top: $spacing-4;
+  right: $spacing-4;
+  background: none;
+  border: none;
+  color: $gray;
+  font-size: 1.5rem;
+  cursor: pointer;
+
+  &:hover {
+    color: $secondary;
   }
 }
 
@@ -251,5 +394,241 @@
     padding: 0 $spacing-4;
     color: $gray;
     font-size: $font-size-sm;
+  }
+}
+
+// Toggle switch
+@mixin toggle-switch {
+  position: relative;
+  display: inline-block;
+  width: 50px;
+  height: 24px;
+
+  input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+  }
+
+  .slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: $gray-light;
+    transition: $transition-base;
+    border-radius: 24px;
+
+    &:before {
+      position: absolute;
+      content: "";
+      height: 16px;
+      width: 16px;
+      left: 4px;
+      bottom: 4px;
+      background-color: $white;
+      transition: $transition-base;
+      border-radius: 50%;
+    }
+  }
+
+  input:checked + .slider {
+    background-color: $success;
+  }
+
+  input:checked + .slider:before {
+    transform: translateX(26px);
+  }
+
+  input:disabled + .slider {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+}
+
+// Checkbox styling
+@mixin custom-checkbox {
+  display: flex;
+  align-items: center;
+  position: relative;
+
+  input[type="checkbox"] {
+    position: absolute;
+    opacity: 0;
+    cursor: pointer;
+    height: 0;
+    width: 0;
+  }
+
+  .checkbox-label {
+    padding-left: 2rem;
+    cursor: pointer;
+    font-weight: normal;
+    position: relative;
+    display: inline-block;
+    user-select: none;
+
+    &:before {
+      content: '';
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: 1.25rem;
+      height: 1.25rem;
+      border: 2px solid $gray-light;
+      background-color: $white;
+      border-radius: $border-radius-sm;
+      transition: $transition-base;
+    }
+
+    &:after {
+      content: '';
+      position: absolute;
+      left: 0.45rem;
+      top: 0.25rem;
+      width: 0.35rem;
+      height: 0.7rem;
+      border: solid $white;
+      border-width: 0 2px 2px 0;
+      transform: rotate(45deg);
+      opacity: 0;
+      transition: opacity 0.2s;
+    }
+  }
+
+  input[type="checkbox"]:checked + .checkbox-label:before {
+    background-color: $primary;
+    border-color: $primary;
+  }
+
+  input[type="checkbox"]:checked + .checkbox-label:after {
+    opacity: 1;
+  }
+
+  &:hover .checkbox-label:before {
+    border-color: $primary;
+  }
+}
+
+// Dashboard specific styles
+@mixin weight-history-item {
+  background-color: $bg-light;
+  padding: $spacing-3;
+  border-radius: $border-radius;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: $spacing-2;
+}
+
+@mixin bmi-scale {
+  width: 100%;
+  height: 12px;
+  background: linear-gradient(
+    to right,
+    $info 0%, $info 25%,
+    $success 25%, $success 50%,
+    $warning 50%, $warning 75%,
+    $error 75%, $error 100%
+  );
+  border-radius: 6px;
+  position: relative;
+  margin-bottom: $spacing-1;
+}
+
+@mixin wellness-score-circle {
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: $white;
+  font-weight: $font-weight-bold;
+  font-size: 2.5rem;
+  margin-bottom: $spacing-6;
+
+  &.excellent {
+    background-color: $success;
+  }
+
+  &.good {
+    background-color: lighten($success, 10%);
+  }
+
+  &.fair {
+    background-color: $warning;
+  }
+
+  &.poor {
+    background-color: $error;
+  }
+}
+
+@mixin insight-item {
+  border-left: 4px solid $gray-lighter;
+  padding: $spacing-3 $spacing-4;
+  margin-bottom: $spacing-4;
+  background-color: $bg-light;
+  border-radius: 0 $border-radius $border-radius 0;
+
+  &.priority-high {
+    border-left-color: $error;
+  }
+
+  &.priority-medium {
+    border-left-color: $warning;
+  }
+
+  &.priority-low {
+    border-left-color: $info;
+  }
+}
+
+// Auth forms
+@mixin auth-container {
+  min-height: 100vh;
+  @include flex(column, center, center);
+  padding: $spacing-4;
+
+  @include responsive('md') {
+    padding: $spacing-8;
+  }
+}
+
+@mixin auth-form-container {
+  width: 100%;
+  max-width: 400px;
+  @include card;
+}
+
+@mixin social-login-button($hover-color) {
+  @include button-base;
+  background-color: $white;
+  color: $secondary;
+  border: 1px solid $gray-lighter;
+  margin-bottom: $spacing-4;
+  display: flex;
+  align-items: center;
+  gap: $spacing-3;
+  width: 100%;
+
+  &:hover:not(:disabled) {
+    background-color: $hover-color;
+  }
+
+  .social-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+  }
+
+  .social-text {
+    flex: 1;
+    text-align: center;
   }
 }

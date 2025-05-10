@@ -116,7 +116,15 @@ const routes = [
         path: '/design-system',
         name: 'DesignSystem',
         component: () => import('@/views/DesignSystem.vue')
+    },
+    {
+        path: '/progress',
+        name: 'Progress',
+        component: () => import('@/views/Progress.vue'),
+        meta: {
+            requiresAuth: true
     }
+}
 ]
 
 const router = createRouter({

@@ -1,0 +1,407 @@
+// Card components
+
+// Base card
+.card {
+  @include card;
+  margin-bottom: $spacing-6;
+  transition: $transition-base;
+
+  &:hover {
+    box-shadow: $shadow-md;
+  }
+
+  // Card title
+  &__title {
+    margin-bottom: $spacing-4;
+    font-size: $font-size-lg;
+    font-weight: $font-weight-semibold;
+    color: $secondary;
+    padding-bottom: $spacing-3;
+    border-bottom: 1px solid $gray-lighter;
+  }
+
+  // Card body
+  &__body {
+    margin-bottom: $spacing-3;
+  }
+
+  // Card footer
+  &__footer {
+    margin-top: $spacing-4;
+    padding-top: $spacing-3;
+    border-top: 1px solid $gray-lighter;
+    display: flex;
+    justify-content: flex-end;
+    gap: $spacing-2;
+  }
+
+  // Card with hover effect
+  &--hoverable {
+    cursor: pointer;
+
+    &:hover {
+      transform: translateY(-3px);
+      box-shadow: $shadow-lg;
+    }
+  }
+
+  // Primary card
+  &--primary {
+    border-top: 3px solid $primary;
+  }
+
+  // Error card
+  &--error {
+    border-top: 3px solid $error;
+  }
+
+  // Success card
+  &--success {
+    border-top: 3px solid $success;
+  }
+}
+
+// Dashboard card
+.dashboard-card {
+  background: white;
+  border-radius: $border-radius-lg;
+  padding: $spacing-6;
+  box-shadow: $shadow;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+
+  &__title {
+    margin-bottom: $spacing-4;
+    font-size: $font-size-lg;
+    font-weight: $font-weight-semibold;
+    color: $secondary;
+    padding-bottom: $spacing-2;
+    border-bottom: 1px solid $gray-lighter;
+  }
+
+  &__body {
+    flex: 1;
+  }
+
+  &__empty {
+    text-align: center;
+    padding: $spacing-4;
+    color: $gray;
+
+    p {
+      margin-bottom: $spacing-4;
+    }
+  }
+
+  &__loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: $spacing-6;
+
+    .loading-spinner {
+      margin-bottom: $spacing-4;
+    }
+  }
+
+  &__error {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    flex: 1;
+    padding: $spacing-6 0;
+
+    .error-text {
+      margin-bottom: $spacing-4;
+      text-align: center;
+    }
+  }
+}
+
+// Wellness score card
+.score-card {
+  text-align: center;
+
+  .score-circle {
+    width: 120px;
+    height: 120px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto $spacing-6;
+    color: white;
+    font-weight: $font-weight-bold;
+    font-size: 2.5rem;
+
+    &.excellent {
+      background-color: $success;
+    }
+
+    &.good {
+      background-color: #8BC34A;
+    }
+
+    &.fair {
+      background-color: $warning;
+    }
+
+    &.poor {
+      background-color: $error;
+    }
+  }
+
+  .score-breakdown {
+    width: 100%;
+    text-align: left;
+  }
+
+  .score-component {
+    margin-bottom: $spacing-3;
+
+    span {
+      display: block;
+      margin-bottom: $spacing-1;
+    }
+  }
+
+  .progress-bar {
+    height: 8px;
+    background-color: $gray-lighter;
+    border-radius: 4px;
+
+    .progress {
+      height: 100%;
+      border-radius: 4px;
+      background-color: $primary;
+    }
+  }
+}
+
+// BMI card
+.bmi-card {
+  text-align: center;
+
+  .bmi-value {
+    font-size: 2.5rem;
+    font-weight: $font-weight-bold;
+    margin-bottom: $spacing-2;
+  }
+
+  .bmi-category {
+    font-size: $font-size-lg;
+    margin-bottom: $spacing-6;
+    font-weight: $font-weight-medium;
+  }
+
+  .bmi-scale {
+    width: 100%;
+    margin-top: $spacing-4;
+
+    .bmi-scale-bar {
+      height: 12px;
+      background: linear-gradient(
+        to right,
+        #2196F3 0%, #2196F3 25%,
+        $success 25%, $success 50%,
+        $warning 50%, $warning 75%,
+        $error 75%, $error 100%
+      );
+      border-radius: 6px;
+      position: relative;
+      margin-bottom: $spacing-2;
+
+      .bmi-marker {
+        width: 12px;
+        height: 20px;
+        background-color: $secondary;
+        position: absolute;
+        top: -4px;
+        transform: translateX(-50%);
+        border-radius: 3px;
+      }
+    }
+
+    .bmi-segments {
+      display: flex;
+      font-size: $font-size-sm;
+      justify-content: space-between;
+
+      .segment {
+        text-align: center;
+        flex: 1;
+
+        &.underweight {
+          color: #2196F3;
+        }
+
+        &.normal {
+          color: $success;
+        }
+
+        &.overweight {
+          color: $warning;
+        }
+
+        &.obese {
+          color: $error;
+        }
+      }
+    }
+  }
+}
+
+// Activity level card
+.activity-card {
+  .activity-level {
+    font-size: $font-size-xl;
+    font-weight: $font-weight-bold;
+    margin-bottom: $spacing-3;
+    color: $primary;
+  }
+
+  .activity-description {
+    margin-bottom: $spacing-4;
+  }
+
+  .activity-suggestions {
+    margin-top: $spacing-4;
+
+    h3 {
+      font-size: $font-size-base;
+      margin-bottom: $spacing-3;
+      font-weight: $font-weight-semibold;
+    }
+
+    ul {
+      padding-left: $spacing-4;
+
+      li {
+        margin-bottom: $spacing-2;
+      }
+    }
+  }
+}
+
+// Weight history card
+.weight-card {
+  .weight-summary {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: $spacing-6;
+    flex-wrap: wrap;
+    gap: $spacing-2;
+
+    .weight-item {
+      background-color: $gray-lighter;
+      padding: $spacing-3;
+      border-radius: $border-radius;
+      flex: 1;
+      min-width: 80px;
+
+      .weight-label {
+        font-size: $font-size-sm;
+        color: $gray;
+        display: block;
+        margin-bottom: $spacing-1;
+      }
+
+      .weight-value {
+        font-size: $font-size-lg;
+        font-weight: $font-weight-bold;
+
+        &.positive {
+          color: $success;
+        }
+
+        &.negative {
+          color: $error;
+        }
+
+        &.neutral {
+          color: #2196F3;
+        }
+      }
+    }
+  }
+
+  .weight-trend {
+    margin-bottom: $spacing-4;
+
+    h3 {
+      margin-bottom: $spacing-3;
+    }
+
+    .weight-table {
+      width: 100%;
+      border-collapse: collapse;
+
+      th, td {
+        padding: $spacing-2;
+        text-align: left;
+        border-bottom: 1px solid $gray-lighter;
+      }
+
+      th {
+        font-weight: $font-weight-semibold;
+        color: $gray;
+      }
+    }
+  }
+}
+
+// AI insights card
+.insights-card {
+  .insights-container {
+    display: flex;
+    flex-direction: column;
+    gap: $spacing-4;
+  }
+
+  .insight-item {
+    border-left: 4px solid $gray-lighter;
+    padding: $spacing-3 $spacing-4;
+    background-color: #f9f9f9;
+    border-radius: 0 $border-radius $border-radius 0;
+
+    &.priority-high {
+      border-left-color: $error;
+    }
+
+    &.priority-medium {
+      border-left-color: $warning;
+    }
+
+    &.priority-low {
+      border-left-color: #2196F3;
+    }
+
+    .insight-header {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: $spacing-2;
+      font-size: $font-size-sm;
+
+      .priority-badge {
+        font-weight: $font-weight-bold;
+      }
+
+      .insight-date {
+        color: $gray;
+      }
+    }
+
+    .insight-content {
+      line-height: 1.5;
+    }
+  }
+
+  .insights-info {
+    color: $gray;
+    font-style: italic;
+    margin-top: $spacing-2;
+  }
+}

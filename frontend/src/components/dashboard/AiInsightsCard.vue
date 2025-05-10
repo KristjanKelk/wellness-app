@@ -52,3 +52,52 @@ export default {
   }
 };
 </script>
+
+<style lang="scss" scoped>
+@import '@/assets/styles/_variables.scss';
+@import '@/assets/styles/_utilities.scss';
+
+.insights-container {
+  display: flex;
+  flex-direction: column;
+}
+
+.insight-header {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: $spacing-2;
+  font-size: 0.85rem;
+}
+
+.priority-badge {
+  font-weight: $font-weight-semibold;
+}
+
+.insight-date {
+  color: $gray;
+}
+
+.insight-content {
+  line-height: 1.5;
+  margin: 0;
+}
+
+.insights-info {
+  color: $gray;
+  font-style: italic;
+  margin-top: $spacing-2;
+}
+
+// Override insight-item styles for specific priorities
+.priority-high .priority-badge {
+  color: $error;
+}
+
+.priority-medium .priority-badge {
+  color: $warning;
+}
+
+.priority-low .priority-badge {
+  color: $info;
+}
+</style>

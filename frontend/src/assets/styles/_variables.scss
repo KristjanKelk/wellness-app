@@ -1,20 +1,44 @@
 // Design System Variables
 
 // Color Palette
-$primary: #30c1b1; // Turquoise blue (main brand color)
+$primary: #30c1b1;
 $primary-dark: #25a59a;
 $primary-light: #4fdfd0;
-$secondary: #212a36; // Dark slate for text and accents
+$secondary: #212a36;
 $secondary-light: #394759;
 $gray-dark: #4a5568;
 $gray: #718096;
 $gray-light: #a0aec0;
 $gray-lighter: #e2e8f0;
 $white: #ffffff;
+$black: #000000;
 $error: #e53e3e;
 $success: #38a169;
 $warning: #f6ad55;
 $info: #4299e1;
+
+// Export colors as CSS variables for JS access
+:root {
+  --primary-color: #{$primary};
+  --primary-dark-color: #{$primary-dark};
+  --primary-light-color: #{$primary-light};
+  --secondary-color: #{$secondary};
+  --secondary-light-color: #{$secondary-light};
+  --gray-dark-color: #{$gray-dark};
+  --gray-color: #{$gray};
+  --gray-light-color: #{$gray-light};
+  --gray-lighter-color: #{$gray-lighter};
+  --white-color: #{$white};
+  --error-color: #{$error};
+  --success-color: #{$success};
+  --warning-color: #{$warning};
+  --info-color: #{$info};
+}
+
+// Component-specific colors (derived from primary palette)
+$positive: $success;
+$negative: $error;
+$neutral: $info;
 
 // Font settings
 $font-family-base: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
@@ -23,6 +47,7 @@ $font-size-sm: 0.875rem;
 $font-size-lg: 1.125rem;
 $font-size-xl: 1.25rem;
 $font-size-2xl: 1.5rem;
+$font-size-3xl: 1.875rem;
 $font-weight-normal: 400;
 $font-weight-medium: 500;
 $font-weight-semibold: 600;
@@ -69,3 +94,29 @@ $z-index-modal-backdrop: 1040;
 $z-index-modal: 1050;
 $z-index-popover: 1060;
 $z-index-tooltip: 1070;
+$z-index-toast: 1080;
+
+// Dashboard specific
+$card-padding: $spacing-6;
+$card-border-radius: $border-radius-lg;
+$card-header-padding: 0 0 $spacing-4 0;
+$card-margin-bottom: $spacing-6;
+
+// Status colors
+$status-verified: $success;
+$status-unverified: $error;
+$status-enabled: $success;
+$status-disabled: $error;
+
+// Background colors
+$bg-light: #f9f9f9;
+$bg-lighter: #f8fcfc;
+$bg-white: $white;
+
+// Elements
+$input-height: 2.5rem;
+$input-padding: $spacing-3 $spacing-4;
+$input-radius: $border-radius;
+$input-border-color: $gray-light;
+$input-focus-border-color: $primary;
+$input-focus-shadow: 0 0 0 3px rgba($primary, 0.1);

@@ -1,3 +1,4 @@
+<!-- src/components/dashboard/AddWeightModal.vue -->
 <template>
   <div class="modal">
     <div class="modal-content">
@@ -5,7 +6,7 @@
       <h2>Log New Weight</h2>
       <form @submit.prevent="handleSubmit">
         <div class="form-group">
-          <label for="weight">Weight (kg)</label>
+          <label for="weight" class="form-label">Weight (kg)</label>
           <input
               type="number"
               id="weight"
@@ -15,16 +16,20 @@
               min="20"
               max="300"
               placeholder="Enter your weight in kg"
+              class="form-control"
           >
         </div>
-        <div v-if="error" class="error-message">{{ error }}</div>
+        <div class="form-info">
+          <small class="help-text">Each weight entry is saved with a unique timestamp.</small>
+        </div>
+        <div v-if="error" class="alert alert-error">{{ error }}</div>
         <div class="form-actions">
           <button type="button" class="btn btn-secondary" @click="$emit('close')">
             Cancel
           </button>
           <button type="submit" class="btn btn-primary" :disabled="loading">
-            <span v-if="loading">Saving...</span>
-            <span v-else>Save</span>
+            <span v-if="loading" class="loading-spinner"></span>
+            <span>{{ loading ? 'Saving...' : 'Save' }}</span>
           </button>
         </div>
       </form>
@@ -61,3 +66,12 @@ export default {
   }
 };
 </script>
+
+<style lang="scss" scoped>
+@import '@/assets/styles/_variables.scss';
+@import '@/assets/styles/_utilities.scss';
+
+.form-info {
+  margin-bottom: $spacing-4;
+}
+</style>

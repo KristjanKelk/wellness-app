@@ -1,0 +1,134 @@
+// Typography styles
+
+h1, h2, h3, h4, h5, h6 {
+  font-weight: $font-weight-semibold;
+  margin-bottom: $spacing-4;
+  color: $secondary;
+  line-height: 1.2;
+}
+
+h1 {
+  font-size: $font-size-2xl;
+
+  @include responsive('md') {
+    font-size: 2rem;
+  }
+
+  @include responsive('lg') {
+    font-size: 2.5rem;
+  }
+}
+
+h2 {
+  font-size: $font-size-xl;
+
+  @include responsive('md') {
+    font-size: 1.75rem;
+  }
+}
+
+h3 {
+  font-size: $font-size-lg;
+  margin-bottom: $spacing-3;
+}
+
+h4 {
+  font-size: $font-size-base;
+  font-weight: $font-weight-bold;
+  margin-bottom: $spacing-2;
+}
+
+p {
+  margin-bottom: $spacing-4;
+  line-height: 1.6;
+}
+
+a {
+  color: $primary;
+  text-decoration: none;
+  transition: $transition-base;
+
+  &:hover {
+    color: $primary-dark;
+  }
+}
+
+small {
+  font-size: $font-size-sm;
+  line-height: 1.4;
+  display: inline-block;
+}
+
+.text-center {
+  text-align: center;
+}
+
+.text-right {
+  text-align: right;
+}
+
+.text-muted {
+  color: $gray;
+}
+
+.text-primary {
+  color: $primary;
+}
+
+.text-error {
+  color: $error;
+}
+
+.text-success {
+  color: $success;
+}
+
+// Heading styles with consistent font sizing
+
+.heading-1 {
+  @include heading-1;
+}
+
+.heading-2 {
+  @include heading-2;
+}
+
+.heading-3 {
+  font-size: $font-size-lg;
+  font-weight: $font-weight-semibold;
+  margin-bottom: $spacing-3;
+}
+
+.page-title {
+  margin-top: $spacing-8;
+  margin-bottom: $spacing-4;
+
+  @include responsive('md') {
+    margin-top: $spacing-10;
+    margin-bottom: $spacing-6;
+  }
+}
+
+.section-title {
+  position: relative;
+  margin-bottom: $spacing-6;
+
+  &:after {
+    content: '';
+    position: absolute;
+    bottom: -8px;
+    left: 0;
+    width: 40px;
+    height: 3px;
+    background-color: $primary;
+  }
+
+  &--centered {
+    text-align: center;
+
+    &:after {
+      left: 50%;
+      transform: translateX(-50%);
+    }
+  }
+}

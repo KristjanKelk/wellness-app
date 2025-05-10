@@ -9,9 +9,9 @@
       <router-link to="/profile" class="btn btn-primary">Update Profile</router-link>
     </template>
 
-    <div class="activity-container">
+    <div class="activity-card">
       <div class="activity-level">{{ activityLevelDisplay }}</div>
-      <p>{{ activityDescription }}</p>
+      <p class="activity-description">{{ activityDescription }}</p>
       <div class="activity-suggestions">
         <h3>Suggestions</h3>
         <ul>
@@ -52,3 +52,6 @@ export default {
   }
 };
 </script>
+
+<style lang="scss" scoped>
+</style>

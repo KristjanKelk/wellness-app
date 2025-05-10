@@ -1,19 +1,19 @@
 <!-- src/components/dashboard/DashboardCard.vue -->
 <template>
-  <div class="card">
-    <h2>{{ title }}</h2>
-    <div v-if="loading" class="loading-container">
+  <div class="dashboard-card">
+    <h2 class="dashboard-card__title">{{ title }}</h2>
+    <div v-if="loading" class="dashboard-card__loading">
       <div class="loading-spinner"></div>
       <p>{{ loadingText }}</p>
     </div>
-    <div v-else-if="error" class="error-container">
-      <p class="error-message">{{ error }}</p>
+    <div v-else-if="error" class="dashboard-card__error">
+      <p class="error-text">{{ error }}</p>
       <slot name="error-action"></slot>
     </div>
-    <div v-else-if="isEmpty" class="empty-container">
+    <div v-else-if="isEmpty" class="dashboard-card__empty">
       <slot name="empty"></slot>
     </div>
-    <div v-else>
+    <div v-else class="dashboard-card__body">
       <slot></slot>
     </div>
   </div>
@@ -46,3 +46,6 @@ export default {
   }
 };
 </script>
+
+<style lang="scss" scoped>
+</style>

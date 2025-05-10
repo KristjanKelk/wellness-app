@@ -1,0 +1,234 @@
+// Alert components
+
+.alert {
+  display: flex;
+  align-items: center;
+  padding: $spacing-4;
+  margin-bottom: $spacing-6;
+  border-radius: $border-radius;
+  position: relative;
+  border: 1px solid transparent;
+
+  &__icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    margin-right: $spacing-3;
+    flex-shrink: 0;
+  }
+
+  &__content {
+    flex: 1;
+  }
+
+  &__close {
+    background: transparent;
+    border: none;
+    font-size: 1.5rem;
+    line-height: 1;
+    padding: 0;
+    cursor: pointer;
+    color: inherit;
+    opacity: 0.5;
+    transition: $transition-base;
+    margin-left: $spacing-4;
+
+    &:hover {
+      opacity: 0.75;
+    }
+  }
+
+  // Success alert
+  &-success {
+    background-color: mix(white, $success, 90%);
+    border-color: $success;
+    color: mix(black, $success, 10%);
+
+    .alert__icon {
+      background-color: $success;
+      color: white;
+    }
+  }
+
+  // Error alert
+  &-error {
+    background-color: mix(white, $error, 85%);
+    border-color: $error;
+    color: mix(black, $error, 10%);
+
+    .alert__icon {
+      background-color: $error;
+      color: white;
+    }
+  }
+
+  // Warning alert
+  &-warning {
+    background-color: mix(white, $warning, 80%);
+    border-color: $warning;
+    color: mix(black, $warning, 15%);
+
+    .alert__icon {
+      background-color: $warning;
+      color: white;
+    }
+  }
+
+  // Info alert
+  &-info {
+    background-color: mix(white, $info, 85%);
+    border-color: $info;
+    color: mix(black, $info, 10%);
+
+    .alert__icon {
+      background-color: $info;
+      color: white;
+    }
+  }
+
+  // Alert with border left
+  &--border-left {
+    border-left-width: 4px;
+    border-top: 0;
+    border-right: 0;
+    border-bottom: 0;
+    background-color: transparent;
+    padding-left: $spacing-3;
+  }
+
+  // Alert with border all
+  &--border-all {
+    border-width: 1px;
+  }
+
+  // Alert with box shadow
+  &--shadow {
+    border: none;
+    box-shadow: $shadow;
+  }
+
+  // Alert with border radius
+  &--rounded {
+    border-radius: $border-radius-lg;
+  }
+
+  // Alert sizes
+  &--sm {
+    padding: $spacing-2 $spacing-3;
+    font-size: $font-size-sm;
+  }
+
+  &--lg {
+    padding: $spacing-5 $spacing-6;
+    font-size: $font-size-lg;
+  }
+}
+
+// Toast notifications
+.toast {
+  position: fixed;
+  bottom: $spacing-6;
+  right: $spacing-6;
+  //z-index: $z-index-toast;
+  max-width: 350px;
+  background-color: $white;
+  border-radius: $border-radius-lg;
+  box-shadow: $shadow-lg;
+  padding: $spacing-4;
+  display: flex;
+  align-items: center;
+  transform: translateY(100px);
+  opacity: 0;
+  transition: transform 0.3s, opacity 0.3s;
+
+  &.is-active {
+    transform: translateY(0);
+    opacity: 1;
+  }
+
+  &__icon {
+    margin-right: $spacing-3;
+    flex-shrink: 0;
+
+    svg {
+      width: 24px;
+      height: 24px;
+    }
+  }
+
+  &__content {
+    flex: 1;
+  }
+
+  &__title {
+    font-weight: $font-weight-medium;
+    margin-bottom: $spacing-1;
+  }
+
+  &__message {
+    color: $gray;
+    font-size: $font-size-sm;
+  }
+
+  &__close {
+    background: transparent;
+    border: none;
+    color: $gray;
+    cursor: pointer;
+    padding: $spacing-1;
+    margin-left: $spacing-2;
+
+    svg {
+      width: 16px;
+      height: 16px;
+    }
+  }
+
+  &-success {
+    border-left: 4px solid $success;
+
+    .toast__icon {
+      color: $success;
+    }
+  }
+
+  &-error {
+    border-left: 4px solid $error;
+
+    .toast__icon {
+      color: $error;
+    }
+  }
+
+  &-warning {
+    border-left: 4px solid $warning;
+
+    .toast__icon {
+      color: $warning;
+    }
+  }
+
+  &-info {
+    border-left: 4px solid $info;
+
+    .toast__icon {
+      color: $info;
+    }
+  }
+}
+
+// Toast container for multiple toasts
+.toast-container {
+  position: fixed;
+  bottom: $spacing-6;
+  right: $spacing-6;
+  //z-index: $z-index-toast;
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-3;
+  max-width: 350px;
+  width: 100%;
+}

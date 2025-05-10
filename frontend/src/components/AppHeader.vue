@@ -16,6 +16,7 @@
         <div class="nav-menu">
           <template v-if="isLoggedIn">
             <router-link to="/dashboard" class="nav-link">Dashboard</router-link>
+            <router-link to="/progress" class="nav-link">Progress</router-link>
             <router-link to="/profile" class="nav-link">Profile</router-link>
             <router-link to="/settings" class="nav-link">Settings</router-link>
             <button @click="logout" class="btn-logout">Logout</button>
@@ -46,6 +47,7 @@
             <div class="mobile-menu-items">
               <template v-if="isLoggedIn">
                 <router-link to="/dashboard" class="mobile-menu-link" @click="closeMobileMenu">Dashboard</router-link>
+                <router-link to="/progress" class="mobile-menu-link" @click="closeMobileMenu">Progress</router-link>
                 <router-link to="/profile" class="mobile-menu-link" @click="closeMobileMenu">Profile</router-link>
                 <router-link to="/settings" class="mobile-menu-link" @click="closeMobileMenu">Settings</router-link>
                 <button @click="logoutAndCloseMobile" class="mobile-menu-button">Logout</button>

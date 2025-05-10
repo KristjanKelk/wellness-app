@@ -1,0 +1,157 @@
+// Social login buttons
+
+.social-login-button {
+  @include button-base;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: $spacing-3;
+  width: 100%;
+  background-color: $white;
+  color: $secondary;
+  border: 1px solid $gray-lighter;
+  margin-bottom: $spacing-4;
+  transition: $transition-base;
+  padding: $spacing-4;
+
+  &:hover:not(:disabled) {
+    background-color: $gray-lighter;
+  }
+
+  .social-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+
+    svg {
+      width: 20px;
+      height: 20px;
+    }
+  }
+
+  .social-text {
+    flex: 1;
+    text-align: center;
+    font-weight: $font-weight-medium;
+  }
+
+  &.is-loading {
+    color: transparent !important;
+    pointer-events: none;
+    position: relative;
+
+    &:after {
+      content: '';
+      position: absolute;
+      width: 1rem;
+      height: 1rem;
+      top: calc(50% - 0.5rem);
+      left: calc(50% - 0.5rem);
+      border: 2px solid rgba(0, 0, 0, 0.1);
+      border-radius: 50%;
+      border-top-color: $secondary;
+      animation: spin 0.8s linear infinite;
+    }
+  }
+}
+
+// Google button
+.btn-google {
+  @extend .social-login-button;
+
+  &:hover:not(:disabled) {
+    background-color: #f8f9fa;
+    border-color: #dadce0;
+  }
+
+  .social-icon svg {
+    height: 18px;
+  }
+}
+
+// GitHub button
+.btn-github {
+  @extend .social-login-button;
+
+  &:hover:not(:disabled) {
+    background-color: #f6f8fa;
+    border-color: #e1e4e8;
+  }
+}
+
+// Facebook button
+.btn-facebook {
+  @extend .social-login-button;
+
+  &:hover:not(:disabled) {
+    background-color: #f5f6f7;
+    border-color: #dddfe2;
+  }
+}
+
+// Apple button
+.btn-apple {
+  @extend .social-login-button;
+  background-color: #000;
+  color: #fff;
+  border-color: #000;
+
+  &:hover:not(:disabled) {
+    background-color: #333;
+    border-color: #333;
+  }
+
+  &.is-loading:after {
+    border: 2px solid rgba(255, 255, 255, 0.1);
+    border-top-color: white;
+  }
+}
+
+// Social login container
+.social-login-container {
+  margin-top: $spacing-8;
+  margin-bottom: $spacing-6;
+
+  .social-login-divider {
+    @include divider;
+    margin: $spacing-6 0;
+  }
+}
+
+// OAuth success page
+.oauth-success {
+  text-align: center;
+  max-width: 500px;
+  margin: 0 auto;
+  padding: $spacing-8 $spacing-4;
+
+  .success-icon {
+    width: 64px;
+    height: 64px;
+    margin: 0 auto $spacing-6;
+    color: $success;
+
+    svg {
+      width: 100%;
+      height: 100%;
+    }
+  }
+
+  .success-title {
+    font-size: $font-size-2xl;
+    margin-bottom: $spacing-4;
+  }
+
+  .success-message {
+    margin-bottom: $spacing-6;
+    color: $gray;
+  }
+
+  .redirect-message {
+    font-size: $font-size-sm;
+    color: $gray;
+    margin-top: $spacing-4;
+  }
+}

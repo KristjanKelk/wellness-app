@@ -2,8 +2,11 @@
 from rest_framework import viewsets, permissions, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
+from django.utils import timezone
+from datetime import timedelta
 from .models import HealthProfile, WeightHistory
 from .serializers import HealthProfileSerializer, WeightHistorySerializer
+
 
 class HealthProfileViewSet(viewsets.ModelViewSet):
     """
@@ -27,7 +30,7 @@ class HealthProfileViewSet(viewsets.ModelViewSet):
             profile = HealthProfile.objects.get(user=request.user)
 
             if request.method in ['PUT', 'PATCH']:
-                serializer = self.get_serializer(profile, data=request.data, partial=request.method=='PATCH')
+                serializer = self.get_serializer(profile, data=request.data, partial=request.method == 'PATCH')
                 if serializer.is_valid():
                     serializer.save()
                     return Response(serializer.data)
@@ -46,9 +49,10 @@ class HealthProfileViewSet(viewsets.ModelViewSet):
                 return Response(serializer.data, status=status.HTTP_201_CREATED)
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
+
 class WeightHistoryViewSet(viewsets.ModelViewSet):
     """
-    ViewSet for managing weight history
+    ViewSet for managing weight history with timestamp verification
     """
     serializer_class = WeightHistorySerializer
     permission_classes = [permissions.IsAuthenticated]
@@ -63,7 +67,29 @@ class WeightHistoryViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         try:
             health_profile = HealthProfile.objects.get(user=self.request.user)
-            serializer.save(health_profile=health_profile)
+
+            # Check for recent entries to prevent duplicates (within last minute)
+            recent_entry = WeightHistory.objects.filter(
+                health_profile=health_profile,
+                recorded_at__gte=timezone.now() - timedelta(minutes=1)
+            ).exists()
+
+            if recent_entry:
+                # If entry exists within last minute, raise error
+                from rest_framework import serializers as rest_serializers
+                raise rest_serializers.ValidationError(
+                    "Please wait at least 1 minute between weight entries to ensure unique timestamps"
+                )
+
+            # Save weight entry with current timestamp
+            weight_entry = serializer.save(health_profile=health_profile)
+
+            # Also update the current weight in the profile
+            health_profile.weight_kg = weight_entry.weight_kg
+            health_profile.save(update_fields=['weight_kg', 'updated_at'])
+
+            return weight_entry
+
         except HealthProfile.DoesNotExist:
-            from rest_framework import serializers
-            raise serializers.ValidationError("You must create a health profile first")
+            from rest_framework import serializers as rest_serializers
+            raise rest_serializers.ValidationError("You must create a health profile first")

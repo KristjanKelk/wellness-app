@@ -1,62 +1,72 @@
 <template>
-  <div class="dashboard">
-    <h1>Health Dashboard</h1>
-    <p>Welcome, {{ getUsernameDisplay() }}!</p>
+  <div class="dashboard-page">
+    <div class="dashboard">
+      <div class="dashboard__header">
+        <h1>Health Dashboard</h1>
+        <p>Welcome, {{ getUsernameDisplay() }}!</p>
+      </div>
 
-    <div v-if="loading" class="loading-container">
-      <div class="loading-spinner"></div>
-      <p>Loading your health data...</p>
+      <div v-if="loading" class="dashboard__loading">
+        <div class="loading-spinner"></div>
+        <p>Loading your health data...</p>
+      </div>
+
+      <div v-else-if="error" class="dashboard__error">
+        <p class="error-message">{{ error }}</p>
+        <router-link to="/profile" class="btn btn-primary">Complete Your Profile</router-link>
+      </div>
+
+      <div v-else class="dashboard__content">
+        <!-- Wellness Score Card -->
+        <wellness-score-card
+            class="dashboard-card"
+            :profile="profile"
+            :score="wellnessScore"
+            :bmi-score="bmiScore"
+            :activity-score="activityScore"
+            :progress-score="progressScore"
+            :habits-score="habitsScore"
+        />
+
+        <!-- BMI Status Card -->
+        <bmi-status-card
+            class="dashboard-card"
+            :bmi="bmi"
+            :profile="profile"
+        />
+
+        <!-- Activity Level Card -->
+        <activity-level-card
+            class="dashboard-card"
+            :profile="profile"
+        />
+
+        <!-- Weight History Card -->
+        <weight-history-card
+            class="dashboard-card"
+            :profile="profile"
+            :weight-history="weightHistory"
+            :weight-change="weightChange"
+            @add-weight="showAddWeightModal = true"
+        />
+
+        <!-- AI Insights Card -->
+        <ai-insights-card
+            class="dashboard-card"
+            :insights="insights"
+        />
+      </div>
+
+      <!-- Add Weight Modal -->
+      <add-weight-modal
+          v-if="showAddWeightModal"
+          class="modal"
+          :loading="weightLoading"
+          :error="weightError"
+          @close="showAddWeightModal = false"
+          @save="saveNewWeight"
+      />
     </div>
-
-    <div v-else-if="error" class="error-container">
-      <p class="error-message">{{ error }}</p>
-      <router-link to="/profile" class="btn btn-primary">Complete Your Profile</router-link>
-    </div>
-
-    <div v-else class="dashboard-content">
-      <!-- Wellness Score Card -->
-      <wellness-score-card
-          :profile="profile"
-          :score="wellnessScore"
-          :bmi-score="bmiScore"
-          :activity-score="activityScore"
-          :progress-score="progressScore"
-          :habits-score="habitsScore"
-      />
-
-      <!-- BMI Status Card -->
-      <bmi-status-card
-          :bmi="bmi"
-          :profile="profile"
-      />
-
-      <!-- Activity Level Card -->
-      <activity-level-card
-          :profile="profile"
-      />
-
-      <!-- Weight History Card -->
-      <weight-history-card
-          :profile="profile"
-          :weight-history="weightHistory"
-          :weight-change="weightChange"
-          @add-weight="showAddWeightModal = true"
-      />
-
-      <!-- AI Insights Card -->
-      <ai-insights-card
-          :insights="insights"
-      />
-    </div>
-
-    <!-- Add Weight Modal -->
-    <add-weight-modal
-        v-if="showAddWeightModal"
-        :loading="weightLoading"
-        :error="weightError"
-        @close="showAddWeightModal = false"
-        @save="saveNewWeight"
-    />
   </div>
 </template>
 
@@ -269,6 +279,5 @@ export default {
 };
 </script>
 
-<style scoped>
-@import '../assets/Dashboard.css';
+<style lang="scss" scoped>
 </style>

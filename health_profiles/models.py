@@ -140,3 +140,13 @@ class WeightHistory(models.Model):
 
     class Meta:
         ordering = ['-recorded_at']
+
+        constraints = [
+            models.UniqueConstraint(
+                fields=['health_profile', 'recorded_at'],
+                name='unique_weight_entry_timestamp'
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.health_profile.user.username}'s weight: {self.weight_kg}kg on {self.recorded_at.strftime('%Y-%m-%d %H:%M')}"

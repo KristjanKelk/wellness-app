@@ -1,0 +1,369 @@
+// Home page styles
+
+.home {
+  // Hero section
+  .hero {
+    padding: $spacing-12 0;
+    background-color: #f8fcfc;
+    overflow: hidden;
+
+    @include responsive('lg') {
+      padding: $spacing-20 0;
+    }
+
+    .container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+
+      @include responsive('lg') {
+        flex-direction: row;
+        justify-content: space-between;
+        align-items: center;
+      }
+    }
+
+    &-content {
+      max-width: 600px;
+      text-align: center;
+      margin-bottom: $spacing-8;
+
+      @include responsive('lg') {
+        text-align: left;
+        margin-bottom: 0;
+        flex: 1;
+        padding-right: $spacing-8;
+      }
+    }
+
+    &-title {
+      font-size: 2rem;
+      line-height: 1.2;
+      margin-bottom: $spacing-4;
+      color: $secondary;
+      font-weight: $font-weight-bold;
+
+      @include responsive('md') {
+        font-size: 2.5rem;
+      }
+
+      @include responsive('lg') {
+        font-size: 3rem;
+      }
+    }
+
+    &-description {
+      font-size: $font-size-lg;
+      color: $gray;
+      margin-bottom: $spacing-6;
+
+      @include responsive('md') {
+        font-size: 1.25rem;
+      }
+    }
+
+    &-actions {
+      display: flex;
+      gap: $spacing-4;
+      justify-content: center;
+
+      @include responsive('lg') {
+        justify-content: flex-start;
+      }
+
+      .btn-primary, .btn-secondary {
+        padding: $spacing-3 $spacing-8;
+
+        @include responsive('md') {
+          padding: $spacing-4 $spacing-10;
+        }
+      }
+    }
+
+    &-image {
+      max-width: 100%;
+      height: auto;
+      flex: 1;
+      display: flex;
+      justify-content: center;
+
+      img {
+        max-width: 100%;
+        height: auto;
+        max-height: 400px;
+
+        @include responsive('lg') {
+          max-height: 500px;
+        }
+      }
+    }
+  }
+
+  // Features section
+  .features {
+    padding: $spacing-12 0;
+    background-color: $white;
+
+    @include responsive('lg') {
+      padding: $spacing-16 0;
+    }
+
+    .section-title {
+      text-align: center;
+      margin-bottom: $spacing-12;
+      position: relative;
+      font-size: 2rem;
+
+      &:after {
+        content: '';
+        position: absolute;
+        bottom: -10px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 60px;
+        height: 3px;
+        background-color: $primary;
+      }
+    }
+
+    &-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: $spacing-8;
+
+      @include responsive('md') {
+        grid-template-columns: repeat(2, 1fr);
+      }
+
+      @include responsive('lg') {
+        grid-template-columns: repeat(3, 1fr);
+      }
+    }
+
+    .feature-card {
+      background-color: $white;
+      border-radius: $border-radius-lg;
+      padding: $spacing-6;
+      box-shadow: $shadow;
+      text-align: center;
+      transition: $transition-base;
+
+      &:hover {
+        box-shadow: $shadow-lg;
+        transform: translateY(-5px);
+      }
+
+      .feature-icon {
+        margin-bottom: $spacing-4;
+        display: flex;
+        justify-content: center;
+
+        svg {
+          width: 48px;
+          height: 48px;
+        }
+      }
+
+      .feature-title {
+        margin-bottom: $spacing-3;
+        font-size: $font-size-xl;
+      }
+
+      .feature-description {
+        color: $gray;
+      }
+    }
+  }
+
+  // How it works section
+  .how-it-works {
+    padding: $spacing-12 0;
+    background-color: #f8fcfc;
+
+    @include responsive('lg') {
+      padding: $spacing-16 0;
+    }
+
+    .section-title {
+      text-align: center;
+      margin-bottom: $spacing-12;
+      position: relative;
+      font-size: 2rem;
+
+      &:after {
+        content: '';
+        position: absolute;
+        bottom: -10px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 60px;
+        height: 3px;
+        background-color: $primary;
+      }
+    }
+
+    .steps {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: $spacing-8;
+      margin-bottom: $spacing-12;
+
+      @include responsive('md') {
+        grid-template-columns: repeat(2, 1fr);
+      }
+
+      @include responsive('lg') {
+        grid-template-columns: repeat(4, 1fr);
+      }
+    }
+
+    .step {
+      text-align: center;
+      position: relative;
+
+      &:not(:last-child) {
+        @include responsive('lg') {
+          &:after {
+            content: '';
+            position: absolute;
+            top: 2rem;
+            right: -50%;
+            width: 100%;
+            height: 2px;
+            background-color: $gray-lighter;
+          }
+        }
+      }
+
+      &-number {
+        width: 4rem;
+        height: 4rem;
+        border-radius: 50%;
+        background-color: $primary;
+        color: $white;
+        font-weight: $font-weight-bold;
+        font-size: $font-size-xl;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 auto $spacing-4;
+        position: relative;
+        z-index: 1;
+      }
+
+      &-title {
+        margin-bottom: $spacing-3;
+        font-size: $font-size-lg;
+      }
+
+      &-description {
+        color: $gray;
+      }
+    }
+
+    .cta-container {
+      text-align: center;
+      margin-top: $spacing-8;
+
+      .btn-primary {
+        padding: $spacing-4 $spacing-10;
+        font-size: $font-size-lg;
+      }
+    }
+  }
+
+  // Testimonials section
+  .testimonials {
+    padding: $spacing-12 0;
+    background-color: $white;
+
+    @include responsive('lg') {
+      padding: $spacing-16 0;
+    }
+
+    .testimonials-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: $spacing-6;
+
+      @include responsive('md') {
+        grid-template-columns: repeat(2, 1fr);
+      }
+
+      @include responsive('lg') {
+        grid-template-columns: repeat(3, 1fr);
+      }
+    }
+
+    .testimonial-card {
+      background-color: #f8f9fa;
+      padding: $spacing-6;
+      border-radius: $border-radius-lg;
+
+      .testimonial-content {
+        margin-bottom: $spacing-4;
+        font-style: italic;
+        color: $gray-dark;
+      }
+
+      .testimonial-author {
+        display: flex;
+        align-items: center;
+        gap: $spacing-3;
+
+        .author-avatar {
+          width: 48px;
+          height: 48px;
+          border-radius: 50%;
+          background-color: $gray-lighter;
+        }
+
+        .author-info {
+          .author-name {
+            font-weight: $font-weight-semibold;
+            color: $secondary;
+          }
+
+          .author-title {
+            font-size: $font-size-sm;
+            color: $gray;
+          }
+        }
+      }
+    }
+  }
+
+  // Stats section
+  .stats {
+    padding: $spacing-8 0;
+    background-color: $primary;
+    color: $white;
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: $spacing-6;
+      text-align: center;
+
+      @include responsive('md') {
+        grid-template-columns: repeat(2, 1fr);
+      }
+
+      @include responsive('lg') {
+        grid-template-columns: repeat(4, 1fr);
+      }
+
+      .stat-item {
+        .stat-value {
+          font-size: 2.5rem;
+          font-weight: $font-weight-bold;
+          margin-bottom: $spacing-2;
+        }
+
+        .stat-label {
+          opacity: 0.9;
+        }
+      }
+    }
+  }
+}

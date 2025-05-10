@@ -9,18 +9,18 @@
       <router-link to="/profile" class="btn btn-primary">Update Profile</router-link>
     </template>
 
-    <div class="bmi-container">
+    <div class="bmi-card">
       <div class="bmi-value">{{ bmi.toFixed(1) }}</div>
       <div class="bmi-category">{{ bmiCategory }}</div>
       <div class="bmi-scale">
         <div class="bmi-scale-bar">
           <div class="bmi-marker" :style="{ left: markerPosition + '%' }"></div>
-          <div class="bmi-segments">
-            <div class="segment underweight">Underweight</div>
-            <div class="segment normal">Normal</div>
-            <div class="segment overweight">Overweight</div>
-            <div class="segment obese">Obese</div>
-          </div>
+        </div>
+        <div class="bmi-segments">
+          <div class="segment underweight">Underweight</div>
+          <div class="segment normal">Normal</div>
+          <div class="segment overweight">Overweight</div>
+          <div class="segment obese">Obese</div>
         </div>
       </div>
     </div>
@@ -58,3 +58,6 @@ export default {
   }
 };
 </script>
+
+<style lang="scss" scoped>
+</style>
