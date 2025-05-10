@@ -1,6 +1,6 @@
 <!-- src/components/dashboard/AddWeightModal.vue -->
 <template>
-  <div class="modal">
+  <div class="modal is-active" @click.self="$emit('close')">
     <div class="modal-content">
       <span class="close-button" @click="$emit('close')">&times;</span>
       <h2>Log New Weight</h2>
@@ -71,7 +71,54 @@ export default {
 @import '@/assets/styles/_variables.scss';
 @import '@/assets/styles/_utilities.scss';
 
-.form-info {
-  margin-bottom: $spacing-4;
+.modal {
+  @include modal-container;
+
+  .modal-content {
+    @include modal-content;
+    max-width: 500px;
+    width: 90%;
+    animation: fadeIn 0.3s ease-out;
+  }
+
+  .close-button {
+    position: absolute;
+    top: $spacing-4;
+    right: $spacing-4;
+    font-size: 1.5rem;
+    background: none;
+    border: none;
+    color: $gray;
+    cursor: pointer;
+    padding: $spacing-2;
+
+    &:hover {
+      color: $secondary;
+    }
+  }
+
+  h2 {
+    margin-bottom: $spacing-6;
+    text-align: center;
+  }
+
+  .form-info {
+    margin-bottom: $spacing-4;
+  }
+
+  .alert {
+    margin-bottom: $spacing-4;
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 </style>
