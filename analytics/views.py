@@ -4,6 +4,10 @@ from rest_framework.response import Response
 from rest_framework.decorators import action
 from django.utils import timezone
 from datetime import timedelta
+from django.conf import settings
+from openai import OpenAI
+
+client = OpenAI(api_key=settings.OPENAI_API_KEY)
 
 from .models import AIInsight, WellnessScore
 from .serializers import AIInsightSerializer, WellnessScoreSerializer
@@ -103,93 +107,61 @@ class AIInsightViewSet(viewsets.ModelViewSet):
         return AIInsight.objects.filter(user=self.request.user)
 
     @action(detail=False, methods=['post'])
+    @action(detail=False, methods=['post'])
     def generate(self, request):
         """
-        Generate new AI insights based on user profile
-        In production, this would connect to an LLM API
+        Generate new AI insights based on user profile by calling OpenAI.
         """
         try:
             health_profile = HealthProfile.objects.get(user=request.user)
             bmi = health_profile.calculate_bmi()
-            try:
-                wellness_score = WellnessScore.objects.filter(
-                    health_profile=health_profile
-                ).latest('created_at')
-            except WellnessScore.DoesNotExist:
-                wellness_score = None
+            activity = health_profile.activity_level or "unknown"
+            goal = health_profile.fitness_goal or "general fitness"
 
-            # In production, this is where you would call the AI service
-            # For now, i create some static insights based on profile data
+            # Configure OpenAI
+
+            # Build a concise prompt
+            prompt = (
+                f"User health profile:\n"
+                f"- BMI: {bmi:.1f}\n"
+                f"- Activity level: {activity}\n"
+                f"- Fitness goal: {goal}\n\n"
+                f"Provide 3 concise, actionable daily wellness insights."
+            )
+
+            # Call the API
+            resp = client.chat.completions.create(model="gpt-3.5-turbo-1106",
+            messages=[
+                {"role": "system", "content": "You are a helpful wellness coach."},
+                {"role": "user", "content": prompt}
+            ],
+            max_tokens=150,
+            temperature=0.7)
+
+            text = resp.choices[0].message.content.strip()
+            # Split into lines (assuming the model returns a list)
+            lines = [l.strip("-• ").strip() for l in text.splitlines() if l.strip()]
+
+            # Persist as AIInsight objects
             insights = []
-            if bmi:
-                if bmi < 18.5:
-                    insights.append({
-                        'content': "Your BMI indicates you're underweight. Focus on nutrient-dense foods and consider consulting with a nutritionist.",
-                        'priority': 'high'
-                    })
-                elif bmi >= 25 and bmi < 30:
-                    insights.append({
-                        'content': "Your BMI indicates you're overweight. Consider increasing daily activity and focusing on nutrient-dense foods.",
-                        'priority': 'medium'
-                    })
-                elif bmi >= 30:
-                    insights.append({
-                        'content': "Your BMI indicates obesity. Consider consulting with a healthcare provider for a personalized plan.",
-                        'priority': 'high'
-                    })
-                else:
-                    insights.append({
-                        'content': "Your BMI is within the healthy range. Focus on maintaining through balanced nutrition and regular activity.",
-                        'priority': 'low'
-                    })
-
-            # Activity-based insight
-            if health_profile.activity_level:
-                if health_profile.activity_level == 'sedentary':
-                    insights.append({
-                        'content': "Your activity level is sedentary. Try to incorporate at least 30 minutes of walking daily.",
-                        'priority': 'high'
-                    })
-                elif health_profile.activity_level == 'light':
-                    insights.append({
-                        'content': "You're lightly active. Consider adding 1-2 more active days per week for better health.",
-                        'priority': 'medium'
-                    })
-
-            # Goal-based insight
-            if health_profile.fitness_goal:
-                if health_profile.fitness_goal == 'weight_loss':
-                    insights.append({
-                        'content': "For weight loss, try incorporating more protein to increase satiety and preserve muscle mass.",
-                        'priority': 'medium'
-                    })
-                elif health_profile.fitness_goal == 'muscle_gain':
-                    insights.append({
-                        'content': "For muscle gain, ensure you're in a slight caloric surplus and follow progressive overload.",
-                        'priority': 'medium'
-                    })
-
-            # Create and save insights
-            created_insights = []
-            for insight_data in insights:
+            for line in lines:
                 insight = AIInsight.objects.create(
                     user=request.user,
-                    content=insight_data['content'],
-                    priority=insight_data['priority']
+                    content=line,
+                    priority="medium"  # you could parse priorities too
                 )
-                created_insights.append(insight)
+                insights.append(insight)
 
-            # Return the created insights
-            serializer = self.get_serializer(created_insights, many=True)
+            serializer = self.get_serializer(insights, many=True)
             return Response(serializer.data, status=status.HTTP_201_CREATED)
 
         except HealthProfile.DoesNotExist:
             return Response(
-                {"detail": "Health profile not found. Please complete your profile first."},
+                {"detail": "Complete your health profile first."},
                 status=status.HTTP_404_NOT_FOUND
             )
         except Exception as e:
             return Response(
-                {"detail": f"Failed to generate insights: {str(e)}"},
+                {"detail": f"Insight generation failed: {e}"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )

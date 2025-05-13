@@ -2,35 +2,27 @@
 from django.contrib import admin
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from rest_framework_simplejwt.views import (
-    TokenRefreshView,
-    TokenVerifyView,
-)
+from rest_framework_simplejwt.views import TokenRefreshView, TokenVerifyView
+
 from health_profiles.views import HealthProfileViewSet, WeightHistoryViewSet
 from analytics.views import AIInsightViewSet, WellnessScoreViewSet
 from users.views import (
-    RegisterView,
-    UserProfileView,
-    VerifyEmailView,
-    ResendVerificationEmailView,
-    GenerateTwoFactorView,
-    VerifyTwoFactorView,
-    DisableTwoFactorView,
-    ChangePasswordView,
-    ResetPasswordRequestView,
-    ResetPasswordConfirmView,
-    NotificationSettingsView,
-    ExportUserDataView,
-    TwoFactorTokenView,
+    RegisterView, UserProfileView, VerifyEmailView, ResendVerificationEmailView,
+    GenerateTwoFactorView, VerifyTwoFactorView, DisableTwoFactorView,
+    ChangePasswordView, ResetPasswordRequestView, ResetPasswordConfirmView,
+    NotificationSettingsView, ExportUserDataView, TwoFactorTokenView,
 )
 from users.jwt import CustomTokenObtainPairView
 from users.oauth import GoogleOAuthAPI, GitHubOAuthAPI
 
 router = DefaultRouter()
+
 router.register(r'health-profiles', HealthProfileViewSet, basename='health-profile')
 router.register(r'weight-history', WeightHistoryViewSet, basename='weight-history')
-router.register(r'insights', AIInsightViewSet, basename='insight')
-router.register(r'wellness-scores', WellnessScoreViewSet, basename='wellness-score')
+router.register(r'analytics/aiinsight',AIInsightViewSet, basename='aiinsight')
+router.register(r'analytics/wellness-score', WellnessScoreViewSet, basename='wellnessscore')
+router.register(r'insights', AIInsightViewSet, basename='insight')            # optional legacy
+router.register(r'wellness-scores', WellnessScoreViewSet, basename='wellness-score')  # optional legacy
 
 urlpatterns = [
     path('admin/', admin.site.urls),
