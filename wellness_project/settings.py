@@ -22,7 +22,10 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/4.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-x0!qokvzdac@20w+))6bk2lfstqrbmerp$=vfx3#c1nqw1-lzj'
+SECRET_KEY = config('SECRET_KEY')
+
+#OpenAI api key
+OPENAI_API_KEY = config('OPENAI_API_KEY')
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
@@ -79,6 +82,8 @@ AUTHENTICATION_BACKENDS = [
     'django.contrib.auth.backends.ModelBackend',
     'allauth.account.auth_backends.AuthenticationBackend',
 ]
+
+
 
 # OAuth configuration
 SOCIALACCOUNT_PROVIDERS = {
