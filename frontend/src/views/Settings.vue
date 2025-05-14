@@ -1,5 +1,11 @@
 <template>
   <div class="settings-container">
+    <!-- Notification alert -->
+    <div v-if="notification.show" class="notification-alert" :class="notification.type">
+      {{ notification.message }}
+      <button class="notification-close" @click="notification.show = false">×</button>
+    </div>
+
     <h1>Account Settings</h1>
 
     <div class="settings-card">
@@ -40,53 +46,6 @@
         </div>
       </div>
 
-      <!-- Two-Factor Authentication Setup Modal -->
-      <div v-if="showTwoFactorModal" class="modal">
-        <div class="modal-content">
-          <span class="close-button" @click="showTwoFactorModal = false">&times;</span>
-          <h2>Set Up Two-Factor Authentication</h2>
-
-          <div v-if="setupStep === 1" class="setup-qr">
-            <p>Scan this QR code with your authenticator app (Google Authenticator, Authy, etc.)</p>
-            <div class="qr-container">
-              <img :src="qrCodeUrl" alt="QR Code for 2FA setup" v-if="qrCodeUrl" />
-              <div v-else class="loading-spinner"></div>
-            </div>
-            <p class="manual-key" v-if="secretKey">
-              Or enter this key manually: <strong>{{ secretKey }}</strong>
-            </p>
-            <button @click="setupStep = 2" class="btn btn-primary" :disabled="!qrCodeUrl">
-              Next
-            </button>
-          </div>
-
-          <div v-if="setupStep === 2" class="verify-code">
-            <p>Enter the 6-digit code from your authenticator app to verify setup</p>
-            <div class="code-input">
-              <input
-                  type="text"
-                  v-model="verificationCode"
-                  placeholder="000000"
-                  maxlength="6"
-                  pattern="[0-9]*"
-                  inputmode="numeric"
-              />
-            </div>
-            <div v-if="twoFactorError" class="error-message">
-              {{ twoFactorError }}
-            </div>
-            <div class="form-actions">
-              <button @click="setupStep = 1" class="btn btn-secondary">
-                Back
-              </button>
-              <button @click="verifyTwoFactor" class="btn btn-primary" :disabled="verificationCode.length !== 6 || loading.verification">
-                {{ loading.verification ? 'Verifying...' : 'Verify & Enable' }}
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-
       <!-- Change Password -->
       <div class="setting-item">
         <div class="setting-info">
@@ -101,7 +60,7 @@
       </div>
 
       <!-- Change Password Modal -->
-      <div v-if="showPasswordModal" class="modal">
+      <div v-if="showPasswordModal" class="modal" @click.self="showPasswordModal = false">
         <div class="modal-content">
           <span class="close-button" @click="showPasswordModal = false">&times;</span>
           <h2>Change Password</h2>
@@ -222,15 +181,34 @@
         </div>
       </div>
     </div>
+
+    <!-- Two-Factor Modal Component -->
+    <TwoFactorModal
+      :show="showTwoFactorModal"
+      :step="setupStep"
+      :qr-code="qrCodeUrl"
+      :secret="secretKey"
+      :code="verificationCode"
+      :error="twoFactorError"
+      :verifying="loading.verification"
+      @close="showTwoFactorModal = false"
+      @step="setupStep = $event"
+      @update:code="verificationCode = $event"
+      @verify="verifyTwoFactor"
+    />
   </div>
 </template>
 
 <script>
 import UserService from '../services/user.service';
 import HealthProfileService from '../services/health-profile_service';
+import TwoFactorModal from '@/components/auth/TwoFactorModal.vue';
 
 export default {
   name: 'Settings',
+  components: {
+    TwoFactorModal
+  },
   data() {
     return {
       user: {
@@ -243,6 +221,11 @@ export default {
       notificationSettings: {
         emailEnabled: true,
         weeklySummary: true
+      },
+      notification: {
+        show: false,
+        message: '',
+        type: 'success'
       },
       loading: {
         verification: false,
@@ -266,21 +249,23 @@ export default {
       passwordSuccess: ''
     };
   },
-  computed: {
-    //TODO isnt in use yet
-    currentUser() {
-      return this.$store.getters['auth/currentUser'];
-    },
-    hasTwoFactorEnabled() {
-      return this.$store.getters['auth/hasTwoFactorEnabled'];
-    }
-  },
   mounted() {
     this.loadUserData();
     this.loadPrivacySettings();
     this.loadNotificationSettings();
   },
   methods: {
+    showToast(message, type = 'success', duration = 3000) {
+      this.notification = {
+        show: true,
+        message,
+        type
+      };
+      setTimeout(() => {
+        this.notification.show = false;
+      }, duration);
+    },
+
     async loadUserData() {
       try {
         const response = await UserService.getCurrentUser();
@@ -289,6 +274,7 @@ export default {
         console.error('Error loading user data:', error);
       }
     },
+
     async loadPrivacySettings() {
       try {
         const response = await HealthProfileService.getHealthProfile();
@@ -299,6 +285,7 @@ export default {
         console.error('Error loading privacy settings:', error);
       }
     },
+
     async loadNotificationSettings() {
       try {
         const response = await UserService.getNotificationSettings();
@@ -312,44 +299,43 @@ export default {
         };
       }
     },
+
     async resendVerificationEmail() {
       this.loading.verification = true;
       try {
         await UserService.resendVerificationEmail();
-        this.$toast.success('Verification email sent successfully. Please check your inbox.', {
-          position: 'top-right',
-          duration: 5000
-        });
+        this.showToast('Verification email sent successfully. Please check your inbox.', 'success', 5000);
       } catch (error) {
         console.error('Error sending verification email:', error);
-        this.$toast.error('Failed to send verification email. Please try again later.', {
-          position: 'top-right',
-          duration: 5000
-        });
+        this.showToast('Failed to send verification email. Please try again later.', 'error', 5000);
       } finally {
         this.loading.verification = false;
       }
     },
+
     async setupTwoFactor() {
       this.loading.twoFactor = true;
       try {
+
+        this.verificationCode = '';
+        this.twoFactorError = '';
+        this.setupStep = 1;
+
         const response = await UserService.generateTwoFactorSecret();
+        console.log("2FA API response:", response);
+
         this.qrCodeUrl = response.data.qr_code;
         this.secretKey = response.data.secret_key;
+
         this.showTwoFactorModal = true;
-        this.setupStep = 1;
-        this.twoFactorError = '';
-        this.verificationCode = '';
       } catch (error) {
         console.error('Error setting up 2FA:', error);
-        this.$toast.error('Failed to set up two-factor authentication. Please try again later.', {
-          position: 'top-right',
-          duration: 5000
-        });
+        this.showToast('Failed to set up two-factor authentication. Please try again later.', 'error', 5000);
       } finally {
         this.loading.twoFactor = false;
       }
     },
+
     async verifyTwoFactor() {
       if (this.verificationCode.length !== 6) {
         this.twoFactorError = 'Please enter a valid 6-digit code';
@@ -361,10 +347,7 @@ export default {
         await UserService.verifyTwoFactor(this.verificationCode);
         this.user.two_factor_enabled = true;
         this.showTwoFactorModal = false;
-        this.$toast.success('Two-factor authentication enabled successfully.', {
-          position: 'top-right',
-          duration: 5000
-        });
+        this.showToast('Two-factor authentication enabled successfully.', 'success', 5000);
       } catch (error) {
         console.error('Error verifying 2FA code:', error);
         this.twoFactorError = 'Invalid verification code. Please try again.';
@@ -372,7 +355,8 @@ export default {
         this.loading.verification = false;
       }
     },
-     async disableTwoFactor() {
+
+    async disableTwoFactor() {
       if (!confirm('Are you sure you want to disable two-factor authentication? This will make your account less secure.')) {
         return;
       }
@@ -382,24 +366,15 @@ export default {
       try {
         await UserService.disableTwoFactor();
         this.user.two_factor_enabled = false;
-
-        if (this.$toast) {
-          this.$toast.success('Two-factor authentication disabled.', {
-            position: 'top-right',
-            duration: 5000
-          });
-        }
+        this.showToast('Two-factor authentication disabled.', 'success', 5000);
       } catch (err) {
-        if (this.$toast) {
-          this.$toast.error('Failed to disable two-factor authentication. Please try again later.', {
-            position: 'top-right',
-            duration: 5000
-          });
-        }
+        console.error('Failed to disable 2FA:', err);
+        this.showToast('Failed to disable two-factor authentication. Please try again later.', 'error', 5000);
       } finally {
         this.loading.twoFactor = false;
       }
     },
+
     async changePassword() {
       this.passwordError = '';
       this.passwordSuccess = '';
@@ -417,8 +392,8 @@ export default {
       this.loading.password = true;
       try {
         await UserService.changePassword(
-            this.passwordForm.currentPassword,
-            this.passwordForm.newPassword
+          this.passwordForm.currentPassword,
+          this.passwordForm.newPassword
         );
         this.passwordSuccess = 'Password updated successfully';
 
@@ -445,6 +420,7 @@ export default {
         this.loading.password = false;
       }
     },
+
     async updatePrivacySettings() {
       try {
         const profile = await HealthProfileService.getHealthProfile();
@@ -454,37 +430,27 @@ export default {
         };
 
         await HealthProfileService.updateHealthProfile(updatedProfile);
-        this.$toast.success('Privacy settings updated successfully.', {
-          position: 'top-right',
-          duration: 3000
-        });
+        this.showToast('Privacy settings updated successfully.', 'success', 3000);
       } catch (error) {
         console.error('Error updating privacy settings:', error);
-        this.$toast.error('Failed to update privacy settings.', {
-          position: 'top-right',
-          duration: 3000
-        });
+        this.showToast('Failed to update privacy settings.', 'error', 3000);
         // Revert the toggle if update fails
         this.loadPrivacySettings();
       }
     },
+
     async updateNotificationSettings() {
       try {
         await UserService.updateNotificationSettings(this.notificationSettings);
-        this.$toast.success('Notification settings updated successfully.', {
-          position: 'top-right',
-          duration: 3000
-        });
+        this.showToast('Notification settings updated successfully.', 'success', 3000);
       } catch (error) {
         console.error('Error updating notification settings:', error);
-        this.$toast.error('Failed to update notification settings.', {
-          position: 'top-right',
-          duration: 3000
-        });
+        this.showToast('Failed to update notification settings.', 'error', 3000);
         // Revert toggles if update fails
         this.loadNotificationSettings();
       }
     },
+
     async exportData() {
       this.loading.export = true;
       try {
@@ -499,16 +465,10 @@ export default {
         link.click();
         document.body.removeChild(link);
 
-        this.$toast.success('Data exported successfully.', {
-          position: 'top-right',
-          duration: 3000
-        });
+        this.showToast('Data exported successfully.', 'success', 3000);
       } catch (error) {
         console.error('Error exporting data:', error);
-        this.$toast.error('Failed to export data. Please try again later.', {
-          position: 'top-right',
-          duration: 3000
-        });
+        this.showToast('Failed to export data. Please try again later.', 'error', 3000);
       } finally {
         this.loading.export = false;
       }
@@ -522,6 +482,7 @@ export default {
   max-width: 800px;
   margin: 0 auto;
   padding: 2rem;
+  position: relative;
 }
 
 h1 {
@@ -646,13 +607,15 @@ input:checked + .slider:before {
   position: fixed;
   top: 0;
   left: 0;
-  width: 100%;
-  height: 100%;
+  right: 0;
+  bottom: 0;
+  width: 100vw;
+  height: 100vh;
   background-color: rgba(0, 0, 0, 0.5);
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1000;
+  z-index: 2000;
 }
 
 .modal-content {
@@ -661,7 +624,10 @@ input:checked + .slider:before {
   border-radius: 8px;
   width: 90%;
   max-width: 500px;
+  max-height: 90vh;
+  overflow-y: auto;
   position: relative;
+  z-index: 2001;
 }
 
 .close-button {
@@ -715,42 +681,6 @@ input:checked + .slider:before {
   margin-top: 1rem;
 }
 
-/* Two-Factor Setup Styles */
-.setup-qr, .verify-code {
-  text-align: center;
-}
-
-.qr-container {
-  display: flex;
-  justify-content: center;
-  margin: 1.5rem 0;
-  min-height: 200px;
-  align-items: center;
-}
-
-.qr-container img {
-  max-width: 200px;
-}
-
-.manual-key {
-  margin-bottom: 1.5rem;
-  word-break: break-all;
-  background: #f5f5f5;
-  padding: 0.5rem;
-  border-radius: 4px;
-}
-
-.code-input input {
-  font-size: 1.5rem;
-  letter-spacing: 0.5rem;
-  text-align: center;
-  max-width: 200px;
-  margin: 1rem auto;
-  padding: 0.75rem;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-}
-
 /* Button Styles */
 .btn {
   cursor: pointer;
@@ -796,5 +726,47 @@ input:checked + .slider:before {
 @keyframes spin {
   0% { transform: rotate(0deg); }
   100% { transform: rotate(360deg); }
+}
+
+/* Toast Notification */
+.notification-alert {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  padding: 12px 20px;
+  border-radius: 4px;
+  color: white;
+  z-index: 1100;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+  display: flex;
+  align-items: center;
+  min-width: 300px;
+  max-width: 450px;
+  animation: slideIn 0.3s ease forwards;
+}
+
+.notification-close {
+  background: none;
+  border: none;
+  color: white;
+  margin-left: auto;
+  font-size: 20px;
+  cursor: pointer;
+  opacity: 0.8;
+}
+
+.notification-close:hover {
+  opacity: 1;
+}
+
+@keyframes slideIn {
+  from {
+    transform: translateY(-20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
 }
 </style>
