@@ -1,6 +1,6 @@
 # analytics/serializers.py
 from rest_framework import serializers
-from .models import AIInsight, WellnessScore
+from .models import AIInsight, WellnessScore, Milestone  # Add Milestone to imports
 
 class AIInsightSerializer(serializers.ModelSerializer):
     class Meta:
@@ -35,3 +35,9 @@ class WellnessScoreSerializer(serializers.ModelSerializer):
         instance.calculate_total()
         instance.save()
         return instance
+
+class MilestoneSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Milestone
+        fields = ['id', 'milestone_type', 'description', 'achieved_at', 'progress_value', 'progress_percentage']
+        read_only_fields = ['achieved_at']

@@ -83,6 +83,7 @@ class AnalyticsService {
     trackMilestone(milestoneData) {
         return apiClient.post('analytics/milestones/', milestoneData);
     }
+    
 
     /**
      * Get all milestones for the current user

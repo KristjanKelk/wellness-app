@@ -30,6 +30,36 @@
         </div>
       </div>
 
+      <div class="goal-progress" v-if="profile?.target_weight_kg">
+        <h3>Goal Progress</h3>
+        <div class="progress-bar-container">
+          <div class="progress-bar">
+            <div
+              class="progress-fill"
+              :style="{ width: goalProgressPercentage + '%' }"
+              :class="goalProgressClass"
+            ></div>
+          </div>
+          <div class="progress-labels">
+            <span class="start-weight">{{ startWeight }} kg</span>
+            <span class="current-position" :style="{ left: goalProgressPercentage + '%' }">
+              <span class="current-marker"></span>
+              <span class="current-weight">{{ profile.weight_kg }} kg</span>
+            </span>
+            <span class="target-weight">{{ profile.target_weight_kg }} kg</span>
+          </div>
+        </div>
+        <p class="goal-status">
+          <span v-if="remainingToGoal !== 0">
+            <strong>{{ Math.abs(remainingToGoal).toFixed(1) }} kg</strong>
+            {{ remainingToGoal > 0 ? 'to lose' : 'to gain' }} to reach your goal
+          </span>
+          <span v-else class="goal-achieved">
+            🎉 Congratulations! You've reached your target weight!
+          </span>
+        </p>
+      </div>
+
       <div v-if="weightHistory.length > 0" class="weight-trend">
         <div class="weight-mini-chart">
           <div
@@ -71,17 +101,29 @@
         <router-link to="/progress">View full weight history and charts</router-link>
       </div>
     </div>
+
+    <!-- Goal Achievement Modal -->
+    <goal-achieved-modal
+      v-if="showGoalAchievedModal"
+      :show="showGoalAchievedModal"
+      :goal-weight="Number(profile?.target_weight_kg)"
+      :current-weight="Number(profile?.weight_kg)"
+      :start-weight="Number(startWeight)"
+      @close="showGoalAchievedModal = false"
+    />
   </dashboard-card>
 </template>
 
 <script>
 import DashboardCard from './DashboardCard.vue';
 import WellnessService from '../../services/wellness-service';
+import GoalAchievedModal from './GoalAchievedModal.vue';
 
 export default {
   name: 'WeightHistoryCard',
   components: {
-    DashboardCard
+    DashboardCard,
+    GoalAchievedModal
   },
   props: {
     profile: {
@@ -100,6 +142,12 @@ export default {
       type: String,
       default: null
     }
+  },
+  data() {
+    return {
+      showGoalAchievedModal: false,
+      goalAchieved: false
+    };
   },
   computed: {
     weightChangeClass() {
@@ -133,6 +181,67 @@ export default {
         recorded_at: entry.recorded_at,
         height: ((parseFloat(entry.weight_kg) - min) / range) * 80 + 10 // Scale to 10-90% height
       }));
+    },
+    startWeight() {
+      if (!this.weightHistory || this.weightHistory.length === 0) return this.profile?.weight_kg;
+
+      // Get the oldest weight entry
+      const oldest = [...this.weightHistory]
+        .sort((a, b) => new Date(a.recorded_at) - new Date(b.recorded_at))
+        .shift();
+
+      return oldest.weight_kg;
+    },
+    goalProgressPercentage() {
+      if (!this.profile?.target_weight_kg || !this.startWeight) return 0;
+
+      const currentWeight = parseFloat(this.profile.weight_kg);
+      const targetWeight = parseFloat(this.profile.target_weight_kg);
+      const startWeight = parseFloat(this.startWeight);
+
+      // Avoid division by zero
+      if (startWeight === targetWeight) return 100;
+
+      // Calculate progress as percentage
+      const totalChange = Math.abs(startWeight - targetWeight);
+      const currentChange = Math.abs(startWeight - currentWeight);
+      const percentage = (currentChange / totalChange) * 100;
+
+      // Limit to 0-100 range
+      return Math.min(Math.max(percentage, 0), 100);
+    },
+    remainingToGoal() {
+      if (!this.profile?.target_weight_kg) return 0;
+
+      const currentWeight = parseFloat(this.profile.weight_kg);
+      const targetWeight = parseFloat(this.profile.target_weight_kg);
+
+      return currentWeight - targetWeight;
+    },
+    goalProgressClass() {
+      if (!this.profile?.target_weight_kg || !this.profile?.fitness_goal) return '';
+
+      // For weight loss goals
+      if (this.profile.fitness_goal === 'weight_loss') {
+        return this.remainingToGoal > 0 ? 'progress-loss' : 'progress-complete';
+      }
+
+      // For muscle gain goals
+      if (this.profile.fitness_goal === 'muscle_gain') {
+        return this.remainingToGoal < 0 ? 'progress-gain' : 'progress-complete';
+      }
+
+      return '';
+    }
+  },
+  watch: {
+    // Watch for goal achievement
+    remainingToGoal(newVal) {
+      if (!this.goalAchieved && Math.abs(newVal) < 0.5) {
+        // If within 0.5kg of goal, consider it achieved
+        this.showGoalAchievedModal = true;
+        this.goalAchieved = true;
+      }
     }
   },
   methods: {

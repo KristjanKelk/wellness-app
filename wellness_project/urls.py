@@ -5,7 +5,7 @@ from rest_framework.routers import DefaultRouter
 from rest_framework_simplejwt.views import TokenRefreshView, TokenVerifyView
 
 from health_profiles.views import HealthProfileViewSet, WeightHistoryViewSet
-from analytics.views import AIInsightViewSet, WellnessScoreViewSet
+from analytics.views import AIInsightViewSet, WellnessScoreViewSet, MilestoneViewSet
 from users.views import (
     RegisterView, UserProfileView, VerifyEmailView, ResendVerificationEmailView,
     GenerateTwoFactorView, VerifyTwoFactorView, DisableTwoFactorView,
@@ -21,6 +21,7 @@ router.register(r'health-profiles', HealthProfileViewSet, basename='health-profi
 router.register(r'weight-history', WeightHistoryViewSet, basename='weight-history')
 router.register(r'analytics/aiinsight',AIInsightViewSet, basename='aiinsight')
 router.register(r'analytics/wellness-score', WellnessScoreViewSet, basename='wellnessscore')
+router.register(r'analytics/milestones', MilestoneViewSet, basename='milestone')
 router.register(r'insights', AIInsightViewSet, basename='insight')            # optional legacy
 router.register(r'wellness-scores', WellnessScoreViewSet, basename='wellness-score')  # optional legacy
 

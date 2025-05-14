@@ -10,7 +10,8 @@ from openai import OpenAI
 client = OpenAI(api_key=settings.OPENAI_API_KEY)
 
 from .models import AIInsight, WellnessScore
-from .serializers import AIInsightSerializer, WellnessScoreSerializer
+from .models import AIInsight, WellnessScore, Milestone  # Make sure Milestone is imported
+from .serializers import AIInsightSerializer, WellnessScoreSerializer, MilestoneSerializer
 from health_profiles.models import HealthProfile
 
 class WellnessScoreViewSet(viewsets.ModelViewSet):
@@ -64,10 +65,31 @@ class WellnessScoreViewSet(viewsets.ModelViewSet):
             }
             activity_score = activity_score_map.get(health_profile.activity_level, 50)
 
-            # For progress score and habits score i use placeholders
-            # In a real implementation, these would be based on goal tracking and habits
-            progress_score = 60
-            habits_score = 50
+            # Check for weight milestones
+            weight_milestone = MilestoneService.check_weight_milestone(request.user)
+
+            # Check for activity milestones if weekly_activity_days was provided
+            if 'weekly_activity_days' in request.data:
+                activity_milestone = MilestoneService.check_activity_milestone(
+                    request.user,
+                    request.data['weekly_activity_days']
+                )
+
+            # For progress score, use milestone-based calculation
+            # Get recent milestones (last 30 days)
+            thirty_days_ago = timezone.now() - timezone.timedelta(days=30)
+            recent_milestones = Milestone.objects.filter(
+                user=request.user,
+                achieved_at__gte=thirty_days_ago
+            ).count()
+
+            # Base progress score + milestone bonus (5 points per milestone, up to 50 bonus points)
+            base_progress_score = 50
+            milestone_bonus = min(recent_milestones * 5, 50)
+            progress_score = min(base_progress_score + milestone_bonus, 100)
+
+            # For habits score - can be based on streaks or other habit metrics
+            habits_score = 50  # Default value, update as needed based on your app's habit tracking
 
             # Creates new wellness score
             wellness_score = WellnessScore(
@@ -164,4 +186,40 @@ class AIInsightViewSet(viewsets.ModelViewSet):
             return Response(
                 {"detail": f"Insight generation failed: {e}"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+class MilestoneViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet for managing milestones
+    """
+    serializer_class = MilestoneSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        return Milestone.objects.filter(user=self.request.user)
+
+    @action(detail=False, methods=['post'])
+    def track_habit(self, request):
+        """
+        Track a habit streak and check for milestones
+        """
+        habit_name = request.data.get('habit_name')
+        current_streak = request.data.get('streak_days')
+
+        if not habit_name or not current_streak:
+            return Response(
+                {"detail": "Habit name and streak days are required."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        milestone = MilestoneService.check_habit_streak(request.user, habit_name, current_streak)
+        if milestone:
+            # Update wellness score
+            MilestoneService.update_progress_score(request.user)
+            serializer = self.get_serializer(milestone)
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        else:
+            return Response(
+                {"detail": "No new milestone achieved."},
+                status=status.HTTP_200_OK
             )

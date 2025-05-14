@@ -44,3 +44,21 @@ class AIInsight(models.Model):
 
     class Meta:
         ordering = ['-created_at']
+
+
+class Milestone(models.Model):
+    MILESTONE_TYPES = [
+        ('weight', 'Weight Goal'),
+        ('activity', 'Activity Level'),
+        ('habit', 'Habit Streak'),
+    ]
+
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='milestones')
+    milestone_type = models.CharField(max_length=20, choices=MILESTONE_TYPES)
+    description = models.CharField(max_length=255)
+    achieved_at = models.DateTimeField(auto_now_add=True)
+    progress_value = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
+    progress_percentage = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
+
+    class Meta:
+        ordering = ['-achieved_at']

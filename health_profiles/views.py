@@ -81,12 +81,34 @@ class WeightHistoryViewSet(viewsets.ModelViewSet):
                     "Please wait at least 1 minute between weight entries to ensure unique timestamps"
                 )
 
-            # Save weight entry with current timestamp
+            # Save weight entry
             weight_entry = serializer.save(health_profile=health_profile)
 
             # Also update the current weight in the profile
             health_profile.weight_kg = weight_entry.weight_kg
             health_profile.save(update_fields=['weight_kg', 'updated_at'])
+
+            # Check for weight logging streak milestones
+            try:
+                MilestoneService.check_weight_logging_streak(self.request.user)
+            except Exception as e:
+                print(f"Error checking weight logging streak: {e}")
+
+            # Check for weight goal milestones (progress)
+            if health_profile.target_weight_kg:
+                try:
+                    MilestoneService.check_weight_milestone(self.request.user)
+                except Exception as e:
+                    print(f"Error checking weight milestone: {e}")
+
+            # Check for weight goal achievement
+            try:
+                goal_achieved = MilestoneService.check_weight_goal_achievement(self.request.user)
+                if goal_achieved:
+                    # Update wellness score to reflect the achievement
+                    MilestoneService.update_progress_score(self.request.user)
+            except Exception as e:
+                print(f"Error checking weight goal achievement: {e}")
 
             return weight_entry
 

@@ -55,6 +55,11 @@
             class="dashboard-card"
             :insights="insights"
         />
+
+        <!-- Milestones Card -->
+        <milestones-card
+            class="dashboard-card"
+          />
       </div>
 
       <!-- Add Weight Modal -->
@@ -82,6 +87,7 @@ import ActivityLevelCard from '../components/dashboard/ActivityLevelCard.vue';
 import WeightHistoryCard from '../components/dashboard/WeightHistoryCard.vue';
 import AiInsightsCard from '../components/dashboard/AiInsightsCard.vue';
 import AddWeightModal from '../components/dashboard/AddWeightModal.vue';
+import MilestonesCard from '../components/dashboard/MilestonesCard.vue';
 
 export default {
   name: 'Dashboard',
@@ -91,6 +97,7 @@ export default {
     ActivityLevelCard,
     WeightHistoryCard,
     AiInsightsCard,
+    MilestonesCard,
     AddWeightModal
   },
   data() {
