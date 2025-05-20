@@ -30,7 +30,7 @@
         </div>
       </div>
 
-      <div class="goal-progress" v-if="profile?.target_weight_kg">
+      <div class="goal-progress" v-if="profile?.target_weight_kg && !goalCompleted">
         <h3>Goal Progress</h3>
         <div class="progress-bar-container">
           <div class="progress-bar">
@@ -58,6 +58,12 @@
             🎉 Congratulations! You've reached your target weight!
           </span>
         </p>
+      </div>
+
+      <div class="goal-completed" v-if="profile?.target_weight_kg && goalCompleted">
+        <h3>Weight Goal Achieved! 🎉</h3>
+        <p>You've reached your target weight of {{ profile.target_weight_kg }}kg!</p>
+        <router-link to="/profile" class="btn btn-primary">Set a New Goal</router-link>
       </div>
 
       <div v-if="weightHistory.length > 0" class="weight-trend">
@@ -146,7 +152,8 @@ export default {
   data() {
     return {
       showGoalAchievedModal: false,
-      goalAchieved: false
+      goalAchieved: false,
+      lastAchievedGoal: null
     };
   },
   computed: {
@@ -232,15 +239,27 @@ export default {
       }
 
       return '';
+    },
+    goalCompleted() {
+      return this.profile?.target_weight_kg &&
+             Math.abs(parseFloat(this.profile.weight_kg) - parseFloat(this.profile.target_weight_kg)) <= 0.5;
     }
   },
   watch: {
     // Watch for goal achievement
     remainingToGoal(newVal) {
       if (!this.goalAchieved && Math.abs(newVal) < 0.5) {
-        // If within 0.5kg of goal, consider it achieved
+        // Store the currently achieved goal to prevent showing it again
+        this.lastAchievedGoal = this.profile?.target_weight_kg;
         this.showGoalAchievedModal = true;
         this.goalAchieved = true;
+      }
+    },
+
+    // Reset goal achieved state when the target changes
+    'profile.target_weight_kg': function(newVal) {
+      if (newVal !== this.lastAchievedGoal) {
+        this.goalAchieved = false;
       }
     }
   },
@@ -396,5 +415,24 @@ export default {
 .btn-secondary {
   width: 100%;
   margin-top: $spacing-4;
+}
+
+/* Add this to your <style> section */
+.goal-completed {
+  margin-bottom: $spacing-6;
+  padding: $spacing-4;
+  background-color: #d4edda;
+  border-radius: $border-radius;
+  text-align: center;
+  border-left: 4px solid $success;
+}
+
+.goal-completed h3 {
+  color: $success;
+  margin-bottom: $spacing-2;
+}
+
+.goal-completed .btn-primary {
+  margin-top: $spacing-3;
 }
 </style>

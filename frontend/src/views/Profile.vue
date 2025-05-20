@@ -135,6 +135,11 @@
           >
           <small v-if="validationErrors.target_weight_kg" class="error-text">{{ validationErrors.target_weight_kg }}</small>
         </div>
+
+        <div v-if="isGoalAchieved" class="goal-achieved-message">
+          <p><strong>Congratulations!</strong> You've reached your weight goal of {{ profile.target_weight_kg }}kg!</p>
+          <button type="button" @click="resetGoal" class="btn btn-secondary">Set a New Goal</button>
+        </div>
       </section>
 
       <!-- Fitness Assessment Section -->
@@ -428,6 +433,13 @@ export default {
   mounted() {
     this.fetchProfile();
   },
+  computed: {
+    isGoalAchieved() {
+      return this.profile?.target_weight_kg &&
+             this.profile?.weight_kg &&
+             Math.abs(parseFloat(this.profile.weight_kg) - parseFloat(this.profile.target_weight_kg)) <= 0.5;
+    }
+  },
   methods: {
     fetchProfile() {
       this.loading = true;
@@ -462,6 +474,14 @@ export default {
             this.successful = false;
           }
         });
+    },
+
+    resetGoal() {
+      // Clear the current target weight
+      this.profile.target_weight_kg = null;
+
+      // Save the updated profile
+      this.saveProfile();
     },
 
     calculateBMI() {
@@ -958,5 +978,19 @@ textarea {
 
 .checkbox-item:hover .checkbox-label:before {
   border-color: $primary;
+}
+
+/* Add this to your <style> section */
+.goal-achieved-message {
+  margin-top: 1rem;
+  padding: 1rem;
+  background-color: #d4edda;
+  border-radius: $border-radius;
+  border-left: 4px solid $success;
+}
+
+.goal-achieved-message p {
+  margin-bottom: 0.5rem;
+  color: darken($success, 10%);
 }
 </style>

@@ -13,6 +13,7 @@ from .models import AIInsight, WellnessScore
 from .models import AIInsight, WellnessScore, Milestone  # Make sure Milestone is imported
 from .serializers import AIInsightSerializer, WellnessScoreSerializer, MilestoneSerializer
 from health_profiles.models import HealthProfile
+from .services import MilestoneService
 
 class WellnessScoreViewSet(viewsets.ModelViewSet):
     """
