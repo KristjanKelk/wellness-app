@@ -3,9 +3,11 @@ from rest_framework import viewsets, permissions, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from django.utils import timezone
-from datetime import timedelta
+from datetime import datetime, timedelta
 from .models import HealthProfile, WeightHistory
 from .serializers import HealthProfileSerializer, WeightHistorySerializer
+from django.db.models import Avg
+from django.db.models.functions import TruncDay, TruncWeek, TruncMonth
 
 
 class HealthProfileViewSet(viewsets.ModelViewSet):
@@ -60,55 +62,125 @@ class WeightHistoryViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         try:
             health_profile = HealthProfile.objects.get(user=self.request.user)
-            return WeightHistory.objects.filter(health_profile=health_profile)
+            queryset = WeightHistory.objects.filter(health_profile=health_profile)
+
+            # Filter by date range if parameters are provided
+            start_date = self.request.query_params.get('start_date', None)
+            end_date = self.request.query_params.get('end_date', None)
+            period = self.request.query_params.get('period', None)
+
+            # Apply date range filter if provided
+            if start_date and end_date:
+                try:
+                    start_date = datetime.strptime(start_date, '%Y-%m-%d').date()
+                    end_date = datetime.strptime(end_date, '%Y-%m-%d').date()
+                    queryset = queryset.filter(
+                        recorded_at__date__gte=start_date,
+                        recorded_at__date__lte=end_date
+                    )
+                except ValueError:
+                    # If date parsing fails, ignore the filter
+                    pass
+
+            # Apply period filter if provided
+            elif period:
+                now = datetime.now().date()
+                if period == 'week':
+                    start_date = now - timedelta(days=7)
+                    queryset = queryset.filter(recorded_at__date__gte=start_date)
+                elif period == 'month':
+                    start_date = now - timedelta(days=30)
+                    queryset = queryset.filter(recorded_at__date__gte=start_date)
+                elif period == 'quarter':
+                    start_date = now - timedelta(days=90)
+                    queryset = queryset.filter(recorded_at__date__gte=start_date)
+                elif period == 'year':
+                    start_date = now - timedelta(days=365)
+                    queryset = queryset.filter(recorded_at__date__gte=start_date)
+
+            return queryset
         except HealthProfile.DoesNotExist:
             return WeightHistory.objects.none()
 
-    def perform_create(self, serializer):
+    # Add endpoints for weekly and monthly averages
+    @action(detail=False, methods=['get'])
+    def weekly_averages(self, request):
+        """
+        Get weekly weight averages
+        """
         try:
-            health_profile = HealthProfile.objects.get(user=self.request.user)
+            # Get the number of weeks to analyze (default: 12)
+            weeks = int(request.query_params.get('weeks', 12))
 
-            # Check for recent entries to prevent duplicates (within last minute)
-            recent_entry = WeightHistory.objects.filter(
+            # Get the health profile
+            health_profile = HealthProfile.objects.get(user=request.user)
+
+            # Get the start date (n weeks ago)
+            start_date = datetime.now() - timedelta(weeks=weeks)
+
+            # Get weight entries
+            queryset = WeightHistory.objects.filter(
                 health_profile=health_profile,
-                recorded_at__gte=timezone.now() - timedelta(minutes=1)
-            ).exists()
+                recorded_at__gte=start_date
+            )
 
-            if recent_entry:
-                # If entry exists within last minute, raise error
-                from rest_framework import serializers as rest_serializers
-                raise rest_serializers.ValidationError(
-                    "Please wait at least 1 minute between weight entries to ensure unique timestamps"
-                )
+            # Group by week and calculate average
+            weekly_data = queryset.annotate(
+                week=TruncWeek('recorded_at')
+            ).values('week').annotate(
+                average_weight=Avg('weight_kg')
+            ).order_by('week')
 
-            # Save weight entry
-            weight_entry = serializer.save(health_profile=health_profile)
-
-            # Also update the current weight in the profile
-            health_profile.weight_kg = weight_entry.weight_kg
-            health_profile.save(update_fields=['weight_kg', 'updated_at'])
-
-            # Check for weight logging streak milestones
-            try:
-                from analytics.services import MilestoneService
-                MilestoneService.check_weight_logging_streak(self.request.user)
-            except Exception as e:
-                print(f"Error checking weight logging streak: {e}")
-
-            # Check for weight milestone progress (also checks for goal achievement)
-            # We only need to call this one function now
-            if health_profile.target_weight_kg:
-                try:
-                    from analytics.services import MilestoneService
-                    milestone = MilestoneService.check_weight_milestone(self.request.user)
-                    if milestone and milestone.progress_percentage == 100:
-                        # Update wellness score to reflect the achievement
-                        MilestoneService.update_progress_score(self.request.user)
-                except Exception as e:
-                    print(f"Error checking weight milestone: {e}")
-
-            return weight_entry
+            return Response(weekly_data)
 
         except HealthProfile.DoesNotExist:
-            from rest_framework import serializers as rest_serializers
-            raise rest_serializers.ValidationError("You must create a health profile first")
+            return Response(
+                {"detail": "Health profile not found"},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        except ValueError:
+            return Response(
+                {"detail": "Invalid parameter"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+    @action(detail=False, methods=['get'])
+    def monthly_averages(self, request):
+        """
+        Get monthly weight averages
+        """
+        try:
+            # Get the number of months to analyze (default: 6)
+            months = int(request.query_params.get('months', 6))
+
+            # Get the health profile
+            health_profile = HealthProfile.objects.get(user=request.user)
+
+            # Get the start date (n months ago)
+            start_date = datetime.now() - timedelta(days=30 * months)
+
+            # Get weight entries
+            queryset = WeightHistory.objects.filter(
+                health_profile=health_profile,
+                recorded_at__gte=start_date
+            )
+
+            # Group by month and calculate average
+            monthly_data = queryset.annotate(
+                month=TruncMonth('recorded_at')
+            ).values('month').annotate(
+                average_weight=Avg('weight_kg')
+            ).order_by('month')
+
+            return Response(monthly_data)
+
+        except HealthProfile.DoesNotExist:
+            return Response(
+                {"detail": "Health profile not found"},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        except ValueError:
+            return Response(
+                {"detail": "Invalid parameter"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
