@@ -1,5 +1,4 @@
-# analytics/services.py - Create a new file
-
+# analytics/services.py
 from decimal import Decimal
 from django.utils import timezone
 from .models import Milestone, WellnessScore
@@ -32,6 +31,27 @@ class MilestoneService:
             if total_change_needed == 0:
                 return None
 
+            # First check if the goal has been reached (within 0.5 kg tolerance)
+            if abs(current_weight - target_weight) <= 0.5:
+                # Check if we already have a weight goal achievement milestone
+                existing_milestone = Milestone.objects.filter(
+                    user=user,
+                    milestone_type='weight',
+                    description__contains='Reached weight goal'
+                ).exists()
+
+                if not existing_milestone:
+                    # Create the milestone
+                    milestone = Milestone.objects.create(
+                        user=user,
+                        milestone_type='weight',
+                        description=f"Reached weight goal of {float(target_weight)} kg!",
+                        progress_value=float(current_weight),
+                        progress_percentage=100  # 100% achievement
+                    )
+                    return milestone
+
+            # If goal not reached yet, check for progress milestones
             # Weight loss goal
             if starting_weight > target_weight:
                 current_change = starting_weight - current_weight
@@ -42,7 +62,7 @@ class MilestoneService:
                 progress_percentage = (current_change / abs(total_change_needed)) * 100
 
             # Check if the progress percentage crosses a 5% threshold
-            milestone_thresholds = [5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80, 85, 90, 95, 100]
+            milestone_thresholds = [5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80, 85, 90, 95]
             for threshold in milestone_thresholds:
                 # Check if we just crossed this threshold
                 if progress_percentage >= threshold:
@@ -166,7 +186,6 @@ class MilestoneService:
         except HealthProfile.DoesNotExist:
             return None
 
-
     @staticmethod
     def check_weight_logging_streak(user):
         """
@@ -216,48 +235,6 @@ class MilestoneService:
                         description=f"{max_streak}-day streak for weight logging!",
                         progress_value=max_streak,
                         progress_percentage=None
-                    )
-                    return milestone
-
-            return None
-
-        except HealthProfile.DoesNotExist:
-            return None
-
-
-    @staticmethod
-    def check_weight_goal_achievement(user):
-        """
-        Check if user has achieved their weight goal
-        """
-        try:
-            profile = HealthProfile.objects.get(user=user)
-
-            # If no target weight is set, we can't achieve a goal
-            if not profile.target_weight_kg or not profile.weight_kg:
-                return None
-
-            # Calculate how close we are to the goal
-            target_weight = float(profile.target_weight_kg)
-            current_weight = float(profile.weight_kg)
-
-            # If we're within 0.5 kg of our target, consider it achieved
-            if abs(current_weight - target_weight) <= 0.5:
-                # Check if we already have a weight goal achievement milestone
-                existing_milestone = Milestone.objects.filter(
-                    user=user,
-                    milestone_type='weight',
-                    description__contains='Reached weight goal'
-                ).exists()
-
-                if not existing_milestone:
-                    # Create the milestone
-                    milestone = Milestone.objects.create(
-                        user=user,
-                        milestone_type='weight',
-                        description=f"Reached weight goal of {target_weight} kg!",
-                        progress_value=current_weight,
-                        progress_percentage=100  # 100% achievement
                     )
                     return milestone
 

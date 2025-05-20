@@ -138,7 +138,6 @@
 
         <div v-if="isGoalAchieved" class="goal-achieved-message">
           <p><strong>Congratulations!</strong> You've reached your weight goal of {{ profile.target_weight_kg }}kg!</p>
-          <button type="button" @click="resetGoal" class="btn btn-secondary">Set a New Goal</button>
         </div>
       </section>
 

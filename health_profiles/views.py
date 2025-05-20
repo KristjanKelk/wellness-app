@@ -90,25 +90,22 @@ class WeightHistoryViewSet(viewsets.ModelViewSet):
 
             # Check for weight logging streak milestones
             try:
+                from analytics.services import MilestoneService
                 MilestoneService.check_weight_logging_streak(self.request.user)
             except Exception as e:
                 print(f"Error checking weight logging streak: {e}")
 
-            # Check for weight goal milestones (progress)
+            # Check for weight milestone progress (also checks for goal achievement)
+            # We only need to call this one function now
             if health_profile.target_weight_kg:
                 try:
-                    MilestoneService.check_weight_milestone(self.request.user)
+                    from analytics.services import MilestoneService
+                    milestone = MilestoneService.check_weight_milestone(self.request.user)
+                    if milestone and milestone.progress_percentage == 100:
+                        # Update wellness score to reflect the achievement
+                        MilestoneService.update_progress_score(self.request.user)
                 except Exception as e:
                     print(f"Error checking weight milestone: {e}")
-
-            # Check for weight goal achievement
-            try:
-                goal_achieved = MilestoneService.check_weight_goal_achievement(self.request.user)
-                if goal_achieved:
-                    # Update wellness score to reflect the achievement
-                    MilestoneService.update_progress_score(self.request.user)
-            except Exception as e:
-                print(f"Error checking weight goal achievement: {e}")
 
             return weight_entry
 

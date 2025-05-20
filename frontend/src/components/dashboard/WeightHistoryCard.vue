@@ -41,12 +41,12 @@
             ></div>
           </div>
           <div class="progress-labels">
-            <span class="start-weight">{{ startWeight }} kg</span>
+            <!--<span class="start-weight">{{ startWeight }} kg</span>-->
             <span class="current-position" :style="{ left: goalProgressPercentage + '%' }">
               <span class="current-marker"></span>
-              <span class="current-weight">{{ profile.weight_kg }} kg</span>
+              <!--<span class="current-weight">{{ profile.weight_kg }} kg</span>-->
             </span>
-            <span class="target-weight">{{ profile.target_weight_kg }} kg</span>
+            <!--<span class="target-weight">{{ profile.target_weight_kg }} kg</span>-->
           </div>
         </div>
         <p class="goal-status">
