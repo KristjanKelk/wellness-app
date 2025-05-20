@@ -150,3 +150,41 @@ class WeightHistory(models.Model):
 
     def __str__(self):
         return f"{self.health_profile.user.username}'s weight: {self.weight_kg}kg on {self.recorded_at.strftime('%Y-%m-%d %H:%M')}"
+
+
+class Activity(models.Model):
+    ACTIVITY_TYPE_CHOICES = [
+        ('cardio', 'Cardio'),
+        ('strength', 'Strength Training'),
+        ('flexibility', 'Flexibility/Stretching'),
+        ('sports', 'Sports'),
+        ('hiit', 'HIIT'),
+        ('yoga', 'Yoga'),
+        ('other', 'Other'),
+    ]
+
+    LOCATION_CHOICES = [
+        ('home', 'Home'),
+        ('gym', 'Gym'),
+        ('outdoors', 'Outdoors'),
+        ('other', 'Other'),
+    ]
+
+    health_profile = models.ForeignKey(HealthProfile, on_delete=models.CASCADE, related_name='activities')
+    name = models.CharField(max_length=100)
+    activity_type = models.CharField(max_length=20, choices=ACTIVITY_TYPE_CHOICES)
+    duration_minutes = models.PositiveIntegerField()
+    location = models.CharField(max_length=20, choices=LOCATION_CHOICES, default='home')
+    distance_km = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
+    calories_burned = models.PositiveIntegerField(null=True, blank=True)
+    notes = models.TextField(blank=True, null=True)
+    performed_at = models.DateTimeField(auto_now_add=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-performed_at']
+        verbose_name_plural = 'Activities'
+
+    def __str__(self):
+        return f"{self.health_profile.user.username}'s {self.name} on {self.performed_at.strftime('%Y-%m-%d')}"

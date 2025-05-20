@@ -6,13 +6,14 @@ from django.utils import timezone
 from datetime import timedelta
 from django.conf import settings
 from openai import OpenAI
+from django.db.models import Count, Sum
 
 client = OpenAI(api_key=settings.OPENAI_API_KEY)
 
 from .models import AIInsight, WellnessScore
-from .models import AIInsight, WellnessScore, Milestone  # Make sure Milestone is imported
+from .models import AIInsight, WellnessScore, Milestone
 from .serializers import AIInsightSerializer, WellnessScoreSerializer, MilestoneSerializer
-from health_profiles.models import HealthProfile
+from health_profiles.models import HealthProfile, Activity
 from .services import MilestoneService
 
 class WellnessScoreViewSet(viewsets.ModelViewSet):
@@ -76,6 +77,8 @@ class WellnessScoreViewSet(viewsets.ModelViewSet):
                     request.data['weekly_activity_days']
                 )
 
+            activity_count_milestone = MilestoneService.check_activity_milestone_by_count(request.user)
+
             # For progress score, use milestone-based calculation
             # Get recent milestones (last 30 days)
             thirty_days_ago = timezone.now() - timezone.timedelta(days=30)
@@ -130,26 +133,36 @@ class AIInsightViewSet(viewsets.ModelViewSet):
         return AIInsight.objects.filter(user=self.request.user)
 
     @action(detail=False, methods=['post'])
-    @action(detail=False, methods=['post'])
     def generate(self, request):
         """
         Generate new AI insights based on user profile by calling OpenAI.
         """
         try:
+            # Get user information
             health_profile = HealthProfile.objects.get(user=request.user)
             bmi = health_profile.calculate_bmi()
             activity = health_profile.activity_level or "unknown"
             goal = health_profile.fitness_goal or "general fitness"
 
-            # Configure OpenAI
+            recent_activities = Activity.objects.filter(
+                health_profile=health_profile
+            ).order_by('-performed_at')[:5]
 
-            # Build a concise prompt
+            # Generate activity details for the prompt
+            activity_details = ""
+            if recent_activities.exists():
+                activity_details = "Recent activities:\n"
+                for i, activity in enumerate(recent_activities, 1):
+                    activity_details += f"- {activity.name} ({activity.activity_type}): {activity.duration_minutes} minutes on {activity.performed_at.strftime('%Y-%m-%d')}\n"
+
+            # Build a concise prompt with activity data
             prompt = (
                 f"User health profile:\n"
                 f"- BMI: {bmi:.1f}\n"
                 f"- Activity level: {activity}\n"
                 f"- Fitness goal: {goal}\n\n"
-                f"Provide 3 concise, actionable daily wellness insights."
+                f"{activity_details}\n"
+                f"Provide 3 concise, actionable daily wellness insights based on this profile and recent activities."
             )
 
             # Call the API

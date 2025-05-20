@@ -4,11 +4,10 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from django.utils import timezone
 from datetime import datetime, timedelta
-from .models import HealthProfile, WeightHistory
-from .serializers import HealthProfileSerializer, WeightHistorySerializer
-from django.db.models import Avg
+from .models import HealthProfile, WeightHistory, Activity
+from .serializers import HealthProfileSerializer, WeightHistorySerializer, ActivitySerializer
+from django.db.models import Avg, Count, Sum
 from django.db.models.functions import TruncDay, TruncWeek, TruncMonth
-
 
 class HealthProfileViewSet(viewsets.ModelViewSet):
     """
@@ -183,4 +182,194 @@ class WeightHistoryViewSet(viewsets.ModelViewSet):
             return Response(
                 {"detail": "Invalid parameter"},
                 status=status.HTTP_400_BAD_REQUEST
+            )
+
+class ActivityViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet for managing user activities
+    """
+    serializer_class = ActivitySerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        try:
+            health_profile = HealthProfile.objects.get(user=self.request.user)
+            queryset = Activity.objects.filter(health_profile=health_profile)
+
+            # Filter by date range if provided
+            start_date = self.request.query_params.get('start_date', None)
+            end_date = self.request.query_params.get('end_date', None)
+            activity_type = self.request.query_params.get('activity_type', None)
+
+            if start_date and end_date:
+                try:
+                    start_date = datetime.strptime(start_date, '%Y-%m-%d').date()
+                    end_date = datetime.strptime(end_date, '%Y-%m-%d').date()
+                    queryset = queryset.filter(
+                        performed_at__date__gte=start_date,
+                        performed_at__date__lte=end_date
+                    )
+                except ValueError:
+                    pass
+
+            # Filter by activity type if provided
+            if activity_type:
+                queryset = queryset.filter(activity_type=activity_type)
+
+            return queryset
+        except HealthProfile.DoesNotExist:
+            return Activity.objects.none()
+
+    def perform_create(self, serializer):
+        """Save the activity and update weekly activity days"""
+        try:
+            health_profile = HealthProfile.objects.get(user=self.request.user)
+
+            # Save the activity
+            activity = serializer.save(health_profile=health_profile)
+
+            # Update weekly activity days if needed
+            current_week_start = timezone.now().date() - timedelta(days=timezone.now().weekday())
+            distinct_days = Activity.objects.filter(
+                health_profile=health_profile,
+                performed_at__date__gte=current_week_start
+            ).dates('performed_at', 'day').distinct().count()
+
+            if distinct_days > health_profile.weekly_activity_days or health_profile.weekly_activity_days is None:
+                health_profile.weekly_activity_days = distinct_days
+                health_profile.save(update_fields=['weekly_activity_days'])
+
+                # Check for activity day milestone
+                MilestoneService.check_activity_milestone(self.request.user, distinct_days)
+
+        except HealthProfile.DoesNotExist:
+            raise serializers.ValidationError("You must create a health profile before logging activities")
+
+    @action(detail=False, methods=['get'])
+    def summary(self, request):
+        """Get activity summary statistics"""
+        try:
+            health_profile = HealthProfile.objects.get(user=request.user)
+
+            # Get all activities for the user
+            activities = Activity.objects.filter(health_profile=health_profile)
+
+            # Calculate summary stats
+            total_activities = activities.count()
+            total_duration = activities.aggregate(Sum('duration_minutes'))['duration_minutes__sum'] or 0
+
+            # Get activity distribution by type
+            activity_distribution = list(activities.values('activity_type')
+                                         .annotate(count=Count('id'))
+                                         .order_by('-count'))
+
+            # Get recent week activity count
+            last_week = timezone.now() - timedelta(days=7)
+            weekly_count = activities.filter(performed_at__gte=last_week).count()
+
+            return Response({
+                'total_activities': total_activities,
+                'total_duration_minutes': total_duration,
+                'activity_distribution': activity_distribution,
+                'weekly_activity_count': weekly_count
+            })
+
+        except HealthProfile.DoesNotExist:
+            return Response(
+                {"detail": "Health profile not found"},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+    @action(detail=False, methods=['get'])
+    def by_type(self, request):
+        """Get activities grouped by type"""
+        try:
+            health_profile = HealthProfile.objects.get(user=request.user)
+            activities_by_type = {}
+
+            for activity_type, _ in Activity.ACTIVITY_TYPE_CHOICES:
+                type_activities = Activity.objects.filter(
+                    health_profile=health_profile,
+                    activity_type=activity_type
+                ).order_by('-performed_at')[:5]  # Get 5 most recent of each type
+
+                if type_activities.exists():
+                    activities_by_type[activity_type] = ActivitySerializer(type_activities, many=True).data
+
+            return Response(activities_by_type)
+
+        except HealthProfile.DoesNotExist:
+            return Response(
+                {"detail": "Health profile not found"},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+    @action(detail=False, methods=['get'])
+    def recent(self, request):
+        """Get most recent activities"""
+        try:
+            health_profile = HealthProfile.objects.get(user=request.user)
+            recent_activities = Activity.objects.filter(
+                health_profile=health_profile
+            ).order_by('-performed_at')[:10]  # Get 10 most recent activities
+
+            serializer = self.get_serializer(recent_activities, many=True)
+            return Response(serializer.data)
+
+        except HealthProfile.DoesNotExist:
+            return Response(
+                {"detail": "Health profile not found"},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+    @action(detail=False, methods=['get'])
+    def calendar_data(self, request):
+        """Get activity data formatted for calendar view"""
+        try:
+            health_profile = HealthProfile.objects.get(user=request.user)
+
+            # Get date range parameters (default to last 30 days)
+            end_date = request.query_params.get('end_date', timezone.now().date().isoformat())
+            start_date = request.query_params.get('start_date',
+                                                  (datetime.strptime(end_date, '%Y-%m-%d').date() - timedelta(
+                                                      days=30)).isoformat())
+
+            # Convert string dates to datetime objects
+            start_date = datetime.strptime(start_date, '%Y-%m-%d').date()
+            end_date = datetime.strptime(end_date, '%Y-%m-%d').date()
+
+            # Get activities in date range
+            activities = Activity.objects.filter(
+                health_profile=health_profile,
+                performed_at__date__gte=start_date,
+                performed_at__date__lte=end_date
+            )
+
+            # Group activities by date
+            calendar_data = {}
+            for activity in activities:
+                date_str = activity.performed_at.date().isoformat()
+
+                if date_str not in calendar_data:
+                    calendar_data[date_str] = {
+                        'date': date_str,
+                        'total_activities': 0,
+                        'total_duration': 0,
+                        'activity_types': set()
+                    }
+
+                calendar_data[date_str]['total_activities'] += 1
+                calendar_data[date_str]['total_duration'] += activity.duration_minutes
+                calendar_data[date_str]['activity_types'].add(activity.activity_type)
+
+            # Convert sets to lists for JSON serialization
+            for date_str in calendar_data:
+                calendar_data[date_str]['activity_types'] = list(calendar_data[date_str]['activity_types'])
+
+            return Response(list(calendar_data.values()))
+
+        except HealthProfile.DoesNotExist:
+            return Response(
+                {"detail": "Health profile not found"},
+                status=status.HTTP_404_NOT_FOUND
             )

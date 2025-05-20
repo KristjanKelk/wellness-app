@@ -242,3 +242,43 @@ class MilestoneService:
 
         except HealthProfile.DoesNotExist:
             return None
+
+
+    @staticmethod
+    def check_activity_milestone_by_count(user):
+        """
+        Check if user has achieved activity count milestones
+        """
+        try:
+            profile = HealthProfile.objects.get(user=user)
+
+            # Count total activities
+            from health_profiles.models import Activity
+            activity_count = Activity.objects.filter(health_profile=profile).count()
+
+            # Activity count milestones
+            count_milestones = [1, 5, 10, 25, 50, 100, 250, 500, 1000]
+
+            for count in count_milestones:
+                if activity_count == count:
+                    # Check if this milestone already exists
+                    existing_milestone = Milestone.objects.filter(
+                        user=user,
+                        milestone_type='activity',
+                        description__contains=f"{count} activities"
+                    ).exists()
+
+                    if not existing_milestone:
+                        milestone = Milestone.objects.create(
+                            user=user,
+                            milestone_type='activity',
+                            description=f"Completed {count} activities!",
+                            progress_value=count,
+                            progress_percentage=None  # Not applicable for count milestones
+                        )
+                        return milestone
+
+            return None
+
+        except HealthProfile.DoesNotExist:
+            return None
