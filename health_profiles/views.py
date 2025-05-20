@@ -1,5 +1,5 @@
 # health_profiles/views.py
-from rest_framework import viewsets, permissions, status
+from rest_framework import viewsets, permissions, status, serializers
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from django.utils import timezone
@@ -141,6 +141,16 @@ class WeightHistoryViewSet(viewsets.ModelViewSet):
             return Response(
                 {"detail": "Invalid parameter"},
                 status=status.HTTP_400_BAD_REQUEST
+            )
+
+    def perform_create(self, serializer):
+        """Associate the weight entry with the user's health profile"""
+        try:
+            health_profile = HealthProfile.objects.get(user=self.request.user)
+            serializer.save(health_profile=health_profile)
+        except HealthProfile.DoesNotExist:
+            raise serializers.ValidationError(
+                "You must create a health profile before logging weight entries."
             )
 
     @action(detail=False, methods=['get'])
