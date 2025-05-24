@@ -40,6 +40,10 @@
             class="dashboard-card"
             :profile="profile"
         />
+        <!-- Activities Card -->
+        <activities-card
+            class="dashboard-card"
+        />
 
         <!-- Weight History Card -->
         <weight-history-card
@@ -80,6 +84,7 @@ import HealthProfileService from '../services/health-profile_service';
 import WellnessService from '../services/wellness-service';
 import AIInsightsService from '../services/ai-insights.service';
 
+
 // Import sub-components
 import WellnessScoreCard from '../components/dashboard/WellnessScoreCard.vue';
 import BmiStatusCard from '../components/dashboard/BmiStatusCard.vue';
@@ -88,6 +93,7 @@ import WeightHistoryCard from '../components/dashboard/WeightHistoryCard.vue';
 import AiInsightsCard from '../components/dashboard/AiInsightsCard.vue';
 import AddWeightModal from '../components/dashboard/AddWeightModal.vue';
 import MilestonesCard from '../components/dashboard/MilestonesCard.vue';
+import ActivitiesCard from '../components/dashboard/ActivitiesCard.vue';
 
 export default {
   name: 'Dashboard',
@@ -98,7 +104,8 @@ export default {
     WeightHistoryCard,
     AiInsightsCard,
     MilestonesCard,
-    AddWeightModal
+    AddWeightModal,
+    ActivitiesCard
   },
   data() {
     return {

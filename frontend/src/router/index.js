@@ -123,7 +123,8 @@ const routes = [
         component: () => import('@/views/Progress.vue'),
         meta: {
             requiresAuth: true
-    }
+    },
+
 }
 ]
 
