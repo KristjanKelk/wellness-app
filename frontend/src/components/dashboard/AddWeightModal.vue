@@ -19,9 +19,6 @@
               class="form-control"
           >
         </div>
-        <div class="form-info">
-          <small class="help-text">Each weight entry is saved with a unique timestamp.</small>
-        </div>
         <div v-if="error" class="alert alert-error">{{ error }}</div>
         <div class="form-actions">
           <button type="button" class="btn btn-secondary" @click="$emit('close')">

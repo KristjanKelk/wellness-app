@@ -19,61 +19,64 @@
       <div v-else class="dashboard__content">
         <!-- Wellness Score Card -->
         <wellness-score-card
-            class="dashboard-card"
-            :profile="profile"
-            :score="wellnessScore"
-            :bmi-score="bmiScore"
-            :activity-score="activityScore"
-            :progress-score="progressScore"
-            :habits-score="habitsScore"
+          class="dashboard-card"
+          :profile="profile"
+          :score="wellnessScore"
+          :bmi-score="bmiScore"
+          :activity-score="activityScore"
+          :progress-score="progressScore"
+          :habits-score="habitsScore"
         />
 
         <!-- BMI Status Card -->
         <bmi-status-card
-            class="dashboard-card"
-            :bmi="bmi"
-            :profile="profile"
+          class="dashboard-card"
+          :bmi="bmi"
+          :profile="profile"
         />
 
         <!-- Activity Level Card -->
         <activity-level-card
-            class="dashboard-card"
-            :profile="profile"
+          class="dashboard-card"
+          :profile="profile"
         />
         <!-- Activities Card -->
         <activities-card
-            class="dashboard-card"
+          class="dashboard-card"
+          :activities="activities"
         />
 
         <!-- Weight History Card -->
         <weight-history-card
-            class="dashboard-card"
-            :profile="profile"
-            :weight-history="weightHistory"
-            :weight-change="weightChange"
-            @add-weight="showAddWeightModal = true"
+          class="dashboard-card"
+          :profile="profile"
+          :weight-history="weightHistory"
+          :weight-change="weightChange"
+          @add-weight="showAddWeightModal = true"
         />
 
         <!-- AI Insights Card -->
         <ai-insights-card
-            class="dashboard-card"
-            :insights="insights"
+          class="dashboard-card"
+          :insights="insights"
+          :loading="insightsLoading"
+          @reload="fetchHealthData"
         />
 
         <!-- Milestones Card -->
         <milestones-card
-            class="dashboard-card"
-          />
+          class="dashboard-card"
+        />
       </div>
 
       <!-- Add Weight Modal -->
       <add-weight-modal
-          v-if="showAddWeightModal"
-          class="modal"
-          :loading="weightLoading"
-          :error="weightError"
-          @close="showAddWeightModal = false"
-          @save="saveNewWeight"
+        v-if="showAddWeightModal"
+        class="modal"
+        :loading="weightLoading"
+        :error="weightError"
+        @close="showAddWeightModal = false"
+        @save="saveNewWeight"
       />
     </div>
   </div>
@@ -82,6 +85,7 @@
 <script>
 import HealthProfileService from '../services/health-profile_service';
 import WellnessService from '../services/wellness-service';
+import ActivitiesService from '../services/activities.service';
 import AIInsightsService from '../services/ai-insights.service';
 
 
@@ -112,6 +116,8 @@ export default {
       profile: null,
       weightHistory: [],
       insights: [],
+      insightsLoading: false,
+      activities: [],
       loading: true,
       error: null,
       bmi: null,
@@ -148,7 +154,7 @@ export default {
       if (this.hasProfileData) {
         this.calculateBMI();
         this.calculateWellnessScore();
-        if (this.weightHistory && this.weightHistory.length > 0) {
+        if (this.weightHistory.length > 1) {
           this.calculateWeightChange();
         }
       }
@@ -168,22 +174,32 @@ export default {
         const weightResponse = await HealthProfileService.getWeightHistory();
         this.weightHistory = weightResponse.data;
 
-        if (this.profile) {
-          try {
-            const userData = {
-              ...this.profile,
-              bmi: this.bmi
-            };
+        const endDate   = new Date().toISOString().split('T')[0];
+        const startDate = (() => {
+          const d = new Date();
+          d.setDate(d.getDate() - 7);
+          return d.toISOString().split('T')[0];
+        })();
+        const activitiesResponse =
+          await ActivitiesService.getActivitiesByDateRange(startDate, endDate);
+        this.activities = activitiesResponse.data;
 
-            const insightsResponse = await AIInsightsService.generateInsights(userData);
-            this.insights = insightsResponse.data;
-          } catch (insightError) {
-            console.error('Error generating insights:', insightError);
+        // generate AI insights
+        if (this.profile) {
+          this.insightsLoading = true;
+          try {
+            const userData = { ...this.profile, bmi: this.bmi };
+            const resp = await AIInsightsService.generateInsights(userData);
+            this.insights = resp.data;
+          } catch (e) {
+            console.error('Insight error:', e);
             this.insights = [{
               content: "Complete your health profile to receive personalized insights.",
               priority: "medium",
               created_at: new Date()
             }];
+          } finally {
+            this.insightsLoading = false;
           }
         }
       } catch (error) {
@@ -198,21 +214,22 @@ export default {
     calculateBMI() {
       if (this.profile.height_cm && this.profile.weight_kg) {
         this.bmi = WellnessService.calculateBMI(this.profile.height_cm, this.profile.weight_kg);
+        this.bmiScore = WellnessService.calculateBMIScore(this.bmi);
       }
     },
     calculateWellnessScore() {
-      if (this.bmi) {
-        this.bmiScore = WellnessService.calculateBMIScore(this.bmi);
-      }
+      // dynamic activity scoring
+      this.activityScore = WellnessService.calculateActivityScoreFromActivities(this.activities);
 
-      this.activityScore = WellnessService.calculateActivityScore(this.profile.activity_level);
       this.progressScore = 60;
       this.habitsScore = 50;
-      this.wellnessScore = WellnessService.calculateWellnessScore(
-          this.bmiScore,
-          this.activityScore,
-          this.progressScore,
-          this.habitsScore
+
+      // combine into overall score
+      this.wellnessScore = WellnessService.calculateWellnessScoreFromActivities(
+        this.bmiScore,
+        this.activities,
+        this.progressScore,
+        this.habitsScore
       );
     },
     calculateWeightChange() {
@@ -220,22 +237,11 @@ export default {
         this.weightChange = 0;
         return;
       }
-
       try {
-        const sortedHistory = [...this.weightHistory].sort((a, b) =>
-            new Date(b.recorded_at) - new Date(a.recorded_at)
-        );
-
-        if (sortedHistory.length >= 2) {
-          const latest = sortedHistory[0];
-          const previous = sortedHistory[1];
-
-          this.weightChange = latest.weight_kg - previous.weight_kg;
-        } else {
-          this.weightChange = 0;
-        }
-      } catch (error) {
-        console.error('Error calculating weight change:', error);
+        const sorted = [...this.weightHistory].sort((a, b) => new Date(b.recorded_at) - new Date(a.recorded_at));
+        this.weightChange = sorted[0].weight_kg - sorted[1].weight_kg;
+      } catch (e) {
+        console.error('Error calculating weight change:', e);
         this.weightChange = 0;
       }
     },
@@ -244,21 +250,15 @@ export default {
         this.weightError = 'Please enter a valid weight between 20 and 300 kg';
         return;
       }
-
       this.weightLoading = true;
       this.weightError = null;
-
       try {
         await HealthProfileService.addWeightEntry(weight);
-        const profileData = { ...this.profile, weight_kg: weight };
-        await HealthProfileService.updateHealthProfile(profileData);
+        await HealthProfileService.updateHealthProfile({ ...this.profile, weight_kg: weight });
         await this.fetchHealthData();
         this.calculateBMI();
         this.calculateWellnessScore();
-
-        if (this.weightHistory && this.weightHistory.length > 0) {
-          this.calculateWeightChange();
-        }
+        if (this.weightHistory.length > 1) this.calculateWeightChange();
         this.showAddWeightModal = false;
       } catch (error) {
         this.weightError = 'Failed to save weight. Please try again.';
@@ -268,20 +268,14 @@ export default {
     },
     getUsernameDisplay() {
       if (this.currentUser) {
-        if (this.currentUser.username) {
-          return this.currentUser.username;
-        }
+        if (this.currentUser.username) return this.currentUser.username;
         if (this.currentUser.access) {
           try {
             const base64Url = this.currentUser.access.split('.')[1];
             const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-            const jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
-              return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
-            }).join(''));
-
-            const payload = JSON.parse(jsonPayload);
-            if (payload.username) return payload.username;
-            if (payload.user_id) return `User #${payload.user_id}`;
+            const json = decodeURIComponent(atob(base64).split('').map(c => '%'+('00'+c.charCodeAt(0).toString(16)).slice(-2)).join(''));
+            const payload = JSON.parse(json);
+            return payload.username || `User #${payload.user_id}`;
           } catch (e) {
             console.error("Error extracting username from token:", e);
           }
@@ -294,4 +288,5 @@ export default {
 </script>
 
 <style lang="scss" scoped>
+/* optional styling adjustments */
 </style>

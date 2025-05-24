@@ -1,6 +1,7 @@
 <!-- src/components/dashboard/AiInsightsCard.vue -->
 <template>
   <dashboard-card title="AI Insights">
+    <!-- Loading State -->
     <template v-if="loading">
       <div class="dashboard-card__loading">
         <div class="loading-spinner"></div>
@@ -8,24 +9,36 @@
       </div>
     </template>
 
-    <template v-else-if="!insights.length">
+    <!-- Empty State -->
+    <template v-else-if="!insights || !insights.length">
       <div class="dashboard-card__empty">
         <p>No insights available yet.</p>
-        <button @click="reloadInsights" class="refresh-button">Refresh Insights</button>
+        <button @click="reloadInsights" class="refresh-button">
+          Refresh Insights
+        </button>
       </div>
     </template>
 
+    <!-- Insights Display -->
     <template v-else>
+      <!-- Introductory Text (first item) -->
+      <p v-if="intro" class="insights-intro">{{ intro }}</p>
+
+      <!-- Detailed Insights List -->
       <div class="insights-container">
         <div
-          v-for="insight in insights"
+          v-for="insight in detailInsights"
           :key="insight.id"
           class="insight-item"
           :class="`priority-${insight.priority}`"
         >
           <div class="insight-header">
-            <span class="priority-badge">{{ getPriorityDisplay(insight.priority) }}</span>
-            <span class="insight-date">{{ formatDate(insight.created_at) }}</span>
+            <span class="priority-badge">
+              {{ getPriorityDisplay(insight.priority) }}
+            </span>
+            <span class="insight-date">
+              {{ formatDate(insight.created_at) }}
+            </span>
           </div>
           <p class="insight-content">{{ insight.content }}</p>
         </div>
@@ -45,17 +58,28 @@ export default {
     return {
       insights: [],
       loading: false,
-      error: null,
+      error: null
     };
   },
   created() {
     this.loadInsights();
   },
+  computed: {
+    // The first item is used as introductory text
+    intro() {
+      return this.insights[0]?.content || '';
+    },
+    // Remaining items are the actual actionable insights
+    detailInsights() {
+      return this.insights.slice(1);
+    }
+  },
   methods: {
     async loadInsights() {
       this.loading = true;
       try {
-        this.insights = await AIInsightsService.generateInsights();
+        const response = await AIInsightsService.generateInsights();
+        this.insights = response.data || response;
       } catch (e) {
         console.error('Failed to load insights:', e);
         this.error = e;
@@ -72,15 +96,25 @@ export default {
     },
     formatDate(dateString) {
       const date = new Date(dateString);
-      return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
-    },
-  },
+      return date.toLocaleDateString(undefined, {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric'
+      });
+    }
+  }
 };
 </script>
 
 <style lang="scss" scoped>
 @import '@/assets/styles/_variables.scss';
 @import '@/assets/styles/_utilities.scss';
+
+/* Introductory text styling */
+.insights-intro {
+  margin-bottom: $spacing-4;
+  font-weight: $font-weight-medium;
+}
 
 .insights-container {
   display: flex;

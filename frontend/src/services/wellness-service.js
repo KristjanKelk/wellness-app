@@ -40,51 +40,79 @@ class WellnessService {
      */
     calculateBMIScore(bmi) {
         if (!bmi) return 0;
-
         let score = 0;
-
         if (bmi >= 18.5 && bmi <= 25) {
-            // Normal weight
             score = 100;
         } else if (bmi < 18.5) {
-            // Underweight
             score = 100 - (18.5 - bmi) * 10;
         } else {
-            // Overweight/obese
             score = 100 - (bmi - 25) * 5;
         }
         return Math.max(0, Math.min(100, score));
     }
 
     /**
-     * Calculate activity score component (0-100)
+     * Calculate activity score from profile (deprecated)
      * @param {string} activityLevel - Activity level from profile
      * @returns {number} - Score from 0-100
      */
     calculateActivityScore(activityLevel) {
-        switch (activityLevel) {
-            case 'sedentary':
-                return 20;
-            case 'light':
-                return 40;
-            case 'moderate':
-                return 70;
-            case 'active':
-                return 90;
-            case 'very_active':
-                return 100;
-            default:
-                return 50;
-        }
+        console.warn('Deprecated: use calculateActivityScoreFromActivities instead');
+        const map = { sedentary: 20, light: 40, moderate: 70, active: 90, very_active: 100 };
+        return map[activityLevel] ?? 50;
     }
 
     /**
-     * Calculate wellness score based on all components
-     * @param {number} bmiScore - BMI score component (0-100)
-     * @param {number} activityScore - Activity score component (0-100)
-     * @param {number} progressScore - Progress score component (0-100)
-     * @param {number} habitsScore - Habits score component (0-100)
+     * Calculate activity score based on actual activity logs
+     * @param {Array<Object>} activities - Array of activity objects { performed_at: ISOString, duration_minutes: number }
+     * @returns {number} - Score from 0 to 100
+     */
+    calculateActivityScoreFromActivities(activities = []) {
+        if (!Array.isArray(activities) || activities.length === 0) return 0;
+
+        const now = new Date();
+        const weekAgo = new Date(now);
+        weekAgo.setDate(now.getDate() - 7);
+
+        // Filter only last 7 days
+        const recent = activities.filter(a => {
+            const d = new Date(a.performed_at);
+            return d >= weekAgo && d <= now;
+        });
+
+        // Count unique days
+        const daysCount = new Set(recent.map(a => new Date(a.performed_at).toDateString())).size;
+        const dayScore = Math.min(daysCount / 7, 1) * 100;
+
+        // Sum durations
+        const totalMin = recent.reduce((sum, a) => sum + (a.duration_minutes || 0), 0);
+        const maxMin = 7 * 60;
+        const durationScore = Math.min(totalMin / maxMin, 1) * 100;
+
+        // Combine day and duration equally
+        return Math.round((dayScore + durationScore) / 2);
+    }
+
+    /**
+     * Calculate overall wellness score using activity logs
+     * @param {number} bmiScore
+     * @param {Array<Object>} activities
+     * @param {number} progressScore
+     * @param {number} habitsScore
      * @returns {number} - Overall wellness score (0-100)
+     */
+    calculateWellnessScoreFromActivities(bmiScore, activities, progressScore, habitsScore) {
+        const activityScore = this.calculateActivityScoreFromActivities(activities);
+        return this.calculateWellnessScore(bmiScore, activityScore, progressScore, habitsScore);
+    }
+
+    /**
+     * Calculate wellness score based on components
+     * @param {number} bmiScore
+     * @param {number} activityScore
+     * @param {number} progressScore
+     * @param {number} habitsScore
+     * @returns {number}
      */
     calculateWellnessScore(bmiScore, activityScore, progressScore, habitsScore) {
         return Math.round(
@@ -114,11 +142,11 @@ class WellnessService {
      */
     getActivityLevelDisplay(activityLevel) {
         const activityMap = {
-            'sedentary': 'Sedentary',
-            'light': 'Lightly Active',
-            'moderate': 'Moderately Active',
-            'active': 'Active',
-            'very_active': 'Very Active'
+            sedentary: 'Sedentary',
+            light: 'Lightly Active',
+            moderate: 'Moderately Active',
+            active: 'Active',
+            very_active: 'Very Active'
         };
         return activityMap[activityLevel] || 'Unknown';
     }
@@ -130,11 +158,11 @@ class WellnessService {
      */
     getActivityDescription(activityLevel) {
         const descriptions = {
-            'sedentary': 'Little to no regular exercise',
-            'light': 'Light exercise 1-3 days per week',
-            'moderate': 'Moderate exercise 3-5 days per week',
-            'active': 'Hard exercise 6-7 days per week',
-            'very_active': 'Very hard exercise & physical job or twice daily training'
+            sedentary: 'Little to no regular exercise',
+            light: 'Light exercise 1-3 days per week',
+            moderate: 'Moderate exercise 3-5 days per week',
+            active: 'Hard exercise 6-7 days per week',
+            very_active: 'Very hard exercise & physical job or twice daily training'
         };
         return descriptions[activityLevel] || '';
     }
@@ -146,27 +174,27 @@ class WellnessService {
      */
     getActivitySuggestions(activityLevel) {
         const suggestions = {
-            'sedentary': [
+            sedentary: [
                 'Start with a 10-minute daily walk',
                 'Take breaks to stretch every hour',
                 'Try using stairs instead of elevators'
             ],
-            'light': [
+            light: [
                 'Aim for 20-30 minute walks 4-5 days/week',
                 'Consider adding 1-2 strength sessions weekly',
                 'Try a beginner yoga or flexibility routine'
             ],
-            'moderate': [
+            moderate: [
                 'Increase intensity in 1-2 workouts per week',
                 'Add variety with different exercise types',
                 'Consider tracking heart rate during exercise'
             ],
-            'active': [
+            active: [
                 'Focus on recovery between intense sessions',
                 'Consider periodization in your training',
                 'Add mobility work to prevent injuries'
             ],
-            'very_active': [
+            very_active: [
                 'Ensure adequate recovery and sleep',
                 'Consider professional guidance for programming',
                 'Focus on nutrition to support your activity level'
@@ -181,11 +209,7 @@ class WellnessService {
      * @returns {string} - Human readable priority name
      */
     getPriorityDisplay(priority) {
-        const map = {
-            'high': 'High Priority',
-            'medium': 'Medium Priority',
-            'low': 'Low Priority'
-        };
+        const map = { high: 'High Priority', medium: 'Medium Priority', low: 'Low Priority' };
         return map[priority] || '';
     }
 
@@ -197,13 +221,11 @@ class WellnessService {
      */
     evaluateWeightChange(change, goal) {
         if (change === 0) return 'neutral';
-
         if (goal === 'weight_loss') {
             return change < 0 ? 'positive' : 'negative';
         } else if (goal === 'muscle_gain') {
             return change > 0 ? 'positive' : 'negative';
         }
-
         return 'neutral';
     }
 }
