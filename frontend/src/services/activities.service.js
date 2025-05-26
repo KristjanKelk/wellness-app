@@ -174,7 +174,7 @@ class ActivitiesService {
         const activities = response.data;
 
         // Calculate statistics
-        const stats = {
+        return {
             totalActivities: activities.length,
             totalDuration: activities.reduce((sum, a) => sum + a.duration_minutes, 0),
             totalDistance: activities.reduce((sum, a) => sum + (a.distance_km || 0), 0),
@@ -182,8 +182,6 @@ class ActivitiesService {
             activeDays: this.calculateActiveDays(activities),
             activityDistribution: this.calculateActivityDistribution(activities)
         };
-
-        return stats;
     }
 
     /**

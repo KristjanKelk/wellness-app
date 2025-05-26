@@ -9,6 +9,7 @@ import Settings from '../views/Settings.vue'
 import VerifyEmail from '../views/VerifyEmail.vue'
 import ResetPassword from '../views/ResetPassword.vue'
 import VerifyPrompt from '../views/VerifyPrompt.vue'
+import Activities from '../views/Activities.vue';
 import store from '../store'
 import OAuthCallback from '../views/OAuthCallback.vue'
 import OAuthSuccess from '../views/OAuthSuccess.vue'
@@ -123,9 +124,16 @@ const routes = [
         component: () => import('@/views/Progress.vue'),
         meta: {
             requiresAuth: true
+        }
     },
-
-}
+    {
+    path: '/activities',
+    name: 'Activities',
+    component: Activities,
+        meta: {
+            requiresAuth: true
+        }
+    }
 ]
 
 const router = createRouter({

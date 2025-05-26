@@ -17,6 +17,7 @@
           <template v-if="isLoggedIn">
             <router-link to="/dashboard" class="nav-link">Dashboard</router-link>
             <router-link to="/progress" class="nav-link">Progress</router-link>
+            <router-link to="/activities" class="nav-link">Activities</router-link>
             <router-link to="/profile" class="nav-link">Profile</router-link>
             <router-link to="/settings" class="nav-link">Settings</router-link>
             <button @click="logout" class="btn-logout">Logout</button>

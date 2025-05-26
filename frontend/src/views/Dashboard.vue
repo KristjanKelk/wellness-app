@@ -1,3 +1,4 @@
+<!-- src/views/Dashboard.vue -->
 <template>
   <div class="dashboard-page">
     <div class="dashboard">
@@ -158,8 +159,8 @@ export default {
           this.calculateWeightChange();
         }
       }
-    } catch (error) {
-      console.error('Error loading dashboard data:', error);
+    } catch (e) {
+      console.error(e);
       this.error = 'Failed to load your health data. Please try again.';
     } finally {
       this.loading = false;
@@ -218,9 +219,7 @@ export default {
       }
     },
     calculateWellnessScore() {
-      // dynamic activity scoring
       this.activityScore = WellnessService.calculateActivityScoreFromActivities(this.activities);
-
       this.progressScore = 60;
       this.habitsScore = 50;
 
@@ -241,7 +240,6 @@ export default {
         const sorted = [...this.weightHistory].sort((a, b) => new Date(b.recorded_at) - new Date(a.recorded_at));
         this.weightChange = sorted[0].weight_kg - sorted[1].weight_kg;
       } catch (e) {
-        console.error('Error calculating weight change:', e);
         this.weightChange = 0;
       }
     },
@@ -287,6 +285,5 @@ export default {
 };
 </script>
 
-<style lang="scss" scoped>
-/* optional styling adjustments */
+<style scoped>
 </style>
