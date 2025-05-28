@@ -54,14 +54,7 @@ export default {
     };
   },
   mounted() {
-    console.log("OAuth Callback Component Mounted");
-    console.log("Full URL:", window.location.href);
-    console.log("Route params:", this.$route.params);
-
-    // Check if we have localStorage data to prevent duplicate processing
     OAuthDebug.checkStorage();
-
-    // Process the callback
     this.processCallback();
   },
   methods: {
@@ -101,13 +94,6 @@ export default {
           timestamp: new Date().toISOString()
         }, null, 2);
 
-        console.log("Processing OAuth callback with params:");
-        console.log("Provider:", provider);
-        console.log("Code:", queryParams.get('code') ? "Present (hidden for security)" : "Not present");
-        console.log("State:", queryParams.get('state') ? "Present" : "Not present");
-        console.log("Error:", queryParams.get('error'));
-
-        // Handle OAuth error in the URL
         if (queryParams.get('error')) {
           const errorMsg = queryParams.get('error_description') || queryParams.get('error');
           this.error = `Authentication error: ${errorMsg}`;
@@ -115,24 +101,19 @@ export default {
           return;
         }
 
-        // Handle missing code in the URL
         if (!queryParams.get('code')) {
           this.error = 'No authorization code received. Please try again.';
           this.loading = false;
           return;
         }
 
-        // Process the callback
         OAuthService.processCallback(queryParams, provider)
           .then(userData => {
-            console.log('OAuth login successful:', userData);
 
-            // Store the user data
             this.$store.commit('auth/loginSuccess', userData);
 
             this.loading = false;
 
-            // Redirect to dashboard after a short delay
             setTimeout(() => {
               this.$router.push('/dashboard');
             }, 1000);
@@ -154,7 +135,6 @@ export default {
       localStorage.removeItem('oauth_error');
       sessionStorage.removeItem('auth_in_progress');
 
-      // Determine which provider to use based on the current URL
       const pathParts = window.location.pathname.split('/');
       let provider = 'google'; // Default
 
@@ -165,7 +145,7 @@ export default {
         }
       }
 
-      // Try the authentication flow again
+
       if (provider === 'github') {
         OAuthService.loginWithGitHub()
           .catch(error => {

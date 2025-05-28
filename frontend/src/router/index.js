@@ -141,13 +141,9 @@ const router = createRouter({
     routes
 })
 
-// Give the router access to the store
 router.$store = store;
-
-// Update the navigation guard in router/index.js
 router.beforeEach((to, from, next) => {
   if (!store || !store.state || !store.state.auth) {
-    console.log('Store not fully initialized, proceeding to route');
     next();
     return;
   }
@@ -155,55 +151,41 @@ router.beforeEach((to, from, next) => {
   const isValidToken = AuthService.validateToken();
   const storeLoggedIn = store.getters['auth/isLoggedIn'];
 
-  console.log(`Route navigation: ${from.path} -> ${to.path}, token valid: ${isValidToken}, store logged in: ${storeLoggedIn}`);
-
-  // Sync store state with token validity
   if (storeLoggedIn && !isValidToken) {
-    console.log('Inconsistent state: store logged in but token invalid');
     store.commit('auth/logout');
   }
 
   if (isValidToken && !storeLoggedIn) {
-    console.log('Inconsistent state: valid token but store not logged in');
     const userStr = localStorage.getItem('user') || sessionStorage.getItem('user');
     try {
       const userData = JSON.parse(userStr);
       store.commit('auth/loginSuccess', userData);
-      console.log('Restored user session from storage to store');
     } catch (e) {
       console.error('Failed to restore user session:', e);
     }
   }
 
-  // Re-check login status after potentially fixing inconsistencies
   const loggedIn = store.getters['auth/isLoggedIn'] && isValidToken;
 
   if (to.matched.some(record => record.meta.requiresAuth)) {
     if (!loggedIn) {
-      console.log('Auth required but not logged in, redirecting to login');
       next({ path: '/login' });
     } else {
       if (!store.getters['auth/isEmailVerified'] && to.name !== 'VerifyPrompt') {
-        console.log('Email not verified, redirecting to verification prompt');
         next({ path: '/verify-prompt' });
         return;
       }
-
-      console.log('Auth required and logged in, proceeding to route');
       next();
     }
   }
   else if (to.matched.some(record => record.meta.guest)) {
     if (loggedIn) {
-      console.log('Guest route but already logged in, redirecting to dashboard');
       next({ path: '/dashboard' });
     } else {
-      console.log('Guest route and not logged in, proceeding to route');
       next();
     }
   }
   else {
-    console.log('Public route, proceeding');
     next();
   }
 });
