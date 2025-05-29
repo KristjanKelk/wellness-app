@@ -380,6 +380,7 @@
 
 <script>
 import HealthProfileService from '../services/health-profile_service';
+import AnalyticsService from "../services/analytics.service";
 
 export default {
   name: 'Profile',
@@ -446,7 +447,6 @@ export default {
 
       HealthProfileService.getHealthProfile()
         .then(response => {
-          console.log('Profile data received:', response.data);
           if (response.data) {
             // Populate profile data
             Object.keys(this.profile).forEach(key => {
@@ -465,7 +465,6 @@ export default {
           this.loading = false;
 
           if (error.response && error.response.status === 404) {
-            console.log('No profile found, using default values');
             // Save original profile data (default values)
             this.originalProfile = JSON.parse(JSON.stringify(this.profile));
           } else {
@@ -687,19 +686,14 @@ export default {
     },
 
     triggerWellnessScoreUpdate() {
-      // Call the wellness score calculation API (if available)
-      // This would typically happen after saving the profile
-      // For now, we'll just log that it would be triggered
-      console.log('Would trigger wellness score update');
 
-      // In a real implementation, you would call a service like:
-      // AnalyticsService.calculateWellnessScore()
-      //   .then(response => {
-      //     console.log('Wellness score updated:', response.data);
-      //   })
-      //   .catch(error => {
-      //     console.error('Error updating wellness score:', error);
-      //   });
+       AnalyticsService.calculateWellnessScore()
+         .then(response => {
+           console.log('Wellness score updated:', response.data);
+         })
+         .catch(error => {
+           console.error('Error updating wellness score:', error);
+         });
     }
   }
 };
@@ -979,7 +973,6 @@ textarea {
   border-color: $primary;
 }
 
-/* Add this to your <style> section */
 .goal-achieved-message {
   margin-top: 1rem;
   padding: 1rem;
