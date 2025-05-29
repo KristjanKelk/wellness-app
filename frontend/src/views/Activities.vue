@@ -148,6 +148,7 @@
                 <div class="stat-label">Active Days</div>
               </div>
             </div>
+            <canvas ref="statsChart" class="stats-chart"></canvas>
           </div>
         </div>
 

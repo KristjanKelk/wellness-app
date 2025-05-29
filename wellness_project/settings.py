@@ -26,6 +26,7 @@ SECRET_KEY = config('SECRET_KEY')
 
 #OpenAI api key
 OPENAI_API_KEY = config('OPENAI_API_KEY')
+AI_INSIGHT_DAILY_LIMIT = 3
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True

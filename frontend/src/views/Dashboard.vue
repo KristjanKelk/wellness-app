@@ -58,10 +58,9 @@
 
         <!-- AI Insights Card -->
         <ai-insights-card
-          class="dashboard-card"
-          :insights="insights"
+          :user-data="{ ...profile, bmi, restrictions: profile.restrictions }"
           :loading="insightsLoading"
-          @reload="fetchHealthData"
+          @reload="regenerateInsights"
         />
 
         <!-- Milestones Card -->
@@ -190,7 +189,12 @@ export default {
           this.insightsLoading = true;
           try {
             const userData = { ...this.profile, bmi: this.bmi };
-            const resp = await AIInsightsService.generateInsights(userData);
+            const resp = await AIInsightsService.generateInsights(userData)
+              this.insights = Array.isArray(resp.insights)
+                ? resp.insights
+                : Array.isArray(resp)
+                  ? resp
+                  : []
             this.insights = resp.data;
           } catch (e) {
             console.error('Insight error:', e);
@@ -280,7 +284,24 @@ export default {
         }
       }
       return "User";
-    }
+    },
+
+    /**
+     * Force a fresh AI call (counts against daily limit)
+     */
+    async regenerateInsights() {
+      this.insightsLoading = true;
+        try {
+          const userData = { ...this.profile, bmi: this.bmi };
+          const resp     = await AIInsightsService.generateInsights(userData, true);
+          // backend now returns { cached: bool, insights: [...] }
+          this.insights = resp.insights || resp;
+        } catch (e) {
+          console.error('Regeneration error:', e);
+        } finally {
+          this.insightsLoading = false;
+        }
+    },
   }
 };
 </script>

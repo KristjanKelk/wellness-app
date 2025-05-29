@@ -135,61 +135,75 @@ class AIInsightViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['post'])
     def generate(self, request):
         """
-        Generate new AI insights based on user profile by calling OpenAI.
+        Generate (or return cached) AI insights.
+        - If user already has today's insights and no ?force=true, return those.
+        - If ?force=true but user has hit daily limit, 429.
+        - Otherwise call OpenAI, persist, and return new.
         """
-        try:
-            # Get user information
-            health_profile = HealthProfile.objects.get(user=request.user)
-            bmi = health_profile.calculate_bmi()
-            activity = health_profile.activity_level or "unknown"
-            goal = health_profile.fitness_goal or "general fitness"
+        user = request.user
+        today = timezone.now().date()
+        force = request.query_params.get('force', 'false').lower() == 'true'
 
-            recent_activities = Activity.objects.filter(
-                health_profile=health_profile
-            ).order_by('-performed_at')[:5]
+        # 1) See if we already generated today
+        todays_insights = AIInsight.objects.filter(
+            user=user,
+            created_at__date=today
+        ).order_by('-created_at')
 
-            # Generate activity details for the prompt
-            activity_details = ""
-            if recent_activities.exists():
-                activity_details = "Recent activities:\n"
-                for i, activity in enumerate(recent_activities, 1):
-                    activity_details += f"- {activity.name} ({activity.activity_type}): {activity.duration_minutes} minutes on {activity.performed_at.strftime('%Y-%m-%d')}\n"
+        if todays_insights.exists() and not force:
+            serializer = self.get_serializer(todays_insights, many=True)
+            return Response({
+                'cached': True,
+                'insights': serializer.data
+            }, status=status.HTTP_200_OK)
 
-            # Build a concise prompt with activity data
-            prompt = (
-                f"User health profile:\n"
-                f"- BMI: {bmi:.1f}\n"
-                f"- Activity level: {activity}\n"
-                f"- Fitness goal: {goal}\n\n"
-                f"{activity_details}\n"
-                f"Provide 3 concise, actionable daily wellness insights based on this profile and recent activities."
+        # 2) Enforce a daily regen limit (if forcing)
+        daily_limit = getattr(settings, 'AI_INSIGHT_DAILY_LIMIT', 3)
+        regen_count = todays_insights.count()
+        if force and regen_count >= daily_limit:
+            return Response(
+                {'detail': 'Daily regeneration limit reached.'},
+                status=status.HTTP_429_TOO_MANY_REQUESTS
             )
 
-            # Call the API
-            resp = client.chat.completions.create(model="gpt-3.5-turbo-1106",
-            messages=[
-                {"role": "system", "content": "You are a helpful wellness coach."},
-                {"role": "user", "content": prompt}
-            ],
-            max_tokens=150,
-            temperature=0.7)
 
-            text = resp.choices[0].message.content.strip()
-            # Split into lines (assuming the model returns a list)
-            lines = [l.strip("-• ").strip() for l in text.splitlines() if l.strip()]
+        try:
+            health_profile = HealthProfile.objects.get(user=user)
+            bmi = health_profile.calculate_bmi()
+            # … your existing prompt‐building code here …
 
-            # Persist as AIInsight objects
-            insights = []
+            resp = client.chat.completions.create(
+                model="gpt-3.5-turbo-1106",
+                messages=[
+                    {"role": "system", "content": "You are a helpful wellness coach."},
+                    {"role": "user", "content": prompt}
+                ],
+                max_tokens=150,
+                temperature=0.7
+            )
+            lines = [
+                l.strip("-• ").strip()
+                for l in resp.choices[0].message.content.splitlines()
+                if l.strip()
+            ]
+
+            # delete today's stale insights if force
+            if force:
+                todays_insights.delete()
+
+            created = []
             for line in lines:
-                insight = AIInsight.objects.create(
-                    user=request.user,
+                created.append(AIInsight.objects.create(
+                    user=user,
                     content=line,
-                    priority="medium"  # you could parse priorities too
-                )
-                insights.append(insight)
+                    priority="medium"
+                ))
 
-            serializer = self.get_serializer(insights, many=True)
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
+            serializer = self.get_serializer(created, many=True)
+            return Response({
+                'cached': False,
+                'insights': serializer.data
+            }, status=status.HTTP_201_CREATED)
 
         except HealthProfile.DoesNotExist:
             return Response(
@@ -197,6 +211,14 @@ class AIInsightViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_404_NOT_FOUND
             )
         except Exception as e:
+            # on error, fall back to any cache or defaults
+            if todays_insights.exists():
+                serializer = self.get_serializer(todays_insights, many=True)
+                return Response({
+                    'cached': True,
+                    'insights': serializer.data,
+                    'error': str(e)
+                }, status=status.HTTP_200_OK)
             return Response(
                 {"detail": f"Insight generation failed: {e}"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR

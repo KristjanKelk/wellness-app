@@ -1,6 +1,8 @@
 <!-- src/components/dashboard/AiInsightsCard.vue -->
 <template>
   <dashboard-card title="AI Insights">
+    <p v-if="statusMessage" class="status-message">{{ statusMessage }}</p>
+
     <!-- Loading State -->
     <template v-if="loading">
       <div class="dashboard-card__loading">
@@ -10,11 +12,14 @@
     </template>
 
     <!-- Empty State -->
-    <template v-else-if="!insights || !insights.length">
+    <template v-else-if="!insights.length">
       <div class="dashboard-card__empty">
         <p>No insights available yet.</p>
-        <button @click="reloadInsights" class="refresh-button">
+        <button @click="reloadInsights(false)" class="refresh-button">
           Refresh Insights
+        </button>
+        <button @click="reloadInsights(true)" class="refresh-button">
+          Generate New Insights
         </button>
       </div>
     </template>
@@ -43,6 +48,15 @@
           <p class="insight-content">{{ insight.content }}</p>
         </div>
       </div>
+      <div class="insights-actions">
+        <button
+          @click="reloadInsights(true)"
+          class="action-btn primary"
+          :disabled="loading"
+        >
+          Generate New Insights
+        </button>
+      </div>
     </template>
   </dashboard-card>
 </template>
@@ -54,41 +68,61 @@ import AIInsightsService from '../../services/ai-insights.service';
 export default {
   name: 'AiInsightsCard',
   components: { DashboardCard },
+  props: {
+    userData: {
+      type: Object,
+      required: true
+    }
+  },
   data() {
     return {
       insights: [],
       loading: false,
-      error: null
+      error: null,
+      statusMessage: ''
     };
   },
   created() {
-    this.loadInsights();
+    this.loadInsights(false);
   },
   computed: {
     // The first item is used as introductory text
     intro() {
       return this.insights[0]?.content || '';
     },
-    // Remaining items are the actual actionable insights
     detailInsights() {
-      return this.insights.slice(1);
+      return this.insights.slice(1, 4);
     }
   },
   methods: {
-    async loadInsights() {
+    async loadInsights(force) {
       this.loading = true;
+      this.error = null;
+      this.statusMessage = '';
       try {
-        const response = await AIInsightsService.generateInsights();
-        this.insights = response.data || response;
+        const result = await AIInsightsService.generateInsights(this.userData, force);
+        const all = Array.isArray(result.insights) ? result.insights : [];
+        this.insights = all.slice(0, 4);
+
+        if (force) {
+          this.statusMessage = result.cached
+            ? 'Showing cached insights – daily regeneration limit reached.'
+            : 'Fresh AI insights generated!';
+        }
       } catch (e) {
-        console.error('Failed to load insights:', e);
-        this.error = e;
+        if (e.response?.status === 429) {
+          this.statusMessage = e.response.data.detail
+            || 'You have reached the maximum regenerations for today.';
+        } else {
+          this.insights = [];
+          this.error = e;
+        }
       } finally {
         this.loading = false;
       }
     },
-    reloadInsights() {
-      this.loadInsights();
+    reloadInsights(force = false) {
+      this.loadInsights(force);
     },
     getPriorityDisplay(priority) {
       const map = { high: 'High', medium: 'Medium', low: 'Low' };
@@ -110,7 +144,12 @@ export default {
 @import '@/assets/styles/_variables.scss';
 @import '@/assets/styles/_utilities.scss';
 
-/* Introductory text styling */
+.status-message {
+  margin-bottom: $spacing-4;
+  font-weight: $font-weight-medium;
+  color: $warning;
+}
+
 .insights-intro {
   margin-bottom: $spacing-4;
   font-weight: $font-weight-medium;
@@ -145,9 +184,30 @@ export default {
   .insight-content { line-height: 1.5; }
 }
 
+.insights-actions {
+  margin-top: $spacing-4;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.action-btn.primary {
+  padding: $spacing-3 $spacing-8;
+  background-color: $primary;
+  color: #fff;
+  border: none;
+  border-radius: $border-radius;
+  font-weight: $font-weight-semibold;
+  cursor: pointer;
+  &:hover { opacity: 0.9; }
+}
+
 .dashboard-card__empty {
   text-align: center;
   p { margin-bottom: $spacing-4; color: $gray; }
+  .refresh-button {
+    margin: 0 $spacing-2 $spacing-2 0;
+  }
 }
 
 .dashboard-card__loading {

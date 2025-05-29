@@ -19,12 +19,14 @@ class AIInsightsService {
     /**
      * Generate new insights based on user data
      * @param {Object} userData - User health data
+     * @param force
      * @returns {Promise} - Promise resolving to generated insights
      */
-    generateInsights(userData) {
-        // Updated to match Django route prefix including custom action
+    generateInsights(userData, force = false) {
+        // if force===true, backend will regenerate even if today's cache exists
+        const url = 'analytics/aiinsight/generate/' + (force ? '?force=true' : '');
         return apiClient
-            .post('analytics/aiinsight/generate/', userData)
+            .post(url, userData)
             .then(res => res.data);
     }
 }
