@@ -1,4 +1,4 @@
-// src/services/analytics.service.js
+// src/services/analytics.service.js - Enhanced Version
 import apiClient from './http.service';
 
 /**
@@ -7,18 +7,39 @@ import apiClient from './http.service';
 class AnalyticsService {
     /**
      * Get wellness scores for the current user
+     * @param {Object} params - Query parameters for filtering
      * @returns {Promise} - Promise resolving to wellness scores data
      */
-    getWellnessScores() {
-        return apiClient.get('wellness-scores/');
+    getWellnessScores(params = {}) {
+        return apiClient.get('analytics/wellness-scores/', { params });
     }
 
     /**
      * Calculate a new wellness score based on current health profile
-     * @returns {Promise} - Promise resolving to the new wellness score
+     * @param {Object} additionalData - Additional data for calculation (e.g., weekly_activity_days)
+     * @returns {Promise} - Promise resolving to the new wellness score with breakdown
      */
-    calculateWellnessScore() {
-        return apiClient.post('wellness-scores/calculate/');
+    calculateWellnessScore(additionalData = {}) {
+        return apiClient.post('analytics/wellness-score/calculate/', additionalData);
+    }
+
+    /**
+     * Get the latest wellness score with detailed breakdown
+     * @returns {Promise} - Promise resolving to latest wellness score
+     */
+    getLatestWellnessScore() {
+        return apiClient.get('analytics/wellness-score/latest/');
+    }
+
+    /**
+     * Get wellness score trends over time
+     * @param {number} days - Number of days to look back (default: 30)
+     * @returns {Promise} - Promise resolving to trend data
+     */
+    getWellnessScoreTrends(days = 30) {
+        return apiClient.get('analytics/wellness-score/trends/', {
+            params: { days }
+        });
     }
 
     /**
@@ -26,34 +47,79 @@ class AnalyticsService {
      * @returns {Promise} - Promise resolving to insights data
      */
     getInsights() {
-        return apiClient.get('insights/');
+        return apiClient.get('analytics/aiinsight/');
     }
 
     /**
      * Generate new AI insights based on current health data
-     * @returns {Promise} - Promise resolving to generated insights
+     * @param {Object} userData - User health data for context
+     * @param {boolean} force - Force regeneration even if daily limit reached
+     * @returns {Promise} - Promise resolving to generated insights with metadata
      */
-    generateInsights() {
-        return apiClient.post('insights/generate/');
+    generateInsights(userData = {}, force = false) {
+        const url = force ? 'analytics/aiinsight/generate/?force=true' : 'analytics/aiinsight/generate/';
+        return apiClient.post(url, userData);
+    }
+
+    /**
+     * Get all milestones for the current user
+     * @param {Object} params - Query parameters (days, milestone_type, etc.)
+     * @returns {Promise} - Promise resolving to milestones data
+     */
+    getMilestones(params = {}) {
+        return apiClient.get('analytics/milestones/', { params });
+    }
+
+    /**
+     * Get recent milestones within specified timeframe
+     * @param {number} days - Number of days to look back (default: 30)
+     * @returns {Promise} - Promise resolving to recent milestones
+     */
+    getRecentMilestones(days = 30) {
+        return apiClient.get('analytics/milestones/recent/', {
+            params: { days }
+        });
+    }
+
+    /**
+     * Get milestone summary statistics
+     * @returns {Promise} - Promise resolving to milestone summary
+     */
+    getMilestoneSummary() {
+        return apiClient.get('analytics/milestones/summary/');
+    }
+
+    /**
+     * Track a habit streak and check for milestones
+     * @param {string} habitName - Name of the habit
+     * @param {number} streakDays - Current streak in days
+     * @returns {Promise} - Promise resolving to milestone if achieved
+     */
+    trackHabitStreak(habitName, streakDays) {
+        return apiClient.post('analytics/milestones/track_habit/', {
+            habit_name: habitName,
+            streak_days: streakDays
+        });
     }
 
     /**
      * Get progress metrics for the current user
-     * This would include milestone tracking, goal progress, etc.
+     * This includes milestone tracking, goal progress, etc.
+     * @param {Object} params - Query parameters for filtering
      * @returns {Promise} - Promise resolving to progress metrics data
      */
-    getProgressMetrics() {
-        return apiClient.get('analytics/progress-metrics/');
+    getProgressMetrics(params = {}) {
+        return apiClient.get('analytics/progress-metrics/', { params });
     }
 
     /**
-     * Export health data in CSV format
-     * @param {Object} options - Export options (date range, metrics to include)
+     * Export health data in various formats
+     * @param {Object} options - Export options (date range, metrics to include, format)
      * @returns {Promise} - Promise resolving to the exported data
      */
     exportHealthData(options = {}) {
         return apiClient.post('analytics/export/', options, {
-            responseType: 'blob'
+            responseType: options.format === 'csv' ? 'blob' : 'json'
         });
     }
 
@@ -76,21 +142,124 @@ class AnalyticsService {
     }
 
     /**
-     * Track a milestone achievement
-     * @param {Object} milestoneData - Data about the achieved milestone
-     * @returns {Promise} - Promise resolving to the created milestone
+     * Get comprehensive dashboard analytics
+     * Combines multiple analytics calls for dashboard display
+     * @returns {Promise} - Promise resolving to combined analytics data
      */
-    trackMilestone(milestoneData) {
-        return apiClient.post('analytics/milestones/', milestoneData);
+    async getDashboardAnalytics() {
+        try {
+            const [
+                latestScore,
+                recentMilestones,
+                milestoneSummary,
+                insights
+            ] = await Promise.allSettled([
+                this.getLatestWellnessScore(),
+                this.getRecentMilestones(30),
+                this.getMilestoneSummary(),
+                this.getInsights()
+            ]);
+
+            return {
+                wellnessScore: latestScore.status === 'fulfilled' ? latestScore.value.data : null,
+                milestones: recentMilestones.status === 'fulfilled' ? recentMilestones.value.data : [],
+                milestoneSummary: milestoneSummary.status === 'fulfilled' ? milestoneSummary.value.data : null,
+                insights: insights.status === 'fulfilled' ? insights.value.data : []
+            };
+        } catch (error) {
+            console.error('Error fetching dashboard analytics:', error);
+            throw error;
+        }
     }
-    
 
     /**
-     * Get all milestones for the current user
-     * @returns {Promise} - Promise resolving to milestones data
+     * Calculate and check for new milestones after profile updates
+     * @param {Object} profileData - Updated profile data
+     * @returns {Promise} - Promise resolving to any new milestones achieved
      */
-    getMilestones() {
-        return apiClient.get('analytics/milestones/');
+    async checkForNewMilestones(profileData = {}) {
+        try {
+            // Trigger wellness score calculation which checks for milestones
+            const scoreResponse = await this.calculateWellnessScore(profileData);
+
+            // Return any milestones that were achieved
+            return scoreResponse.data?.milestones_achieved || [];
+        } catch (error) {
+            console.error('Error checking for milestones:', error);
+            return [];
+        }
+    }
+
+    /**
+     * Get wellness score component explanations
+     * @returns {Object} - Explanations for each wellness score component
+     */
+    getWellnessScoreExplanations() {
+        return {
+            bmi_score: {
+                name: "BMI Score",
+                weight: 30,
+                description: "Based on your Body Mass Index relative to healthy ranges",
+                optimal: "BMI between 18.5-24.9 for maximum points"
+            },
+            activity_score: {
+                name: "Activity Score",
+                weight: 30,
+                description: "Based on your logged activities and declared activity level",
+                optimal: "Regular activities logged with good variety and consistency"
+            },
+            progress_score: {
+                name: "Progress Score",
+                weight: 20,
+                description: "Based on milestone achievements and goal progress",
+                optimal: "Regular milestones and steady progress toward goals"
+            },
+            habits_score: {
+                name: "Habits Score",
+                weight: 20,
+                description: "Based on consistency in logging and profile completeness",
+                optimal: "Regular weight logging and complete health profile"
+            }
+        };
+    }
+
+    /**
+     * Format wellness score for display
+     * @param {Object} scoreData - Raw score data from API
+     * @returns {Object} - Formatted score data for UI
+     */
+    formatWellnessScore(scoreData) {
+        if (!scoreData) return null;
+
+        const explanations = this.getWellnessScoreExplanations();
+
+        return {
+            total: Math.round(scoreData.total_score || 0),
+            components: {
+                bmi: {
+                    score: Math.round(scoreData.bmi_score || 0),
+                    points: Math.round((scoreData.bmi_score || 0) * 0.3),
+                    ...explanations.bmi_score
+                },
+                activity: {
+                    score: Math.round(scoreData.activity_score || 0),
+                    points: Math.round((scoreData.activity_score || 0) * 0.3),
+                    ...explanations.activity_score
+                },
+                progress: {
+                    score: Math.round(scoreData.progress_score || 0),
+                    points: Math.round((scoreData.progress_score || 0) * 0.2),
+                    ...explanations.progress_score
+                },
+                habits: {
+                    score: Math.round(scoreData.habits_score || 0),
+                    points: Math.round((scoreData.habits_score || 0) * 0.2),
+                    ...explanations.habits_score
+                }
+            },
+            breakdown: scoreData.score_breakdown || null,
+            lastUpdated: scoreData.created_at || new Date().toISOString()
+        };
     }
 }
 

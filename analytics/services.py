@@ -1,12 +1,13 @@
-# analytics/services.py - Enhanced Wellness Score Service
+# analytics/services.py - Fixed with proper imports
 from decimal import Decimal
 from django.utils import timezone
-from .models import Milestone, WellnessScore
 from datetime import timedelta
 from django.db.models import Count, Avg, Sum
-from health_profiles.models import Activity
-
 import logging
+
+# Import the models that are used in this file
+from .models import Milestone, WellnessScore
+from health_profiles.models import HealthProfile, WeightHistory, Activity
 
 logger = logging.getLogger(__name__)
 
@@ -129,36 +130,43 @@ class MilestoneService:
 
         except HealthProfile.DoesNotExist:
             return None
+        except Exception as e:
+            logger.error(f"Error checking activity milestone for user {user.id}: {str(e)}")
+            return None
 
     @staticmethod
     def check_habit_streak(user, habit_name, current_streak):
         """
         Check if user has achieved a habit streak milestone
         """
-        # Streak milestones at 3, 7, 14, 21, 30, 60, 90, 180, 365 days
-        streak_milestones = [3, 7, 14, 21, 30, 60, 90, 180, 365]
+        try:
+            # Streak milestones at 3, 7, 14, 21, 30, 60, 90, 180, 365 days
+            streak_milestones = [3, 7, 14, 21, 30, 60, 90, 180, 365]
 
-        for milestone_streak in streak_milestones:
-            if current_streak == milestone_streak:
-                # Create milestone
-                milestone = Milestone.objects.create(
-                    user=user,
-                    milestone_type='habit',
-                    description=f"{milestone_streak}-day streak for {habit_name}!",
-                    progress_value=current_streak,
-                    progress_percentage=None  # No percentage for streaks
-                )
-                return milestone
+            for milestone_streak in streak_milestones:
+                if current_streak == milestone_streak:
+                    # Create milestone
+                    milestone = Milestone.objects.create(
+                        user=user,
+                        milestone_type='habit',
+                        description=f"{milestone_streak}-day streak for {habit_name}!",
+                        progress_value=current_streak,
+                        progress_percentage=None  # No percentage for streaks
+                    )
+                    return milestone
 
-        return None
+            return None
+        except Exception as e:
+            logger.error(f"Error checking habit streak for user {user.id}: {str(e)}")
+            return None
 
     @staticmethod
     def update_progress_score(user):
         """
         Update the wellness score based on milestone achievements
         """
-        # Get the most recent wellness score
         try:
+            # Get the most recent wellness score
             profile = HealthProfile.objects.get(user=user)
             wellness_score = WellnessScore.objects.filter(health_profile=profile).order_by('-created_at').first()
 
@@ -166,7 +174,7 @@ class MilestoneService:
                 return None
 
             # Calculate milestones_achieved in the last 30 days
-            thirty_days_ago = timezone.now() - timezone.timedelta(days=30)
+            thirty_days_ago = timezone.now() - timedelta(days=30)
             recent_milestones = Milestone.objects.filter(
                 user=user,
                 achieved_at__gte=thirty_days_ago
@@ -189,6 +197,9 @@ class MilestoneService:
             return wellness_score
 
         except HealthProfile.DoesNotExist:
+            return None
+        except Exception as e:
+            logger.error(f"Error updating progress score for user {user.id}: {str(e)}")
             return None
 
     @staticmethod
@@ -247,9 +258,15 @@ class MilestoneService:
 
         except HealthProfile.DoesNotExist:
             return None
+        except Exception as e:
+            logger.error(f"Error checking weight logging streak for user {user.id}: {str(e)}")
+            return None
 
     @staticmethod
     def check_activity_milestone_by_count(user):
+        """
+        Check if user has achieved an activity count milestone
+        """
         try:
             profile = HealthProfile.objects.get(user=user)
             activity_count = Activity.objects.filter(health_profile=profile).count()
@@ -277,6 +294,10 @@ class MilestoneService:
 
         except HealthProfile.DoesNotExist:
             return None
+        except Exception as e:
+            logger.error(f"Error checking activity count milestone for user {user.id}: {str(e)}")
+            return None
+
 
 class WellnessScoreService:
     """
@@ -548,7 +569,8 @@ class WellnessScoreService:
             else:
                 return 0  # No significant progress
 
-        except (ValueError, TypeError):
+        except (ValueError, TypeError) as e:
+            logger.error(f"Error calculating weight progress score: {str(e)}")
             return 0
 
     @staticmethod
@@ -590,7 +612,8 @@ class WellnessScoreService:
             else:
                 return 0  # Declining activity
 
-        except (ValueError, ZeroDivisionError):
+        except (ValueError, ZeroDivisionError) as e:
+            logger.error(f"Error calculating activity trend score: {str(e)}")
             return 0
 
     @staticmethod
