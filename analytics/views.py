@@ -36,19 +36,15 @@ class WellnessScoreViewSet(viewsets.ModelViewSet):
         Calculate and save a new wellness score using enhanced algorithm
         """
         try:
-            # Get user's health profile
             health_profile = HealthProfile.objects.get(user=request.user)
 
-            # Use the enhanced calculation service
             score_data = WellnessScoreService.calculate_comprehensive_score(
                 health_profile,
                 request.user
             )
 
-            # Check for weight milestones
             weight_milestone = MilestoneService.check_weight_milestone(request.user)
 
-            # Check for activity milestones if weekly_activity_days was provided
             if 'weekly_activity_days' in request.data:
                 activity_milestone = MilestoneService.check_activity_milestone(
                     request.user,
