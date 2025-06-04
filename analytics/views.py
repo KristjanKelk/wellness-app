@@ -13,7 +13,7 @@ client = OpenAI(api_key=settings.OPENAI_API_KEY)
 from .models import AIInsight, WellnessScore, Milestone
 from .serializers import AIInsightSerializer, WellnessScoreSerializer, MilestoneSerializer
 from health_profiles.models import HealthProfile, Activity
-from .services import MilestoneService, WellnessScoreService  # Import the new service
+from .services import MilestoneService, WellnessScoreService
 
 
 class WellnessScoreViewSet(viewsets.ModelViewSet):
