@@ -138,7 +138,6 @@ wellness-platform/
 2. **Access the application**
    - Frontend: http://localhost:8080
    - Backend API: http://localhost:8000/api/
-   - Admin Panel: http://localhost:8000/admin/
 
 ## 📊 API Documentation
 

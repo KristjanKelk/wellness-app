@@ -188,7 +188,6 @@ export default {
       const now = new Date();
       let startDate = new Date();
 
-      // Calculate start date based on selected period
       switch (this.selectedPeriod) {
         case 'week':
           startDate.setDate(now.getDate() - 7);
@@ -201,18 +200,15 @@ export default {
           break;
       }
 
-      // Filter activities within the period
       const periodActivities = this.activities.filter(activity => {
         const activityDate = new Date(activity.performed_at);
         return activityDate >= startDate;
       });
 
-      // Calculate statistics
       const totalActivities = periodActivities.length;
       const totalDuration = periodActivities.reduce((sum, activity) => sum + (activity.duration_minutes || 0), 0);
       const totalDistance = periodActivities.reduce((sum, activity) => sum + (parseFloat(activity.distance_km) || 0), 0);
 
-      // Calculate active days
       const uniqueDays = new Set(
         periodActivities.map(activity =>
           new Date(activity.performed_at).toLocaleDateString()
@@ -231,7 +227,6 @@ export default {
       const distribution = {};
       const periodActivities = this.getActivitiesForPeriod();
 
-      // Count activities by type
       periodActivities.forEach(activity => {
         if (!distribution[activity.activity_type]) {
           distribution[activity.activity_type] = 0;
@@ -239,7 +234,6 @@ export default {
         distribution[activity.activity_type]++;
       });
 
-      // Convert to array and calculate percentages
       const total = periodActivities.length;
       return Object.entries(distribution).map(([type, count]) => ({
         type,
@@ -261,12 +255,10 @@ export default {
         const response = await ActivitiesService.getAllActivities();
         this.activities = response.data;
 
-        // Get recent activities (last 5)
         this.recentActivities = [...this.activities]
           .sort((a, b) => new Date(b.performed_at) - new Date(a.performed_at))
           .slice(0, 5);
       } catch (error) {
-        console.error('Failed to fetch activities:', error);
         this.error = 'Failed to load activities. Please try again.';
       } finally {
         this.loading = false;
@@ -302,7 +294,6 @@ export default {
         await this.fetchActivities();
         this.showAddActivityModal = false;
       } catch (error) {
-        console.error('Failed to save activity:', error);
         this.modalError = 'Failed to save activity. Please try again.';
       } finally {
         this.modalLoading = false;
