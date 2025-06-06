@@ -5,7 +5,7 @@ from rest_framework.routers import DefaultRouter
 from rest_framework_simplejwt.views import TokenRefreshView, TokenVerifyView
 
 from health_profiles.views import HealthProfileViewSet, WeightHistoryViewSet, ActivityViewSet
-from analytics.views import AIInsightViewSet, WellnessScoreViewSet, MilestoneViewSet
+from analytics.views import AIInsightViewSet, WellnessScoreViewSet, MilestoneViewSet, HealthSummaryViewSet
 from users.views import (
     RegisterView, UserProfileView, VerifyEmailView, ResendVerificationEmailView,
     GenerateTwoFactorView, VerifyTwoFactorView, DisableTwoFactorView,
@@ -22,9 +22,10 @@ router.register(r'weight-history', WeightHistoryViewSet, basename='weight-histor
 router.register(r'analytics/aiinsight',AIInsightViewSet, basename='aiinsight')
 router.register(r'analytics/wellness-score', WellnessScoreViewSet, basename='wellnessscore')
 router.register(r'analytics/milestones', MilestoneViewSet, basename='milestone')
+router.register(r'analytics/health-summaries', HealthSummaryViewSet, basename='health-summary')
 router.register(r'activities', ActivityViewSet, basename='activity')
-router.register(r'insights', AIInsightViewSet, basename='insight')            # optional legacy
-router.register(r'wellness-scores', WellnessScoreViewSet, basename='wellness-score')  # optional legacy
+router.register(r'insights', AIInsightViewSet, basename='insight')
+router.register(r'wellness-scores', WellnessScoreViewSet, basename='wellness-score')
 
 urlpatterns = [
     path('admin/', admin.site.urls),

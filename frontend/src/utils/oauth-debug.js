@@ -26,7 +26,6 @@ export const OAuthDebug = {
       debugInfo.allParams.code = `${debugInfo.allParams.code.substring(0, 10)}... [truncated]`;
     }
 
-    console.log('OAuth Debug Info:', debugInfo);
     return debugInfo;
   },
 
@@ -77,7 +76,6 @@ export const OAuthDebug = {
       }
     };
 
-    console.log('OAuth Storage Check:', storage);
     return storage;
   }
 };

@@ -23,7 +23,6 @@ class OAuthService {
       const response = await axios.get(`${API_URL}oauth/${provider}/`);
 
       if (response.data && response.data.authorization_url) {
-        console.log(`Redirecting to ${provider} authorization URL`);
 
         if (response.data.state) {
           localStorage.setItem('oauth_state', response.data.state);
@@ -102,7 +101,6 @@ class OAuthService {
       sessionStorage.removeItem('oauth_provider');
 
       if (error.response && error.response.data) {
-        console.log('Backend error response:', error.response.data);
 
         if (error.response.data.detail) {
           throw new Error(error.response.data.detail);

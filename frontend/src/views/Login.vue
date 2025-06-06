@@ -208,8 +208,6 @@ export default {
         loading.value = true;
         message.value = '';
 
-        console.log(`Attempting to login with username: ${username.value}`);
-
         const userData = await store.dispatch('auth/login', {
           username: username.value,
           password: password.value,
@@ -311,7 +309,6 @@ export default {
 
         localStorage.removeItem('oauth_error');
 
-        console.log('Starting Google authentication flow');
         await OAuthService.loginWithGoogle();
       } catch (error) {
         console.error('Google login initialization error:', error);
@@ -329,7 +326,6 @@ export default {
 
         localStorage.removeItem('oauth_error');
 
-        console.log('Starting GitHub authentication flow');
         await OAuthService.loginWithGitHub();
       } catch (error) {
         console.error('GitHub login initialization error:', error);

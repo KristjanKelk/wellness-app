@@ -1,0 +1,36 @@
+SUMMARY_NOTIFICATION_TXT = """
+Your {{ summary.summary_type|title }} Health Summary is Ready!
+{{ period_text }}
+
+Hi {{ user.first_name|default:user.username }},
+
+Great news! Your {{ summary.summary_type }} health summary has been generated with personalized insights and recommendations.
+
+Summary Stats:
+- Activities: {{ summary.metrics_summary.activity_count|default:0 }}
+- Minutes Exercised: {{ summary.metrics_summary.total_duration|default:0 }}
+- Milestones Achieved: {{ summary.metrics_summary.milestones_achieved|default:0 }}
+
+{% if summary.key_achievements %}
+Key Achievements:
+{% for achievement in summary.key_achievements|slice:":3" %}
+- {{ achievement }}
+{% endfor %}
+{% endif %}
+
+{% if summary.recommendations %}
+Top Recommendations:
+{% for recommendation in summary.recommendations|slice:":2" %}
+- {{ recommendation }}
+{% endfor %}
+{% endif %}
+
+View your full summary: {{ summary_url }}
+Go to Dashboard: {{ dashboard_url }}
+
+Keep up the great work on your health journey!
+
+---
+You're receiving this because you have email notifications enabled.
+Update your preferences: {{ dashboard_url }}/settings
+"""

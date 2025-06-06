@@ -44,6 +44,7 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'django_celery_beat',
 
     # Third-party apps
     'rest_framework',
@@ -157,6 +158,45 @@ CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:8080",
 ]
+
+# CELERY CONFIGURATION
+
+CELERY_BROKER_URL = 'redis://localhost:6379/0'
+CELERY_RESULT_BACKEND = 'redis://localhost:6379/0'
+
+# Celery Task Settings
+CELERY_ACCEPT_CONTENT = ['json']
+CELERY_TASK_SERIALIZER = 'json'
+CELERY_RESULT_SERIALIZER = 'json'
+CELERY_TIMEZONE = 'UTC'
+
+# Celery Beat Scheduler (for periodic tasks)
+CELERY_BEAT_SCHEDULER = 'django_celery_beat.schedulers:DatabaseScheduler'
+
+# Task execution settings
+CELERY_TASK_ALWAYS_EAGER = False
+CELERY_TASK_EAGER_PROPAGATES = True
+CELERY_TASK_IGNORE_RESULT = False
+
+# Health Summary specific settings
+HEALTH_SUMMARY_SETTINGS = {
+    'AI_MODEL': 'gpt-3.5-turbo-1106',
+    'MAX_RETRIES': 3,
+    'RETRY_DELAY': 60,
+    'NOTIFICATION_ENABLED': True,
+    'AUTO_GENERATE_WEEKLY': True,
+    'AUTO_GENERATE_MONTHLY': True,
+}
+
+# Health Summary specific settings
+HEALTH_SUMMARY_SETTINGS = {
+    'AI_MODEL': 'gpt-3.5-turbo-1106',
+    'MAX_RETRIES': 3,
+    'RETRY_DELAY': 60,
+    'NOTIFICATION_ENABLED': True,
+    'AUTO_GENERATE_WEEKLY': True,
+    'AUTO_GENERATE_MONTHLY': True,
+}
 
 # REST Framework settings
 REST_FRAMEWORK = {

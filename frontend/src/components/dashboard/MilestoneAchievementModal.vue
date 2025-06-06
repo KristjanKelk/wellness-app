@@ -207,8 +207,6 @@ export default {
       const text = this.getShareText();
       try {
         await navigator.clipboard.writeText(text);
-        // You could show a toast notification here
-        console.log('Copied to clipboard!');
       } catch (err) {
         console.error('Failed to copy to clipboard:', err);
       }

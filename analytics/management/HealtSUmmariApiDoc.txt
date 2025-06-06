@@ -1,0 +1,638 @@
+# Health Summary API Documentation and Usage Examples
+
+"""
+HEALTH SUMMARY API ENDPOINTS
+
+Base URL: /api/analytics/health-summaries/
+
+Authentication: Bearer Token required for all endpoints
+"""
+
+# =====================================================
+# 1. GENERATE NEW SUMMARY
+# =====================================================
+
+"""
+POST /api/analytics/health-summaries/
+
+Generate a new health summary for the authenticated user.
+
+Request Body:
+{
+    "summary_type": "weekly" | "monthly",
+    "target_date": "2024-01-15" (optional, defaults to today),
+    "force_regenerate": false (optional, forces regeneration if summary exists)
+}
+
+Response (201 Created):
+{
+    "id": 123,
+    "summary_type": "weekly",
+    "start_date": "2024-01-15",
+    "end_date": "2024-01-21",
+    "summary_text": "Health Summary for 2024-01-15 to 2024-01-21\n\n...",
+    "key_achievements": [
+        "Completed 5 workout sessions this week",
+        "Maintained consistent sleep schedule",
+        "Achieved weekly step goal 6 out of 7 days"
+    ],
+    "areas_for_improvement": [
+        "Increase water intake throughout the day",
+        "Add more strength training sessions"
+    ],
+    "recommendations": [
+        "Try adding 15-minute strength training sessions",
+        "Set hydration reminders every 2 hours",
+        "Consider yoga for better flexibility"
+    ],
+    "metrics_summary": {
+        "activity_count": 5,
+        "total_duration": 285,
+        "active_days": 5,
+        "milestones_achieved": 2,
+        "average_weight": 72.5,
+        "wellness_score": 78.5
+    },
+    "status": "completed",
+    "ai_model_used": "gpt-3.5-turbo-1106",
+    "created_at": "2024-01-22T10:30:00Z",
+    "updated_at": "2024-01-22T10:35:00Z",
+    "generated_at": "2024-01-22T10:35:00Z",
+    "detailed_metrics": [...],
+    "is_current_period": false
+}
+
+Example Usage:
+```python
+import requests
+
+headers = {'Authorization': 'Bearer your_jwt_token'}
+data = {
+    "summary_type": "weekly",
+    "target_date": "2024-01-15"
+}
+
+response = requests.post(
+    'http://localhost:8000/api/analytics/health-summaries/',
+    json=data,
+    headers=headers
+)
+
+if response.status_code == 201:
+    summary = response.json()
+    print(f"Generated summary: {summary['summary_text'][:100]}...")
+```
+"""
+
+# =====================================================
+# 2. GET CURRENT WEEK/MONTH SUMMARY
+# =====================================================
+
+"""
+GET /api/analytics/health-summaries/current_week/
+GET /api/analytics/health-summaries/current_month/
+
+Get or generate summary for the current week/month.
+
+Response: Same as generate summary endpoint
+
+Example Usage:
+```python
+# Get current week summary
+response = requests.get(
+    'http://localhost:8000/api/analytics/health-summaries/current_week/',
+    headers=headers
+)
+
+current_week_summary = response.json()
+```
+"""
+
+# =====================================================
+# 3. LIST RECENT SUMMARIES
+# =====================================================
+
+"""
+GET /api/analytics/health-summaries/recent/
+Query Parameters:
+- type: "weekly" | "monthly" (optional, filter by type)
+- limit: integer (optional, default 10)
+
+Response:
+{
+    "summaries": [
+        {
+            "id": 123,
+            "summary_type": "weekly",
+            "start_date": "2024-01-15",
+            "end_date": "2024-01-21",
+            "status": "completed",
+            "created_at": "2024-01-22T10:30:00Z",
+            "generated_at": "2024-01-22T10:35:00Z",
+            "detailed_metrics_count": 6,
+            "achievements_count": 3,
+            "recommendations_count": 4,
+            "is_current_period": false
+        }
+    ],
+    "total_count": 15,
+    "filtered_count": 5
+}
+
+Example Usage:
+```python
+# Get recent weekly summaries
+response = requests.get(
+    'http://localhost:8000/api/analytics/health-summaries/recent/?type=weekly&limit=5',
+    headers=headers
+)
+
+recent_summaries = response.json()
+```
+"""
+
+# =====================================================
+# 4. GET SUMMARY STATISTICS
+# =====================================================
+
+"""
+GET /api/analytics/health-summaries/statistics/
+
+Response:
+{
+    "total_summaries": 15,
+    "weekly_summaries": 10,
+    "monthly_summaries": 5,
+    "latest_summary": {
+        "id": 123,
+        "summary_type": "weekly",
+        ...
+    },
+    "summary_streak": 8
+}
+
+Example Usage:
+```python
+response = requests.get(
+    'http://localhost:8000/api/analytics/health-summaries/statistics/',
+    headers=headers
+)
+
+stats = response.json()
+print(f"You have a {stats['summary_streak']} week streak!")
+```
+"""
+
+# =====================================================
+# 5. GET SUMMARY INSIGHTS
+# =====================================================
+
+"""
+GET /api/analytics/health-summaries/insights/
+
+Response:
+{
+    "most_common_achievement_themes": [
+        "exercise", "consistency", "goals", "strength", "cardio"
+    ],
+    "most_common_improvement_areas": [
+        "nutrition", "sleep", "hydration", "flexibility", "recovery"
+    ],
+    "progress_trend": "improving",
+    "consistency_score": 85.5,
+    "total_milestones_across_summaries": 24
+}
+
+Example Usage:
+```python
+response = requests.get(
+    'http://localhost:8000/api/analytics/health-summaries/insights/',
+    headers=headers
+)
+
+insights = response.json()
+```
+"""
+
+# =====================================================
+# 6. COMPARE PERIODS
+# =====================================================
+
+"""
+GET /api/analytics/health-summaries/compare_periods/
+Query Parameters:
+- period1_start: "2024-01-01"
+- period1_end: "2024-01-31"
+- period2_start: "2024-02-01"
+- period2_end: "2024-02-28"
+
+Response:
+{
+    "period1": {
+        "start_date": "2024-01-01",
+        "end_date": "2024-01-31",
+        "summaries_count": 4,
+        "metrics": {
+            "total_activities": 20,
+            "total_duration": 1200,
+            "total_milestones": 5,
+            "average_wellness_score": 75.2
+        }
+    },
+    "period2": {
+        "start_date": "2024-02-01",
+        "end_date": "2024-02-28",
+        "summaries_count": 4,
+        "metrics": {
+            "total_activities": 25,
+            "total_duration": 1500,
+            "total_milestones": 8,
+            "average_wellness_score": 82.1
+        }
+    },
+    "comparison": {
+        "total_activities": {
+            "change": 5,
+            "percentage_change": 25.0,
+            "direction": "improved"
+        },
+        "total_duration": {
+            "change": 300,
+            "percentage_change": 25.0,
+            "direction": "improved"
+        },
+        ...
+    }
+}
+"""
+
+# =====================================================
+# 7. GET DETAILED METRICS
+# =====================================================
+
+"""
+GET /api/analytics/health-summaries/{summary_id}/detailed_metrics/
+
+Response:
+{
+    "summary_id": 123,
+    "summary_period": "2024-01-15 to 2024-01-21",
+    "summary_type": "weekly",
+    "metrics": [
+        {
+            "id": 1,
+            "metric_name": "Total Activities",
+            "metric_value": "5.00",
+            "metric_unit": "count",
+            "previous_value": "3.00",
+            "change_percentage": "66.67",
+            "change_direction": "improved",
+            "created_at": "2024-01-22T10:35:00Z"
+        }
+    ],
+    "metrics_count": 6
+}
+"""
+
+# =====================================================
+# 8. BULK GENERATE SUMMARIES
+# =====================================================
+
+"""
+POST /api/analytics/health-summaries/bulk_generate/
+
+Request Body:
+{
+    "periods": [
+        {
+            "summary_type": "weekly",
+            "target_date": "2024-01-15"
+        },
+        {
+            "summary_type": "weekly",
+            "target_date": "2024-01-08"
+        },
+        {
+            "summary_type": "monthly",
+            "target_date": "2024-01-01"
+        }
+    ],
+    "force_regenerate": false
+}
+
+Response:
+{
+    "results": [
+        {
+            "period": {"summary_type": "weekly", "target_date": "2024-01-15"},
+            "summary_id": 123,
+            "status": "completed",
+            "message": "Summary generated successfully"
+        }
+    ],
+    "total_requested": 3,
+    "successful": 2,
+    "failed": 1
+}
+"""
+
+# =====================================================
+# FRONTEND INTEGRATION EXAMPLES
+# =====================================================
+
+"""
+Frontend Integration Examples (JavaScript/React)
+
+1. Dashboard Component - Show Current Summary
+```javascript
+const HealthDashboard = () => {
+    const [currentSummary, setCurrentSummary] = useState(null);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        fetchCurrentWeekSummary();
+    }, []);
+
+    const fetchCurrentWeekSummary = async () => {
+        try {
+            const response = await api.get('/analytics/health-summaries/current_week/');
+            setCurrentSummary(response.data);
+        } catch (error) {
+            console.error('Error fetching summary:', error);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const generateNewSummary = async () => {
+        setLoading(true);
+        try {
+            const response = await api.post('/analytics/health-summaries/', {
+                summary_type: 'weekly',
+                force_regenerate: true
+            });
+            setCurrentSummary(response.data);
+        } catch (error) {
+            console.error('Error generating summary:', error);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    if (loading) return <LoadingSpinner />;
+
+    return (
+        <div className="health-dashboard">
+            <h2>This Week's Health Summary</h2>
+
+            {currentSummary && (
+                <div>
+                    <div className="summary-metrics">
+                        <MetricCard
+                            title="Activities"
+                            value={currentSummary.metrics_summary.activity_count}
+                        />
+                        <MetricCard
+                            title="Total Duration"
+                            value={`${currentSummary.metrics_summary.total_duration} min`}
+                        />
+                        <MetricCard
+                            title="Wellness Score"
+                            value={currentSummary.metrics_summary.wellness_score?.toFixed(1)}
+                        />
+                    </div>
+
+                    <div className="achievements">
+                        <h3>Key Achievements</h3>
+                        <ul>
+                            {currentSummary.key_achievements?.map((achievement, index) => (
+                                <li key={index}>{achievement}</li>
+                            ))}
+                        </ul>
+                    </div>
+
+                    <div className="recommendations">
+                        <h3>Recommendations</h3>
+                        <ul>
+                            {currentSummary.recommendations?.map((rec, index) => (
+                                <li key={index}>{rec}</li>
+                            ))}
+                        </ul>
+                    </div>
+                </div>
+            )}
+
+            <button onClick={generateNewSummary}>
+                Regenerate Summary
+            </button>
+        </div>
+    );
+};
+```
+
+2. Summary History Component
+```javascript
+const SummaryHistory = () => {
+    const [summaries, setSummaries] = useState([]);
+    const [filter, setFilter] = useState('both'); // weekly, monthly, both
+
+    useEffect(() => {
+        fetchRecentSummaries();
+    }, [filter]);
+
+    const fetchRecentSummaries = async () => {
+        try {
+            const params = filter !== 'both' ? { type: filter } : {};
+            const response = await api.get('/analytics/health-summaries/recent/', { params });
+            setSummaries(response.data.summaries);
+        } catch (error) {
+            console.error('Error fetching summaries:', error);
+        }
+    };
+
+    return (
+        <div className="summary-history">
+            <div className="filter-tabs">
+                <button
+                    className={filter === 'both' ? 'active' : ''}
+                    onClick={() => setFilter('both')}
+                >
+                    All Summaries
+                </button>
+                <button
+                    className={filter === 'weekly' ? 'active' : ''}
+                    onClick={() => setFilter('weekly')}
+                >
+                    Weekly
+                </button>
+                <button
+                    className={filter === 'monthly' ? 'active' : ''}
+                    onClick={() => setFilter('monthly')}
+                >
+                    Monthly
+                </button>
+            </div>
+
+            <div className="summaries-list">
+                {summaries.map(summary => (
+                    <SummaryCard key={summary.id} summary={summary} />
+                ))}
+            </div>
+        </div>
+    );
+};
+```
+
+3. Summary Insights Component
+```javascript
+const SummaryInsights = () => {
+    const [insights, setInsights] = useState(null);
+    const [stats, setStats] = useState(null);
+
+    useEffect(() => {
+        fetchInsights();
+        fetchStats();
+    }, []);
+
+    const fetchInsights = async () => {
+        try {
+            const response = await api.get('/analytics/health-summaries/insights/');
+            setInsights(response.data);
+        } catch (error) {
+            console.error('Error fetching insights:', error);
+        }
+    };
+
+    const fetchStats = async () => {
+        try {
+            const response = await api.get('/analytics/health-summaries/statistics/');
+            setStats(response.data);
+        } catch (error) {
+            console.error('Error fetching stats:', error);
+        }
+    };
+
+    return (
+        <div className="summary-insights">
+            {stats && (
+                <div className="stats-overview">
+                    <StatCard title="Total Summaries" value={stats.total_summaries} />
+                    <StatCard title="Current Streak" value={`${stats.summary_streak} weeks`} />
+                </div>
+            )}
+
+            {insights && (
+                <div className="insights-details">
+                    <div className="theme-cloud">
+                        <h3>Your Achievement Themes</h3>
+                        {insights.most_common_achievement_themes.map(theme => (
+                            <span key={theme} className="theme-tag">{theme}</span>
+                        ))}
+                    </div>
+
+                    <div className="progress-indicator">
+                        <h3>Overall Progress</h3>
+                        <div className={`trend ${insights.progress_trend}`}>
+                            {insights.progress_trend}
+                        </div>
+                    </div>
+
+                    <div className="consistency-score">
+                        <h3>Consistency Score</h3>
+                        <div className="score-circle">
+                            {insights.consistency_score.toFixed(1)}%
+                        </div>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+};
+```
+"""
+
+# =====================================================
+# MANAGEMENT COMMANDS USAGE
+# =====================================================
+
+"""
+Management Commands for Automated Summary Generation
+
+1. Generate summaries for all users:
+python manage.py generate_summaries --bulk --type both
+
+2. Generate weekly summary for specific user:
+python manage.py generate_summaries --user-id 123 --type weekly
+
+3. Generate summary for specific date:
+python manage.py generate_summaries --user-id 123 --type weekly --date 2024-01-15
+
+4. Force regeneration of existing summaries:
+python manage.py generate_summaries --bulk --type weekly --force
+
+5. Dry run to see what would be generated:
+python manage.py generate_summaries --bulk --dry-run
+
+6. Clean up failed summary attempts:
+python manage.py cleanup_failed_summaries --days 7
+
+Example Cron Job for Automated Weekly Summaries:
+# Add to crontab: 0 9 * * 1 (Every Monday at 9 AM)
+0 9 * * 1 cd /path/to/wellness_project && python manage.py generate_summaries --bulk --type weekly
+"""
+
+# =====================================================
+# ERROR HANDLING AND EDGE CASES
+# =====================================================
+
+"""
+Error Handling Examples
+
+1. Insufficient Data Error:
+{
+    "detail": "Insufficient data available for this period. Please log more activities and health metrics."
+}
+
+2. AI Service Unavailable:
+{
+    "cached": false,
+    "insights": [...],  // Fallback insights
+    "fallback": true,
+    "error": "AI service unavailable: API rate limit exceeded"
+}
+
+3. Summary Generation Failed:
+{
+    "id": 123,
+    "status": "failed",
+    "summary_text": "Error generating summary: Insufficient context data",
+    ...
+}
+
+4. Handling in Frontend:
+```javascript
+const handleSummaryGeneration = async () => {
+    try {
+        const response = await api.post('/analytics/health-summaries/', {
+            summary_type: 'weekly'
+        });
+
+        if (response.data.status === 'failed') {
+            showError('Summary generation failed. Please ensure you have logged some health data first.');
+        } else if (response.data.status === 'generating') {
+            showInfo('Summary is being generated. Please check back in a moment.');
+            // Poll for completion or set up auto-refresh
+        } else {
+            showSuccess('Summary generated successfully!');
+            setSummary(response.data);
+        }
+    } catch (error) {
+        if (error.response?.status === 404) {
+            showError('Please complete your health profile first.');
+        } else {
+            showError('An error occurred while generating your summary.');
+        }
+    }
+};
+```
+"""

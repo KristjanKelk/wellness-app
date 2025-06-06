@@ -1,0 +1,75 @@
+SUMMARY_NOTIFICATION_HTML = """
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Your Health Summary is Ready!</title>
+    <style>
+        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+        .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+        .header { background: #4CAF50; color: white; padding: 20px; text-align: center; }
+        .content { padding: 20px; background: #f9f9f9; }
+        .achievement { background: #e8f5e8; padding: 10px; margin: 10px 0; border-left: 4px solid #4CAF50; }
+        .recommendation { background: #fff3cd; padding: 10px; margin: 10px 0; border-left: 4px solid #ffc107; }
+        .button { display: inline-block; background: #4CAF50; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; margin: 10px 0; }
+        .metrics { display: flex; justify-content: space-between; margin: 20px 0; }
+        .metric { text-align: center; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎉 Your {{ summary.summary_type|title }} Health Summary is Ready!</h1>
+            <p>{{ period_text }}</p>
+        </div>
+
+        <div class="content">
+            <p>Hi {{ user.first_name|default:user.username }},</p>
+
+            <p>Great news! Your {{ summary.summary_type }} health summary has been generated with personalized insights and recommendations.</p>
+
+            <div class="metrics">
+                <div class="metric">
+                    <h3>{{ summary.metrics_summary.activity_count|default:0 }}</h3>
+                    <p>Activities</p>
+                </div>
+                <div class="metric">
+                    <h3>{{ summary.metrics_summary.total_duration|default:0 }}</h3>
+                    <p>Minutes Exercised</p>
+                </div>
+                <div class="metric">
+                    <h3>{{ summary.metrics_summary.milestones_achieved|default:0 }}</h3>
+                    <p>Milestones</p>
+                </div>
+            </div>
+
+            {% if summary.key_achievements %}
+            <h3>🏆 Key Achievements</h3>
+            {% for achievement in summary.key_achievements|slice:":3" %}
+            <div class="achievement">{{ achievement }}</div>
+            {% endfor %}
+            {% endif %}
+
+            {% if summary.recommendations %}
+            <h3>💡 Top Recommendations</h3>
+            {% for recommendation in summary.recommendations|slice:":2" %}
+            <div class="recommendation">{{ recommendation }}</div>
+            {% endfor %}
+            {% endif %}
+
+            <p style="text-align: center;">
+                <a href="{{ summary_url }}" class="button">View Full Summary</a>
+                <a href="{{ dashboard_url }}" class="button">Go to Dashboard</a>
+            </p>
+
+            <p>Keep up the great work on your health journey!</p>
+
+            <hr>
+            <small>
+                You're receiving this because you have email notifications enabled.
+                <a href="{{ dashboard_url }}/settings">Update your preferences</a>
+            </small>
+        </div>
+    </div>
+</body>
+</html>
+"""

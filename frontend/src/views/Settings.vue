@@ -322,7 +322,6 @@ export default {
         this.setupStep = 1;
 
         const response = await UserService.generateTwoFactorSecret();
-        console.log("2FA API response:", response);
 
         this.qrCodeUrl = response.data.qr_code;
         this.secretKey = response.data.secret_key;
