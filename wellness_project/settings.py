@@ -27,6 +27,10 @@ SECRET_KEY = config('SECRET_KEY')
 OPENAI_API_KEY = config('OPENAI_API_KEY')
 AI_INSIGHT_DAILY_LIMIT = 3
 
+# Spoonacular API Configuration (ADD THIS TO YOUR .env FILE)
+SPOONACULAR_API_KEY = config('SPOONACULAR_API_KEY')
+SPOONACULAR_BASE_URL = 'https://api.spoonacular.com'
+
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
@@ -44,6 +48,7 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'django.contrib.postgres',
     'django_celery_beat',
 
     # Third-party apps
@@ -63,6 +68,7 @@ INSTALLED_APPS = [
     'users',
     'health_profiles',
     'analytics',
+    'meal_planning',
 ]
 
 MIDDLEWARE = [
@@ -83,8 +89,6 @@ AUTHENTICATION_BACKENDS = [
     'django.contrib.auth.backends.ModelBackend',
     'allauth.account.auth_backends.AuthenticationBackend',
 ]
-
-
 
 # OAuth configuration
 SOCIALACCOUNT_PROVIDERS = {
@@ -121,10 +125,7 @@ ACCOUNT_USERNAME_REQUIRED = True
 ACCOUNT_AUTHENTICATION_METHOD = 'username_email'
 ACCOUNT_EMAIL_VERIFICATION = 'mandatory'
 
-
 # CORS settings
-
-# Allow all origins in development
 CORS_ALLOW_ALL_ORIGINS = True  # ONLY in development
 # CORS_ALLOWED_ORIGINS = [
 #     "http://localhost:8080",
@@ -144,7 +145,6 @@ CORS_ALLOW_HEADERS = [
     'x-requested-with',
 ]
 
-# Allow these HTTP methods
 CORS_ALLOW_METHODS = [
     'DELETE',
     'GET',
@@ -160,7 +160,6 @@ CORS_ALLOWED_ORIGINS = [
 ]
 
 # CELERY CONFIGURATION
-
 CELERY_BROKER_URL = 'redis://localhost:6379/0'
 CELERY_RESULT_BACKEND = 'redis://localhost:6379/0'
 
@@ -188,15 +187,6 @@ HEALTH_SUMMARY_SETTINGS = {
     'AUTO_GENERATE_MONTHLY': True,
 }
 
-# Health Summary specific settings
-HEALTH_SUMMARY_SETTINGS = {
-    'AI_MODEL': 'gpt-3.5-turbo-1106',
-    'MAX_RETRIES': 3,
-    'RETRY_DELAY': 60,
-    'NOTIFICATION_ENABLED': True,
-    'AUTO_GENERATE_WEEKLY': True,
-    'AUTO_GENERATE_MONTHLY': True,
-}
 
 # REST Framework settings
 REST_FRAMEWORK = {
@@ -211,7 +201,14 @@ REST_FRAMEWORK = {
     'DEFAULT_THROTTLE_RATES': {
         'user': '100/minute',
         'anon': '20/minute',
-    }
+    },
+    'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
+    'PAGE_SIZE': 20,
+    'DEFAULT_FILTER_BACKENDS': [
+        'django_filters.rest_framework.DjangoFilterBackend',
+        'rest_framework.filters.SearchFilter',
+        'rest_framework.filters.OrderingFilter',
+    ],
 }
 
 # JWT Settings
@@ -259,7 +256,6 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'wellness_project.wsgi.application'
 
-
 # Database
 # https://docs.djangoproject.com/en/4.2/ref/settings/#databases
 
@@ -273,7 +269,6 @@ DATABASES = {
         'PORT': '5432',
     }
 }
-
 
 # Password validation
 # https://docs.djangoproject.com/en/4.2/ref/settings/#auth-password-validators
@@ -293,28 +288,23 @@ AUTH_PASSWORD_VALIDATORS = [
     },
 ]
 
-
 # Internationalization
 # https://docs.djangoproject.com/en/4.2/topics/i18n/
 
 LANGUAGE_CODE = 'en-us'
-
 TIME_ZONE = 'UTC'
-
 USE_I18N = True
-
 USE_TZ = True
 
-
-# Static files (CSS, JavaScript, Images)
-# https://docs.djangoproject.com/en/4.2/howto/static-files/
-
+# Static files
 STATIC_URL = 'static/'
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 
-# Default primary key field type
-# https://docs.djangoproject.com/en/4.2/ref/settings/#default-auto-field
+# Media files for recipe images
+MEDIA_URL = '/media/'
+MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
+# Default primary key field type
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 AUTH_USER_MODEL = 'users.User'
@@ -323,10 +313,276 @@ AUTH_USER_MODEL = 'users.User'
 EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'  # For development
 DEFAULT_FROM_EMAIL = 'noreply@wellnessplatform.com'
 
-# For production use something like:
-# EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
-# EMAIL_HOST = 'smtp.yourprovider.com'
-# EMAIL_PORT = 587
-# EMAIL_USE_TLS = True
-# EMAIL_HOST_USER = 'your-email@example.com'
-# EMAIL_HOST_PASSWORD = 'your-password'
+# ========================================
+# NUTRITION FEATURE CONFIGURATIONS
+# ========================================
+
+# Spoonacular API endpoints
+SPOONACULAR_ENDPOINTS = {
+    'search_recipes': '/recipes/complexSearch',
+    'recipe_information': '/recipes/{id}/information',
+    'ingredient_search': '/food/ingredients/search',
+    'ingredient_information': '/food/ingredients/{id}/information',
+    'recipe_nutrition': '/recipes/{id}/nutritionWidget.json',
+    'generate_meal_plan': '/mealplanner/generate',
+    'connect_user': '/users/connect',
+    'add_to_meal_plan': '/mealplanner/{username}/items',
+    'shopping_list': '/mealplanner/{username}/shopping-list',
+}
+
+# Spoonacular API rate limiting (free tier: 150 requests/day)
+SPOONACULAR_RATE_LIMIT = {
+    'requests_per_day': 150,
+    'requests_per_minute': 1,
+    'cache_duration': 3600,  # Cache responses for 1 hour
+}
+
+# OpenAI Model Configuration for different nutrition tasks
+OPENAI_MODEL_CONFIG = {
+    'meal_planning': {
+        'model': 'gpt-4-turbo-preview',
+        'temperature': 0.7,
+        'max_tokens': 2000,
+    },
+    'recipe_generation': {
+        'model': 'gpt-4-turbo-preview',
+        'temperature': 0.8,
+        'max_tokens': 1500,
+    },
+    'nutrition_analysis': {
+        'model': 'gpt-4-turbo-preview',
+        'temperature': 0.3,
+        'max_tokens': 1000,
+    },
+    'embeddings': {
+        'model': 'text-embedding-3-small',
+        'dimensions': 1536,
+    }
+}
+
+# Nutrition calculation constants
+NUTRITION_CONSTANTS = {
+    'calories_per_gram': {
+        'protein': 4,
+        'carbs': 4,
+        'fat': 9,
+        'alcohol': 7,
+    },
+    'default_meal_distribution': {
+        'breakfast': 0.25,
+        'lunch': 0.35,
+        'dinner': 0.35,
+        'snack': 0.05,
+    },
+    'macro_ratios': {
+        'balanced': {'protein': 0.25, 'carbs': 0.45, 'fat': 0.30},
+        'high_protein': {'protein': 0.35, 'carbs': 0.35, 'fat': 0.30},
+        'low_carb': {'protein': 0.30, 'carbs': 0.20, 'fat': 0.50},
+        'mediterranean': {'protein': 0.20, 'carbs': 0.50, 'fat': 0.30},
+    }
+}
+
+# Cache configuration for API responses and calculations
+CACHES = {
+    'default': {
+        'BACKEND': 'django.core.cache.backends.redis.RedisCache',
+        'LOCATION': 'redis://localhost:6379/1',
+        'KEY_PREFIX': 'wellness_nutrition',
+        'TIMEOUT': 3600,  # 1 hour default
+    }
+}
+
+# Cache timeouts for different data types
+CACHE_TIMEOUTS = {
+    'spoonacular_recipe': 86400,      # 24 hours
+    'spoonacular_ingredient': 604800,  # 1 week
+    'nutrition_calculation': 3600,    # 1 hour
+    'meal_plan': 3600,               # 1 hour
+    'user_preferences': 1800,        # 30 minutes
+}
+
+# Enhanced Celery Beat Schedule with nutrition tasks
+CELERY_BEAT_SCHEDULE = {
+    'update-recipe-database': {
+        'task': 'nutrition.tasks.update_recipe_database',
+        'schedule': 86400.0,  # Daily
+    },
+    'generate-meal-plans': {
+        'task': 'nutrition.tasks.generate_daily_meal_plans',
+        'schedule': 3600.0,   # Hourly
+    },
+    'analyze-nutrition-trends': {
+        'task': 'nutrition.tasks.analyze_user_nutrition_trends',
+        'schedule': 21600.0,  # Every 6 hours
+    },
+}
+
+# Recipe image upload settings
+RECIPE_IMAGE_UPLOAD_PATH = 'recipes/images/'
+MAX_RECIPE_IMAGE_SIZE = 5 * 1024 * 1024  # 5MB
+
+# AI Prompt Templates for consistent nutrition responses
+AI_PROMPT_TEMPLATES = {
+    'meal_plan_strategy': """
+    Analyze this user's health and nutrition profile to create a meal planning strategy:
+    
+    User Profile:
+    - Age: {age}, Gender: {gender}
+    - Weight: {weight}kg, Height: {height}cm, BMI: {bmi}
+    - Activity Level: {activity_level}
+    - Fitness Goal: {fitness_goal}
+    - Dietary Preferences: {dietary_preferences}
+    - Allergies/Intolerances: {allergies}
+    - Cuisine Preferences: {cuisine_preferences}
+    - Disliked Ingredients: {disliked_ingredients}
+    - Target Calories: {calorie_target}
+    - Target Macros: Protein {protein_target}g, Carbs {carb_target}g, Fat {fat_target}g
+    
+    Create a meal planning strategy that includes:
+    1. Recommended meal timing and distribution
+    2. Portion size guidelines
+    3. Key nutritional focus areas
+    4. Suggested meal types for each time of day
+    
+    Respond in JSON format.
+    """,
+
+    'meal_structure_generation': """
+    Based on this meal planning strategy, create a detailed daily meal structure:
+    
+    Strategy: {strategy}
+    Date: {date}
+    
+    Create meals that:
+    1. Meet the calorie target (±50 calories)
+    2. Balance macronutrients according to targets
+    3. Respect dietary preferences and restrictions
+    4. Include variety in ingredients and cuisines
+    5. Consider meal timing preferences
+    
+    For each meal, provide:
+    - Meal name and type (breakfast/lunch/dinner/snack)
+    - Brief description
+    - Estimated calories and macros
+    - Key ingredients
+    - Preparation time estimate
+    
+    Respond in JSON format with meal structure.
+    """,
+
+    'nutrition_analysis': """
+    Analyze this user's daily nutrition data and provide insights:
+    
+    Daily Intake:
+    - Calories: {calories} (Target: {calorie_target})
+    - Protein: {protein}g (Target: {protein_target}g)
+    - Carbs: {carbs}g (Target: {carb_target}g)
+    - Fat: {fat}g (Target: {fat_target}g)
+    
+    User Goals: {fitness_goal}
+    Recent Trends: {trends}
+    
+    Provide:
+    1. Key achievements and highlights
+    2. Areas for improvement
+    3. Specific recommendations
+    4. Meal timing or portion adjustments
+    
+    Keep response encouraging and actionable. Respond in JSON format.
+    """
+}
+
+# Function calling schemas for OpenAI
+OPENAI_FUNCTIONS = {
+    'calculate_nutrition': {
+        'name': 'calculate_nutrition',
+        'description': 'Calculate nutritional information for ingredients or recipes',
+        'parameters': {
+            'type': 'object',
+            'properties': {
+                'ingredients': {
+                    'type': 'array',
+                    'description': 'List of ingredients with quantities',
+                    'items': {
+                        'type': 'object',
+                        'properties': {
+                            'name': {'type': 'string'},
+                            'quantity': {'type': 'number'},
+                            'unit': {'type': 'string'}
+                        }
+                    }
+                },
+                'servings': {
+                    'type': 'number',
+                    'description': 'Number of servings'
+                }
+            },
+            'required': ['ingredients', 'servings']
+        }
+    },
+    'validate_dietary_restrictions': {
+        'name': 'validate_dietary_restrictions',
+        'description': 'Check if recipe meets dietary restrictions',
+        'parameters': {
+            'type': 'object',
+            'properties': {
+                'ingredients': {
+                    'type': 'array',
+                    'items': {'type': 'string'}
+                },
+                'dietary_preferences': {
+                    'type': 'array',
+                    'items': {'type': 'string'}
+                },
+                'allergies': {
+                    'type': 'array',
+                    'items': {'type': 'string'}
+                }
+            },
+            'required': ['ingredients', 'dietary_preferences', 'allergies']
+        }
+    }
+}
+
+# Logging configuration with nutrition-specific loggers
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'verbose': {
+            'format': '{levelname} {asctime} {module} {message}',
+            'style': '{',
+        },
+    },
+    'handlers': {
+        'file': {
+            'level': 'INFO',
+            'class': 'logging.FileHandler',
+            'filename': 'logs/nutrition.log',
+            'formatter': 'verbose',
+        },
+        'spoonacular': {
+            'level': 'DEBUG',
+            'class': 'logging.FileHandler',
+            'filename': 'logs/spoonacular_api.log',
+            'formatter': 'verbose',
+        },
+    },
+    'loggers': {
+        'nutrition': {
+            'handlers': ['file'],
+            'level': 'INFO',
+            'propagate': True,
+        },
+        'nutrition.spoonacular': {
+            'handlers': ['spoonacular'],
+            'level': 'DEBUG',
+            'propagate': False,
+        },
+        'nutrition.ai': {
+            'handlers': ['file'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+    },
+}
