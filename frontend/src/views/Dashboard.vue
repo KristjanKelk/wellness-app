@@ -193,8 +193,8 @@ export default {
       return {
         ...this.profile,
         bmi: this.bmi,
-        recentActivities: this.activities.length,
-        recentMilestones: this.recentMilestones.length,
+        recentActivities: Array.isArray(this.activities) ? this.activities.length : 0,
+        recentMilestones: Array.isArray(this.recentMilestones) ? this.recentMilestones.length : 0,
         restrictions: this.getUserRestrictions()
       };
     }
@@ -234,36 +234,57 @@ export default {
     },
 
     async fetchHealthData() {
-      try {
-        // Fetch profile and weight history
-        const [profileResponse, weightResponse] = await Promise.all([
-          HealthProfileService.getHealthProfile(),
-          HealthProfileService.getWeightHistory()
-        ]);
+  try {
+    // Fetch profile and weight history
+    const [profileResponse, weightResponse] = await Promise.all([
+      HealthProfileService.getHealthProfile(),
+      HealthProfileService.getWeightHistory()
+    ]);
 
-        this.profile = profileResponse.data;
-        this.weightHistory = weightResponse.data;
+    this.profile = profileResponse.data;
 
-        // Fetch recent activities
-        const endDate = new Date().toISOString().split('T')[0];
-        const startDate = (() => {
-          const d = new Date();
-          d.setDate(d.getDate() - 14); // Last 2 weeks
-          return d.toISOString().split('T')[0];
-        })();
+    // FIX: Handle paginated weight history response
+    if (weightResponse.data && weightResponse.data.results) {
+      this.weightHistory = weightResponse.data.results;
+    } else if (Array.isArray(weightResponse.data)) {
+      this.weightHistory = weightResponse.data;
+    } else {
+      this.weightHistory = [];
+    }
 
-        const activitiesResponse = await ActivitiesService.getActivitiesByDateRange(startDate, endDate);
+    // Fetch recent activities
+    const endDate = new Date().toISOString().split('T')[0];
+    const startDate = (() => {
+      const d = new Date();
+      d.setDate(d.getDate() - 14); // Last 2 weeks
+      return d.toISOString().split('T')[0];
+    })();
+
+    try {
+      const activitiesResponse = await ActivitiesService.getActivitiesByDateRange(startDate, endDate);
+      // FIX: Handle paginated activities response
+      if (activitiesResponse.data && activitiesResponse.data.results) {
+        this.activities = activitiesResponse.data.results;
+      } else if (Array.isArray(activitiesResponse.data)) {
         this.activities = activitiesResponse.data;
-
-      } catch (error) {
-        console.error('Error fetching health data:', error);
-        if (error.response && error.response.status === 404) {
-          this.error = 'Please complete your health profile to view your dashboard.';
-        } else {
-          throw error;
-        }
+      } else {
+        this.activities = [];
       }
-    },
+    } catch (activityError) {
+      console.error('Error fetching activities:', activityError);
+      this.activities = []; // Fallback to empty array
+    }
+
+  } catch (error) {
+    console.error('Error fetching health data:', error);
+    if (error.response && error.response.status === 404) {
+      this.error = 'Please complete your health profile to view your dashboard.';
+    } else {
+      this.error = 'Failed to load health data. Please try again.';
+    }
+    throw error;
+  }
+},
 
     async fetchAnalyticsData() {
       try {
@@ -311,9 +332,28 @@ export default {
     async fetchRecentMilestones() {
       try {
         const response = await AnalyticsService.getRecentMilestones(30);
-        this.recentMilestones = response.data;
+
+        // FIX: Extract the actual milestones array from the paginated response
+        if (response.data && response.data.milestones) {
+          // If response has milestones property
+          this.recentMilestones = Array.isArray(response.data.milestones)
+            ? response.data.milestones.filter(m => m !== null)
+            : [];
+        } else if (response.data && response.data.results) {
+          // If paginated response
+          this.recentMilestones = Array.isArray(response.data.results)
+            ? response.data.results.filter(m => m !== null)
+            : [];
+        } else if (Array.isArray(response.data)) {
+          // If direct array
+          this.recentMilestones = response.data.filter(m => m !== null);
+        } else {
+          this.recentMilestones = [];
+        }
+
       } catch (error) {
         console.error('Error fetching milestones:', error);
+        this.recentMilestones = [];
       }
     },
 
@@ -338,24 +378,34 @@ export default {
     },
 
     getWeeklyActivityDays() {
-      // Calculate current week activity days from logged activities
-      const now = new Date();
-      const weekStart = new Date(now);
-      weekStart.setDate(now.getDate() - now.getDay()); // Start of current week
+      // FIX: Ensure activities is an array before filtering
+      if (!Array.isArray(this.activities)) {
+        return 0;
+      }
 
-      const thisWeekActivities = this.activities.filter(activity => {
-        const activityDate = new Date(activity.performed_at);
-        return activityDate >= weekStart;
-      });
+      try {
+        // Calculate current week activity days from logged activities
+        const now = new Date();
+        const weekStart = new Date(now);
+        weekStart.setDate(now.getDate() - now.getDay()); // Start of current week
 
-      // Count unique days
-      const uniqueDays = new Set(
-        thisWeekActivities.map(activity =>
-          new Date(activity.performed_at).toDateString()
-        )
-      );
+        const thisWeekActivities = this.activities.filter(activity => {
+          const activityDate = new Date(activity.performed_at);
+          return activityDate >= weekStart;
+        });
 
-      return uniqueDays.size;
+        // Count unique days
+        const uniqueDays = new Set(
+          thisWeekActivities.map(activity =>
+            new Date(activity.performed_at).toDateString()
+          )
+        );
+
+        return uniqueDays.size;
+      } catch (error) {
+        console.error('Error calculating weekly activity days:', error);
+        return 0;
+      }
     },
 
     getUserRestrictions() {
@@ -473,6 +523,21 @@ export default {
         hour: '2-digit',
         minute: '2-digit'
       });
+    },
+
+    async generateInsights() {
+      if (!this.hasProfileData) return;
+
+      this.insightsLoading = true;
+      try {
+        const response = await AnalyticsService.generateInsights(this.enhancedUserData);
+        this.insights = response.data || [];
+      } catch (error) {
+        console.error('Error generating insights:', error);
+        this.insights = [];
+      } finally {
+        this.insightsLoading = false;
+      }
     },
 
     async regenerateInsights() {

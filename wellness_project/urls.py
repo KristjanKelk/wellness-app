@@ -63,4 +63,7 @@ urlpatterns = [
     # OAuth authentication endpoints
     path('api/oauth/google/', GoogleOAuthAPI.as_view(), name='google-oauth'),
     path('api/oauth/github/', GitHubOAuthAPI.as_view(), name='github-oauth'),
+
+    #Meal planning
+    path('meal-planning/', include('meal_planning.urls')),
 ]

@@ -316,34 +316,72 @@ export default {
       try {
         let response;
         const { startDate, endDate, activityType } = this.filters;
+
         if (activityType) {
           response = await ActivitiesService.getActivitiesByType(activityType);
-          this.activities = response.data.filter(activity => {
+
+          // Handle paginated response for activity type filtering
+          let activities;
+          if (response.data && response.data.results) {
+            activities = response.data.results;
+          } else if (Array.isArray(response.data)) {
+            activities = response.data;
+          } else {
+            activities = [];
+          }
+
+          // Filter by date range
+          this.activities = activities.filter(activity => {
             const activityDate = activity.performed_at.substr(0, 10);
             return activityDate >= startDate && activityDate <= endDate;
           });
         } else {
           response = await ActivitiesService.getActivitiesByDateRange(startDate, endDate);
-          this.activities = response.data;
+
+          // Handle paginated response for date range filtering
+          if (response.data && response.data.results) {
+            this.activities = response.data.results;
+          } else if (Array.isArray(response.data)) {
+            this.activities = response.data;
+          } else {
+            this.activities = [];
+          }
         }
+
         this.computeStats();
       } catch (error) {
         console.error('Failed to fetch activities:', error);
         this.error = 'Failed to load activities. Please try again.';
+        this.activities = []; // Ensure activities is always an array
       } finally {
         this.loading = false;
       }
     },
     computeStats() {
-      const activities = this.activities;
-      this.stats = {
-        totalActivities: activities.length,
-        totalDuration: activities.reduce((sum, activity) => sum + (activity.duration_minutes || 0), 0),
-        totalDistance: activities.reduce((sum, activity) => sum + (parseFloat(activity.distance_km) || 0), 0),
-        totalCalories: activities.reduce((sum, activity) => sum + (activity.calories_burned || 0), 0),
-        activeDays: ActivitiesService.calculateActiveDays(activities),
-        distribution: ActivitiesService.calculateActivityDistribution(activities)
-      };
+      // Ensure activities is an array before using reduce
+      const activities = Array.isArray(this.activities) ? this.activities : [];
+
+      try {
+        this.stats = {
+          totalActivities: activities.length,
+          totalDuration: activities.reduce((sum, activity) => sum + (activity.duration_minutes || 0), 0),
+          totalDistance: activities.reduce((sum, activity) => sum + (parseFloat(activity.distance_km) || 0), 0),
+          totalCalories: activities.reduce((sum, activity) => sum + (activity.calories_burned || 0), 0),
+          activeDays: ActivitiesService.calculateActiveDays(activities),
+          distribution: ActivitiesService.calculateActivityDistribution(activities)
+        };
+      } catch (error) {
+        console.error('Error computing stats:', error);
+        // Provide fallback stats if computation fails
+        this.stats = {
+          totalActivities: 0,
+          totalDuration: 0,
+          totalDistance: 0,
+          totalCalories: 0,
+          activeDays: 0,
+          distribution: {}
+        };
+      }
     },
 
     clearFilters() {

@@ -214,41 +214,121 @@ export default {
     });
 
     const hasEnoughData = computed(() => {
-      return weightHistory.value && weightHistory.value.length > 2;
+      return weightHistory.value && Array.isArray(weightHistory.value) && weightHistory.value.length > 2;
     });
 
     const sortedWeightHistory = computed(() => {
-      if (!weightHistory.value || weightHistory.value.length === 0) return [];
-      return [...weightHistory.value].sort((a, b) =>
-        new Date(b.recorded_at) - new Date(a.recorded_at)
-      );
+      if (!weightHistory.value || !Array.isArray(weightHistory.value) || weightHistory.value.length === 0) {
+        return [];
+      }
+
+      try {
+        return [...weightHistory.value].sort((a, b) =>
+          new Date(b.recorded_at) - new Date(a.recorded_at)
+        );
+      } catch (error) {
+        console.error('Error sorting weight history:', error);
+        return [];
+      }
     });
 
     const startingWeight = computed(() => {
-      if (!weightHistory.value || weightHistory.value.length === 0) return null;
-      const oldest = [...weightHistory.value].sort((a, b) =>
-        new Date(a.recorded_at) - new Date(b.recorded_at)
-      )[0];
-      return parseFloat(oldest.weight_kg);
+      if (!weightHistory.value || !Array.isArray(weightHistory.value) || weightHistory.value.length === 0) {
+        return profile.value?.weight_kg || null;
+      }
+
+      try {
+        // Get the oldest weight entry
+        const oldest = [...weightHistory.value]
+          .sort((a, b) => new Date(a.recorded_at) - new Date(b.recorded_at))
+          .shift();
+
+        return oldest ? oldest.weight_kg : profile.value?.weight_kg || null;
+      } catch (error) {
+        console.error('Error calculating starting weight:', error);
+        return profile.value?.weight_kg || null;
+      }
     });
 
     const totalWeightChange = computed(() => {
-      if (!profile.value || !startingWeight.value) return null;
-      const currentWeight = parseFloat(profile.value.weight_kg);
-      return (currentWeight - startingWeight.value).toFixed(1);
+      if (!weightHistory.value || !Array.isArray(weightHistory.value) || weightHistory.value.length === 0) {
+        return 0;
+      }
+
+      try {
+        const sorted = [...weightHistory.value].sort((a, b) =>
+          new Date(a.recorded_at) - new Date(b.recorded_at)
+        );
+
+        if (sorted.length < 2) return 0;
+
+        const first = parseFloat(sorted[0].weight_kg);
+        const last = parseFloat(sorted[sorted.length - 1].weight_kg);
+
+        return (last - first).toFixed(1);
+      } catch (error) {
+        console.error('Error calculating total weight change:', error);
+        return 0;
+      }
     });
 
     // Calculate weekly and monthly changes
     const weeklyChange = computed(() => {
-      if (!hasEnoughData.value) return '0.0';
-      const changeRate = calculateChangeRate(7); // 7 days
-      return changeRate.toFixed(1);
+      if (!weightHistory.value || !Array.isArray(weightHistory.value) || weightHistory.value.length < 2) {
+        return 0;
+      }
+
+      try {
+        const oneWeekAgo = new Date();
+        oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+
+        const recentEntries = weightHistory.value.filter(entry =>
+          new Date(entry.recorded_at) >= oneWeekAgo
+        );
+
+        if (recentEntries.length < 2) return 0;
+
+        const sorted = recentEntries.sort((a, b) =>
+          new Date(a.recorded_at) - new Date(b.recorded_at)
+        );
+
+        const first = parseFloat(sorted[0].weight_kg);
+        const last = parseFloat(sorted[sorted.length - 1].weight_kg);
+
+        return (last - first).toFixed(1);
+      } catch (error) {
+        console.error('Error calculating weekly change:', error);
+        return 0;
+      }
     });
 
     const monthlyChange = computed(() => {
-      if (!hasEnoughData.value) return '0.0';
-      const changeRate = calculateChangeRate(30); // 30 days
-      return changeRate.toFixed(1);
+      if (!weightHistory.value || !Array.isArray(weightHistory.value) || weightHistory.value.length < 2) {
+        return 0;
+      }
+
+      try {
+        const oneMonthAgo = new Date();
+        oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1);
+
+        const recentEntries = weightHistory.value.filter(entry =>
+          new Date(entry.recorded_at) >= oneMonthAgo
+        );
+
+        if (recentEntries.length < 2) return 0;
+
+        const sorted = recentEntries.sort((a, b) =>
+          new Date(a.recorded_at) - new Date(b.recorded_at)
+        );
+
+        const first = parseFloat(sorted[0].weight_kg);
+        const last = parseFloat(sorted[sorted.length - 1].weight_kg);
+
+        return (last - first).toFixed(1);
+      } catch (error) {
+        console.error('Error calculating monthly change:', error);
+        return 0;
+      }
     });
 
     // Projected goal date based on current trend
@@ -345,6 +425,7 @@ export default {
     };
 
     // Updated fetchData function to ensure chart renders on initial load
+
     const fetchData = async () => {
       loading.value = true;
       error.value = null;
@@ -354,7 +435,15 @@ export default {
         profile.value = profileResponse.data;
 
         const weightResponse = await HealthProfileService.getWeightHistory();
-        weightHistory.value = weightResponse.data;
+
+        // FIX: Handle paginated weight history response
+        if (weightResponse.data && weightResponse.data.results) {
+          weightHistory.value = weightResponse.data.results;
+        } else if (Array.isArray(weightResponse.data)) {
+          weightHistory.value = weightResponse.data;
+        } else {
+          weightHistory.value = [];
+        }
 
         // Wait for the DOM to update before rendering chart
         await nextTick();
@@ -411,45 +500,53 @@ export default {
 
     // Filter entries based on selected time range
     const filterEntriesByTimeRange = () => {
-      if (!weightHistory.value || weightHistory.value.length === 0) return [];
 
-      // Sort by date
-      const sortedEntries = [...weightHistory.value].sort((a, b) =>
-        new Date(a.recorded_at) - new Date(b.recorded_at)
-      );
-
-      if (selectedTimeRange.value === 'all') {
-        return sortedEntries;
+      if (!weightHistory.value || !Array.isArray(weightHistory.value) || weightHistory.value.length === 0) {
+        return [];
       }
 
-      // Calculate cut-off date based on selected range
-      const now = new Date();
-      let cutoffDate = new Date();
+      try {
+        // Sort by date
+        const sortedEntries = [...weightHistory.value].sort((a, b) =>
+          new Date(a.recorded_at) - new Date(b.recorded_at)
+        );
 
-      switch (selectedTimeRange.value) {
-        case 'year':
-          cutoffDate.setFullYear(now.getFullYear() - 1);
-          break;
-        case '6months':
-          cutoffDate.setMonth(now.getMonth() - 6);
-          break;
-        case '3months':
-          cutoffDate.setMonth(now.getMonth() - 3);
-          break;
-        case 'month':
-          cutoffDate.setMonth(now.getMonth() - 1);
-          break;
-        case 'week':
-          cutoffDate.setDate(now.getDate() - 7);
-          break;
-        default:
+        if (selectedTimeRange.value === 'all') {
           return sortedEntries;
-      }
+        }
 
-      // Filter entries by date
-      return sortedEntries.filter(entry =>
-        new Date(entry.recorded_at) >= cutoffDate
-      );
+        // Calculate cut-off date based on selected range
+        const now = new Date();
+        let cutoffDate = new Date();
+
+        switch (selectedTimeRange.value) {
+          case 'year':
+            cutoffDate.setFullYear(now.getFullYear() - 1);
+            break;
+          case '6months':
+            cutoffDate.setMonth(now.getMonth() - 6);
+            break;
+          case '3months':
+            cutoffDate.setMonth(now.getMonth() - 3);
+            break;
+          case 'month':
+            cutoffDate.setMonth(now.getMonth() - 1);
+            break;
+          case 'week':
+            cutoffDate.setDate(now.getDate() - 7);
+            break;
+          default:
+            return sortedEntries;
+        }
+
+        // Filter entries by date
+        return sortedEntries.filter(entry =>
+          new Date(entry.recorded_at) >= cutoffDate
+        );
+      } catch (error) {
+        console.error('Error filtering weight entries:', error);
+        return [];
+      }
     };
 
     // Render weight progress chart

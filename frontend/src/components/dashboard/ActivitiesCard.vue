@@ -253,13 +253,26 @@ export default {
 
       try {
         const response = await ActivitiesService.getAllActivities();
-        this.activities = response.data;
 
+        // FIX: Handle paginated response
+        if (response.data && response.data.results) {
+          this.activities = response.data.results;
+        } else if (Array.isArray(response.data)) {
+          this.activities = response.data;
+        } else {
+          this.activities = [];
+        }
+
+        // Update recent activities
         this.recentActivities = [...this.activities]
           .sort((a, b) => new Date(b.performed_at) - new Date(a.performed_at))
           .slice(0, 5);
+
       } catch (error) {
+        console.error('Error fetching activities:', error);
         this.error = 'Failed to load activities. Please try again.';
+        this.activities = [];
+        this.recentActivities = [];
       } finally {
         this.loading = false;
       }
@@ -290,11 +303,22 @@ export default {
       this.modalError = null;
 
       try {
+        console.log('Saving activity data:', activityData); // Debug log
         await ActivitiesService.createActivity(activityData);
         await this.fetchActivities();
         this.showAddActivityModal = false;
+
+        // Emit event to parent (Dashboard) to refresh its data
+        this.$emit('activity-added');
+
       } catch (error) {
-        this.modalError = 'Failed to save activity. Please try again.';
+        console.error('Error saving activity:', error);
+        // Show more specific error message
+        if (error.response && error.response.data) {
+          this.modalError = `Failed to save activity: ${error.response.data.message || 'Please check your input and try again.'}`;
+        } else {
+          this.modalError = 'Failed to save activity. Please try again.';
+        }
       } finally {
         this.modalLoading = false;
       }

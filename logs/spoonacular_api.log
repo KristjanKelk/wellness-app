@@ -1,0 +1,67 @@
+INFO 2025-06-18 23:14:23,109 spoonacular_service Making request to Spoonacular: /recipes/complexSearch
+INFO 2025-06-18 23:14:23,478 spoonacular_service Rate limiting: sleeping for 59.99 seconds
+INFO 2025-06-18 23:15:23,470 spoonacular_service Making request to Spoonacular: /recipes/651994/information
+INFO 2025-06-18 23:15:24,993 spoonacular_service Rate limiting: sleeping for 58.83 seconds
+INFO 2025-06-18 23:16:23,832 spoonacular_service Making request to Spoonacular: /recipes/654571/information
+INFO 2025-06-18 23:16:25,079 spoonacular_service Rate limiting: sleeping for 58.94 seconds
+INFO 2025-06-18 23:17:24,021 spoonacular_service Making request to Spoonacular: /recipes/642583/information
+INFO 2025-06-18 23:17:25,213 spoonacular_service Rate limiting: sleeping for 58.99 seconds
+INFO 2025-06-18 23:18:24,202 spoonacular_service Making request to Spoonacular: /recipes/665553/information
+INFO 2025-06-18 23:18:25,613 spoonacular_service Rate limiting: sleeping for 58.99 seconds
+INFO 2025-06-18 23:19:24,604 spoonacular_service Making request to Spoonacular: /recipes/665767/information
+INFO 2025-06-18 23:19:26,031 spoonacular_service Rate limiting: sleeping for 58.99 seconds
+INFO 2025-06-18 23:20:25,023 spoonacular_service Making request to Spoonacular: /recipes/complexSearch
+INFO 2025-06-18 23:20:25,583 spoonacular_service Rate limiting: sleeping for 59.99 seconds
+INFO 2025-06-18 23:21:25,574 spoonacular_service Making request to Spoonacular: /recipes/715769/information
+INFO 2025-06-18 23:21:26,821 spoonacular_service Rate limiting: sleeping for 58.99 seconds
+INFO 2025-06-18 23:22:25,814 spoonacular_service Making request to Spoonacular: /recipes/659109/information
+INFO 2025-06-18 23:22:27,035 spoonacular_service Rate limiting: sleeping for 58.98 seconds
+INFO 2025-06-18 23:23:26,026 spoonacular_service Making request to Spoonacular: /recipes/648279/information
+INFO 2025-06-18 23:23:27,385 spoonacular_service Rate limiting: sleeping for 58.98 seconds
+INFO 2025-06-18 23:24:26,379 spoonacular_service Making request to Spoonacular: /recipes/1095745/information
+INFO 2025-06-18 23:24:27,654 spoonacular_service Rate limiting: sleeping for 58.98 seconds
+INFO 2025-06-18 23:25:26,633 spoonacular_service Making request to Spoonacular: /recipes/658753/information
+INFO 2025-06-18 23:25:27,920 spoonacular_service Rate limiting: sleeping for 58.98 seconds
+INFO 2025-06-18 23:26:26,911 spoonacular_service Making request to Spoonacular: /recipes/complexSearch
+INFO 2025-06-18 23:26:27,372 spoonacular_service Rate limiting: sleeping for 59.99 seconds
+INFO 2025-06-18 23:27:27,369 spoonacular_service Making request to Spoonacular: /recipes/640062/information
+INFO 2025-06-18 23:27:28,758 spoonacular_service Rate limiting: sleeping for 58.98 seconds
+INFO 2025-06-18 23:28:27,747 spoonacular_service Making request to Spoonacular: /recipes/715421/information
+INFO 2025-06-18 23:28:28,960 spoonacular_service Rate limiting: sleeping for 58.98 seconds
+INFO 2025-06-18 23:29:27,945 spoonacular_service Making request to Spoonacular: /recipes/715391/information
+INFO 2025-06-18 23:29:29,172 spoonacular_service Rate limiting: sleeping for 58.98 seconds
+INFO 2025-06-18 23:30:28,160 spoonacular_service Making request to Spoonacular: /recipes/982382/information
+INFO 2025-06-18 23:30:29,374 spoonacular_service Rate limiting: sleeping for 58.98 seconds
+INFO 2025-06-18 23:31:28,360 spoonacular_service Making request to Spoonacular: /recipes/637157/information
+INFO 2025-06-18 23:31:29,722 spoonacular_service Rate limiting: sleeping for 58.98 seconds
+INFO 2025-06-18 23:32:28,707 spoonacular_service Making request to Spoonacular: /recipes/complexSearch
+INFO 2025-06-18 23:32:29,019 spoonacular_service Rate limiting: sleeping for 59.99 seconds
+INFO 2025-06-18 23:33:29,011 spoonacular_service Making request to Spoonacular: /recipes/1132339/information
+INFO 2025-06-18 23:33:30,239 spoonacular_service Rate limiting: sleeping for 58.98 seconds
+INFO 2025-06-18 23:34:29,218 spoonacular_service Making request to Spoonacular: /recipes/1046982/information
+INFO 2025-06-18 23:34:30,451 spoonacular_service Rate limiting: sleeping for 58.98 seconds
+INFO 2025-06-18 23:35:29,439 spoonacular_service Making request to Spoonacular: /recipes/complexSearch
+INFO 2025-06-18 23:35:29,669 spoonacular_service Rate limiting: sleeping for 60.00 seconds
+INFO 2025-06-18 23:36:29,666 spoonacular_service Making request to Spoonacular: /recipes/716426/information
+INFO 2025-06-18 23:36:30,979 spoonacular_service Rate limiting: sleeping for 58.98 seconds
+INFO 2025-06-18 23:37:29,966 spoonacular_service Making request to Spoonacular: /food/ingredients/search
+INFO 2025-06-18 23:37:30,187 spoonacular_service Rate limiting: sleeping for 60.00 seconds
+INFO 2025-06-18 23:38:30,187 spoonacular_service Making request to Spoonacular: /food/ingredients/4542/information
+INFO 2025-06-18 23:38:31,462 spoonacular_service Rate limiting: sleeping for 58.98 seconds
+INFO 2025-06-18 23:39:30,446 spoonacular_service Making request to Spoonacular: /food/ingredients/5075/information
+INFO 2025-06-18 23:39:31,646 spoonacular_service Rate limiting: sleeping for 58.98 seconds
+INFO 2025-06-18 23:40:30,634 spoonacular_service Making request to Spoonacular: /food/ingredients/6080/information
+INFO 2025-06-18 23:40:31,919 spoonacular_service Rate limiting: sleeping for 58.98 seconds
+INFO 2025-06-18 23:41:30,905 spoonacular_service Making request to Spoonacular: /food/ingredients/5335/information
+INFO 2025-06-18 23:41:32,485 spoonacular_service Rate limiting: sleeping for 58.98 seconds
+INFO 2025-06-18 23:42:31,473 spoonacular_service Making request to Spoonacular: /food/ingredients/5100/information
+INFO 2025-06-18 23:42:32,852 spoonacular_service Rate limiting: sleeping for 58.98 seconds
+INFO 2025-06-18 23:43:31,839 spoonacular_service Making request to Spoonacular: /food/ingredients/6194/information
+INFO 2025-06-18 23:43:33,139 spoonacular_service Rate limiting: sleeping for 58.98 seconds
+INFO 2025-06-18 23:44:32,127 spoonacular_service Making request to Spoonacular: /food/ingredients/6172/information
+INFO 2025-06-18 23:44:33,686 spoonacular_service Rate limiting: sleeping for 58.98 seconds
+INFO 2025-06-18 23:45:32,672 spoonacular_service Making request to Spoonacular: /food/ingredients/5091/information
+INFO 2025-06-18 23:45:33,982 spoonacular_service Rate limiting: sleeping for 58.98 seconds
+INFO 2025-06-18 23:46:32,970 spoonacular_service Making request to Spoonacular: /food/ingredients/1005006/information
+INFO 2025-06-18 23:46:34,172 spoonacular_service Rate limiting: sleeping for 58.98 seconds
+INFO 2025-06-18 23:47:33,160 spoonacular_service Making request to Spoonacular: /food/ingredients/6999/information
