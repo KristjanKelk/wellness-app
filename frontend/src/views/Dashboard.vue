@@ -121,6 +121,11 @@
         :milestones="achievedMilestones"
         @close="closeMilestoneModal"
       />
+
+      <meal-planning-card
+        class="dashboard-card"
+        @navigate-to-meal-planning="$router.push('/meal-planning')"
+      />
     </div>
   </div>
 </template>
@@ -141,10 +146,12 @@ import AddWeightModal from '../components/dashboard/AddWeightModal.vue';
 import MilestonesCard from '../components/dashboard/MilestonesCard.vue';
 import ActivitiesCard from '../components/dashboard/ActivitiesCard.vue';
 import MilestoneAchievementModal from '../components/dashboard/MilestoneAchievementModal.vue';
+import MealPlanningCard from "@/components/dashboard/MealPlanningCard.vue";
 
 export default {
   name: 'Dashboard',
   components: {
+    MealPlanningCard,
     WellnessScoreCard,
     BmiStatusCard,
     ActivityLevelCard,
@@ -153,7 +160,8 @@ export default {
     MilestonesCard,
     AddWeightModal,
     ActivitiesCard,
-    MilestoneAchievementModal
+    MilestoneAchievementModal,
+
   },
   data() {
     return {

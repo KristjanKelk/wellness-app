@@ -127,9 +127,17 @@ const routes = [
         }
     },
     {
-    path: '/activities',
-    name: 'Activities',
-    component: Activities,
+        path: '/activities',
+        name: 'Activities',
+        component: Activities,
+            meta: {
+                requiresAuth: true
+            }
+    },
+    {
+        path: '/meal-planning',
+        name: 'MealPlanningDashboard',
+        component: () => import('@/views/MealPlanningDashboard.vue'),
         meta: {
             requiresAuth: true
         }
