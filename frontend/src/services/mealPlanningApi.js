@@ -114,11 +114,11 @@ export const mealPlanningApi = {
 
   // Nutrition Profile endpoints
   getNutritionProfile() {
-    return api.get('/nutrition-profile/')
+    return api.get('/nutrition-profile/current/')
   },
 
   updateNutritionProfile(profileData) {
-    return api.put('/nutrition-profile/', profileData)
+    return api.post('/nutrition-profile/update_profile/', profileData)
   },
 
   calculateNutritionTargets() {

@@ -56,36 +56,55 @@ class IngredientViewSet(viewsets.ReadOnlyModelViewSet):
 
 
 class NutritionProfileViewSet(viewsets.ModelViewSet):
-    """Simple nutrition profile API"""
+    """Nutrition profile API with proper authentication"""
     serializer_class = SimpleNutritionProfileSerializer
-    permission_classes = [IsAuthenticated]  # Remove authentication for now
+    permission_classes = [IsAuthenticated]  # Re-enable authentication
 
     def get_queryset(self):
-        # Handle anonymous users
-        if not self.request.user.is_authenticated:
-            return NutritionProfile.objects.none()
         return NutritionProfile.objects.filter(user=self.request.user)
 
-    def list(self, request):
-        if not request.user.is_authenticated:
-            return Response({"message": "Please log in to view nutrition profile"})
+    def get_object(self):
+        """Get or create nutrition profile for current user"""
+        nutrition_profile, created = NutritionProfile.objects.get_or_create(
+            user=self.request.user,
+            defaults={
+                'calorie_target': 2000,
+                'protein_target': 100,
+                'carb_target': 250,
+                'fat_target': 67,
+                'dietary_preferences': [],
+                'allergies_intolerances': [],
+                'cuisine_preferences': [],
+                'meals_per_day': 3,
+                'timezone': 'UTC'
+            }
+        )
+        return nutrition_profile
 
-        # Try to get or create profile
+    def list(self, request):
+        """GET /nutrition-profile/ - Get current user's profile"""
         try:
-            nutrition_profile, created = NutritionProfile.objects.get_or_create(
-                user=request.user,
-                defaults={
-                    'calorie_target': 2000,
-                    'protein_target': 100,
-                    'carb_target': 250,
-                    'fat_target': 67
-                }
-            )
+            nutrition_profile = self.get_object()
             serializer = self.get_serializer(nutrition_profile)
             return Response(serializer.data)
         except Exception as e:
             return Response({"error": str(e)}, status=500)
 
+    @action(detail=False, methods=['post'])
+    def update_profile(self, request):
+        """POST /nutrition-profile/update_profile/ - Update profile"""
+        try:
+            nutrition_profile = self.get_object()
+            serializer = self.get_serializer(nutrition_profile, data=request.data, partial=True)
+
+            if serializer.is_valid():
+                serializer.save()
+                return Response(serializer.data)
+            else:
+                return Response(serializer.errors, status=400)
+
+        except Exception as e:
+            return Response({"error": str(e)}, status=500)
 
 # Placeholder ViewSets (we'll implement these later)
 class MealPlanViewSet(viewsets.ModelViewSet):
