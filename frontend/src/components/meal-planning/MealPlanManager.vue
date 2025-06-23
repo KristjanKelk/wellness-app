@@ -151,8 +151,8 @@
           @click="viewMealPlan(plan)"
         >
           <div class="plan-header">
-            <h3>{{ formatPlanType(plan.plan_type) }} Plan</h3>
-            <span class="plan-date">{{ formatDateRange(plan.start_date, plan.end_date) }}</span>
+            <h3>{{ plan ? formatPlanType(plan.plan_type) : 'Loading...' }} Plan</h3>
+            <span class="plan-date">{{ plan ? formatDateRange(plan.start_date, plan.end_date) : 'Date unknown' }}</span>
             <div class="ai-badge">
               <i class="fas fa-brain"></i>
               <span>AI v{{ plan.generation_version || '1.0' }}</span>
@@ -161,11 +161,11 @@
 
           <div class="plan-stats">
             <div class="stat">
-              <span class="stat-value">{{ Math.round(plan.avg_daily_calories) }}</span>
+              <span class="stat-value">{{ plan?.avg_daily_calories ? Math.round(plan.avg_daily_calories) : 'N/A' }}</span>
               <span class="stat-label">Avg Calories</span>
             </div>
             <div class="stat">
-              <span class="stat-value">{{ plan.meal_count }}</span>
+              <span class="stat-value">{{ plan?.meal_count || 'N/A' }}</span>
               <span class="stat-label">Meals</span>
             </div>
             <div class="stat">
@@ -283,9 +283,11 @@ export default {
     async loadMealPlans() {
       try {
         const response = await mealPlanningApi.getMealPlans()
-        this.mealPlans = response.data || []
+        // Handle different response structures safely
+        this.mealPlans = response?.data?.results || response?.data || []
       } catch (error) {
         console.error('Failed to load meal plans:', error)
+        this.mealPlans = [] // Set empty array to prevent null errors
         this.showError('Failed to load meal plans')
       }
     },
@@ -529,6 +531,10 @@ export default {
     },
 
     formatDateRange(startDate, endDate) {
+      if (!startDate || !endDate) {
+        return 'Date unknown'
+      }
+
       const start = new Date(startDate).toLocaleDateString()
       const end = new Date(endDate).toLocaleDateString()
 
