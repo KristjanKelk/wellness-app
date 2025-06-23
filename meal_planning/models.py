@@ -154,19 +154,23 @@ class NutritionProfile(models.Model):
 
     def _calculate_bmr(self, health_profile):
         """Calculate Basal Metabolic Rate using Mifflin-St Jeor Equation"""
-        if health_profile.gender == 'male':
-            return (10 * health_profile.weight) + (6.25 * health_profile.height) - (5 * health_profile.age) + 5
+        weight = float(health_profile.weight_kg or 0)
+        height = float(health_profile.height_cm or 0)
+        age = health_profile.age or 0
+
+        if health_profile.gender == 'M':
+            return (10 * weight) + (6.25 * height) - (5 * age) + 5
         else:
-            return (10 * health_profile.weight) + (6.25 * health_profile.height) - (5 * health_profile.age) - 161
+            return (10 * weight) + (6.25 * height) - (5 * age) - 161
 
     def _get_activity_multiplier(self, activity_level):
         """Convert activity level to calorie multiplier"""
         multipliers = {
             'sedentary': 1.2,
-            'lightly_active': 1.375,
-            'moderately_active': 1.55,
-            'very_active': 1.725,
-            'extra_active': 1.9
+            'light': 1.375,
+            'moderate': 1.55,
+            'active': 1.725,
+            'very_active': 1.9
         }
         return multipliers.get(activity_level, 1.375)
 
