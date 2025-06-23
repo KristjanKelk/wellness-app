@@ -644,5 +644,46 @@ class NutritionLogViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['get'])
     def dashboard_data(self, request):
         """Get nutrition dashboard data"""
-        # TODO: Implement dashboard data aggregation
-        return Response({'message': 'Dashboard data feature coming soon'})
+        from django.utils import timezone
+        from datetime import timedelta
+
+        days = int(request.query_params.get('days', 7))
+        today = timezone.now().date()
+        start_date = today - timedelta(days=days - 1)
+
+        logs = (self.get_queryset()
+                .filter(date__gte=start_date, date__lte=today)
+                .order_by('date'))
+
+        data = {
+            'labels': [],
+            'calories': [],
+            'protein': [],
+            'carbs': [],
+            'fat': [],
+        }
+
+        logs_by_date = {log.date: log for log in logs}
+        for i in range(days):
+            current = start_date + timedelta(days=i)
+            log = logs_by_date.get(current)
+            data['labels'].append(current.isoformat())
+            if log:
+                data['calories'].append(log.total_calories)
+                data['protein'].append(log.total_protein)
+                data['carbs'].append(log.total_carbs)
+                data['fat'].append(log.total_fat)
+            else:
+                data['calories'].append(0)
+                data['protein'].append(0)
+                data['carbs'].append(0)
+                data['fat'].append(0)
+
+        data['totals'] = {
+            'calories': sum(data['calories']),
+            'protein': sum(data['protein']),
+            'carbs': sum(data['carbs']),
+            'fat': sum(data['fat']),
+        }
+
+        return Response(data)
