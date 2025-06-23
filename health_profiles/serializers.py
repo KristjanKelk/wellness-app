@@ -1,12 +1,12 @@
 # health_profiles/serializers.py
 from rest_framework import serializers
-from .models import HealthProfile, WeightHistory, Activity  # Changed from WeightEntry to WeightHistory
+from .models import HealthProfile, WeightHistory, Activity  # Import models
 
-class WeightHistorySerializer(serializers.ModelSerializer):  # Changed from WeightEntrySerializer
+class WeightHistorySerializer(serializers.ModelSerializer):  # Serializer for weight history entries
     class Meta:
-        model = WeightHistory  # Changed from WeightEntry
-        fields = ['id', 'weight_kg', 'recorded_at']  # Changed from timestamp to recorded_at
-        read_only_fields = ['recorded_at']  # Changed from timestamp to recorded_at
+        model = WeightHistory
+        fields = ['id', 'weight_kg', 'recorded_at']
+        read_only_fields = ['recorded_at']
 
 class HealthProfileSerializer(serializers.ModelSerializer):
     class Meta:
