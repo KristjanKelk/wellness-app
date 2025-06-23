@@ -2,7 +2,8 @@ from rest_framework.test import APITestCase
 from rest_framework import status
 from django.contrib.auth import get_user_model
 from django.urls import reverse
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
+from datetime import date
 
 User = get_user_model()
 
@@ -34,7 +35,8 @@ class HealthSummaryAPITestCase(APITestCase):
             response = self.client.post(url, data, format='json')
 
             self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-            mock_generate.assert_called_once()
+            mock_generate.assert_called_once_with(self.user, date(2024, 1, 15))
+            self.assertEqual(response.data.get('summary_type'), 'weekly')
 
     def test_current_week_endpoint(self):
         """Test current week summary endpoint"""
