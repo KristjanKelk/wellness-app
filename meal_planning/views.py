@@ -509,6 +509,81 @@ class MealPlanViewSet(viewsets.ModelViewSet):
         # TODO: Implement AI meal regeneration
         return Response({'message': 'Meal regenerated successfully'})
 
+    @action(detail=True, methods=['get'])
+    def analyze(self, request, pk=None):
+        """Analyze meal plan nutrition (mock implementation)"""
+        meal_plan = self.get_object()
+
+        # Return mock analysis data for now
+        mock_analysis = {
+            'overall_score': 85,
+            'nutritional_adequacy': {
+                'calories': {'status': 'adequate', 'percentage_of_target': 98},
+                'protein': {'status': 'adequate', 'percentage_of_target': 105},
+                'carbs': {'status': 'adequate', 'percentage_of_target': 92},
+                'fat': {'status': 'adequate', 'percentage_of_target': 103}
+            },
+            'meal_distribution': {
+                'breakfast_percentage': 25,
+                'lunch_percentage': 35,
+                'dinner_percentage': 40,
+                'balance_rating': 'excellent'
+            },
+            'variety_analysis': {
+                'cuisine_diversity': 'good',
+                'ingredient_variety': 'excellent',
+                'cooking_method_diversity': 'good'
+            },
+            'recommendations': [
+                'Consider adding more fiber-rich vegetables',
+                'Excellent protein distribution throughout the day'
+            ],
+            'health_highlights': [
+                'Well-balanced macronutrients',
+                'Good variety of nutrient-dense foods'
+            ],
+            'areas_for_improvement': [
+                'Could increase omega-3 fatty acids'
+            ]
+        }
+
+        return Response(mock_analysis)
+
+    @action(detail=True, methods=['post'])
+    def get_alternatives(self, request, pk=None):
+        """Get meal alternatives for a specific meal"""
+        meal_plan = self.get_object()
+        day = request.data.get('day')
+        meal_type = request.data.get('meal_type')
+        count = request.data.get('count', 3)
+
+        # Return mock alternatives for now
+        mock_alternatives = [
+            {
+                'name': 'Alternative Grilled Chicken Salad',
+                'calories': 380,
+                'protein': 32,
+                'carbs': 12,
+                'fat': 20
+            },
+            {
+                'name': 'Turkey and Avocado Wrap',
+                'calories': 420,
+                'protein': 28,
+                'carbs': 35,
+                'fat': 18
+            },
+            {
+                'name': 'Quinoa Buddha Bowl',
+                'calories': 395,
+                'protein': 25,
+                'carbs': 45,
+                'fat': 15
+            }
+        ]
+
+        return Response(mock_alternatives[:count])
+
     @action(detail=True, methods=['post'])
     def generate_shopping_list(self, request, pk=None):
         """Generate shopping list from meal plan"""
