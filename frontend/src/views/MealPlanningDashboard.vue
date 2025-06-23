@@ -1,29 +1,26 @@
 <!-- src/views/MealPlanningDashboard.vue -->
 <template>
-  <div class="meal-planning-page">
-    <div class="meal-planning-dashboard">
-      <!-- Header Section -->
-      <div class="dashboard__header">
-        <h1>Meal Planning</h1>
-        <p>AI-powered nutrition planning tailored to your goals</p>
-      </div>
+  <div class="meal-planning-dashboard">
+    <div class="dashboard-header">
+      <h1>Meal Planning Dashboard</h1>
+      <p>AI-powered nutrition and meal planning</p>
+    </div>
 
-      <!-- Navigation Tabs -->
-      <div class="tab-navigation">
+    <div class="dashboard-tabs">
+      <nav class="tabs-nav">
         <button
           v-for="tab in tabs"
           :key="tab.id"
           @click="activeTab = tab.id"
-          :class="['tab-button', { active: activeTab === tab.id }]"
+          class="tab-button"
+          :class="{ 'active': activeTab === tab.id }"
         >
           <i :class="tab.icon"></i>
           {{ tab.name }}
         </button>
-      </div>
+      </nav>
 
-      <!-- Tab Content -->
       <div class="tab-content">
-        <!-- Recipes Tab -->
         <div v-if="activeTab === 'recipes'" class="tab-panel">
           <recipe-browser
             :recipes="recipes"
@@ -32,21 +29,19 @@
           />
         </div>
 
-        <!-- Nutrition Profile Tab -->
         <div v-if="activeTab === 'profile'" class="tab-panel">
           <nutrition-profile-setup
             :profile="nutritionProfile"
             :loading="profileLoading"
-            @profile-updated="updateProfile"
+            @profile-updated="onProfileUpdated"
           />
         </div>
 
-        <!-- Coming Soon Tabs -->
         <div v-if="activeTab === 'meal-plans'" class="tab-panel">
-          <coming-soon-card
-            title="Meal Plans"
-            description="AI-generated meal plans coming soon!"
-            icon="fas fa-calendar-alt"
+          <meal-plan-manager
+            :loading="mealPlansLoading"
+            :nutrition-profile="nutritionProfile"
+            @meal-plan-generated="onMealPlanGenerated"
           />
         </div>
 
@@ -65,6 +60,7 @@
 <script>
 import RecipeBrowser from '../components/meal-planning/RecipeBrowser.vue'
 import NutritionProfileSetup from '../components/meal-planning/NutritionProfileSetup.vue'
+import MealPlanManager from '../components/meal-planning/MealPlanManager.vue'
 import ComingSoonCard from '../components/meal-planning/ComingSoonCard.vue'
 import { mealPlanningApi } from '@/services/mealPlanningApi'
 
@@ -73,6 +69,7 @@ export default {
   components: {
     RecipeBrowser,
     NutritionProfileSetup,
+    MealPlanManager,
     ComingSoonCard
   },
   data() {
@@ -87,7 +84,8 @@ export default {
       recipes: [],
       nutritionProfile: null,
       recipesLoading: false,
-      profileLoading: false
+      profileLoading: false,
+      mealPlansLoading: false
     }
   },
   computed: {
@@ -114,7 +112,7 @@ export default {
       this.recipesLoading = true
       try {
         const response = await mealPlanningApi.getRecipes()
-        this.recipes = response.data.results || []
+        this.recipes = response.data.results || response.data || []
       } catch (error) {
         console.error('Failed to load recipes:', error)
         // Show user-friendly error
@@ -140,30 +138,42 @@ export default {
           fat_target: 67,
           dietary_preferences: [],
           allergies_intolerances: [],
-          cuisine_preferences: []
+          cuisine_preferences: [],
+          disliked_ingredients: [],
+          meals_per_day: 3,
+          timezone: 'Europe/Tallinn'
         }
       } finally {
         this.profileLoading = false
       }
     },
 
-    async updateProfile(profileData) {
-      try {
-        const response = await mealPlanningApi.updateNutritionProfile(profileData)
-        this.nutritionProfile = response.data
-        this.$toast?.success?.('Nutrition profile updated!') ||
-        alert('Nutrition profile updated!')
-      } catch (error) {
-        console.error('Failed to update profile:', error)
-        this.$toast?.error?.('Failed to update profile') ||
-        alert('Failed to update profile')
+    // Fixed: Handle profile updates properly
+    onProfileUpdated(updatedProfile) {
+      // Update local state with the new profile data
+      this.nutritionProfile = { ...updatedProfile }
+
+      // Optionally reload related data that depends on the profile
+      // For example, if meal plans depend on the nutrition profile
+      if (this.activeTab === 'meal-plans') {
+        // Refresh meal plans since preferences might have changed
+        this.$nextTick(() => {
+          this.$forceUpdate()
+        })
       }
     },
 
     selectRecipe(recipe) {
       // Handle recipe selection - could open a modal or navigate to detail view
       console.log('Selected recipe:', recipe)
-      // For now, just log it. Later we can add a recipe detail modal
+      // For now, just log it. You could implement a recipe detail modal here
+    },
+
+    onMealPlanGenerated(mealPlan) {
+      console.log('New meal plan generated:', mealPlan)
+      // Handle the new meal plan - could show success message, refresh data, etc.
+      this.$toast?.success?.('Meal plan generated successfully!') ||
+      alert('Meal plan generated successfully!')
     }
   }
 }
@@ -173,97 +183,80 @@ export default {
 @import '@/assets/styles/_variables.scss';
 @import '@/assets/styles/_utilities.scss';
 
-.meal-planning-page {
-  min-height: 100vh;
-  background-color: $bg-light;
-}
-
 .meal-planning-dashboard {
   max-width: 1200px;
   margin: 0 auto;
   padding: $spacing-6;
-
-  @include responsive('sm') {
-    padding: $spacing-4;
-  }
 }
 
-.dashboard__header {
+.dashboard-header {
   text-align: center;
-  margin-bottom: $spacing-6;
+  margin-bottom: $spacing-8;
 
   h1 {
-    font-size: 2.5rem;
-    font-weight: 700;
+    margin: 0 0 $spacing-2 0;
     color: $primary-dark;
-    margin-bottom: $spacing-2;
+    font-size: 2rem;
+    font-weight: 600;
   }
 
   p {
-    font-size: 1.1rem;
-    color: $gray;
     margin: 0;
+    color: $gray;
+    font-size: 1.1rem;
   }
 }
 
-.tab-navigation {
-  display: flex;
-  border-bottom: 2px solid $gray-lighter;
-  margin-bottom: $spacing-6;
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
+.dashboard-tabs {
+  background: $white;
+  border-radius: $border-radius-lg;
+  box-shadow: $shadow;
+  overflow: hidden;
+}
 
-  @include responsive('sm') {
-    justify-content: center;
-  }
+.tabs-nav {
+  display: flex;
+  background: $gray-light;
+  border-bottom: 1px solid $gray-lighter;
 }
 
 .tab-button {
-  display: flex;
-  align-items: center;
-  gap: $spacing-2;
-  padding: $spacing-3 $spacing-4;
+  flex: 1;
+  padding: $spacing-4 $spacing-6;
   border: none;
-  background: none;
+  background: transparent;
+  color: $gray;
   font-size: 1rem;
   font-weight: 500;
-  color: $gray;
   cursor: pointer;
-  border-bottom: 3px solid transparent;
-  transition: all 0.2s ease;
-  white-space: nowrap;
-  min-width: fit-content;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: $spacing-2;
+
+  i {
+    font-size: 0.9rem;
+  }
 
   &:hover {
+    background: rgba($primary, 0.1);
     color: $primary;
-    background-color: rgba($primary, 0.05);
   }
 
   &.active {
-    color: $primary;
-    border-bottom-color: $primary;
-    background-color: rgba($primary, 0.1);
-  }
-
-  i {
-    font-size: 1.1rem;
-  }
-
-  @include responsive('sm') {
-    padding: $spacing-2 $spacing-3;
-    font-size: 0.9rem;
-
-    i {
-      font-size: 1rem;
-    }
+    background: $primary;
+    color: $white;
+    box-shadow: inset 0 -3px 0 rgba($white, 0.3);
   }
 }
 
 .tab-content {
-  min-height: 500px;
+  min-height: 600px;
 }
 
 .tab-panel {
+  padding: $spacing-6;
   animation: fadeIn 0.3s ease;
 }
 
@@ -275,6 +268,32 @@ export default {
   to {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+
+// Responsive design
+@media (max-width: 768px) {
+  .meal-planning-dashboard {
+    padding: $spacing-4;
+  }
+
+  .tabs-nav {
+    flex-direction: column;
+  }
+
+  .tab-button {
+    justify-content: flex-start;
+    padding: $spacing-3 $spacing-4;
+  }
+
+  .tab-panel {
+    padding: $spacing-4;
+  }
+
+  .dashboard-header {
+    h1 {
+      font-size: 1.5rem;
+    }
   }
 }
 </style>

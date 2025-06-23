@@ -69,6 +69,7 @@ INSTALLED_APPS = [
     'health_profiles',
     'analytics',
     'meal_planning',
+
 ]
 
 MIDDLEWARE = [
