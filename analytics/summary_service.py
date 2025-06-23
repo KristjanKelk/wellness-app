@@ -210,7 +210,7 @@ class HealthSummaryService:
             ai_text = response.choices[0].message.content
 
             # Parse achievements and recommendations
-            achievements = cls._extract_achievements(ai_text)
+            achievements = cls._extract_achievements(ai_text, data)
             recommendations = cls._extract_recommendations(ai_text)
 
             return ai_text, achievements, recommendations
@@ -256,8 +256,12 @@ Keep it encouraging and actionable!
         return prompt
 
     @classmethod
-    def _extract_achievements(cls, text):
-        """Extract achievements from AI response"""
+    def _extract_achievements(cls, text, data=None):
+        """Extract achievements from AI response.
+
+        Falls back to basic metrics when no bullet points are found and
+        contextual data is provided.
+        """
         achievements = []
         lines = text.split('\n')
         in_achievements = False
@@ -274,8 +278,8 @@ Keep it encouraging and actionable!
                 if clean_line:
                     achievements.append(clean_line)
 
-        # If no achievements found, extract from general content
-        if not achievements and data['activity_count'] > 0:
+        # If no achievements found, extract from general content when data is available
+        if not achievements and data and data.get('activity_count', 0) > 0:
             achievements = [
                 f"Completed {data['activity_count']} workout sessions",
                 f"Exercised for {data['total_duration']} minutes total",
