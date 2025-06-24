@@ -279,9 +279,9 @@ class SpoonacularService:
                 'cuisine': self._extract_cuisine(spoonacular_recipe.get('cuisines', [])),
                 'meal_type': self._determine_meal_type(spoonacular_recipe),
                 'servings': spoonacular_recipe.get('servings', 4),
-                'prep_time_minutes': spoonacular_recipe.get('preparationMinutes', 0),
-                'cook_time_minutes': spoonacular_recipe.get('cookingMinutes', 0),
-                'total_time_minutes': spoonacular_recipe.get('readyInMinutes', 30),
+                'prep_time_minutes': spoonacular_recipe.get('preparationMinutes') or 0,
+                'cook_time_minutes': spoonacular_recipe.get('cookingMinutes') or 0,
+                'total_time_minutes': spoonacular_recipe.get('readyInMinutes') or 30,
                 'image_url': spoonacular_recipe.get('image', ''),
                 'source_url': spoonacular_recipe.get('sourceUrl', ''),
                 'source_type': 'spoonacular',
@@ -396,7 +396,7 @@ class SpoonacularService:
                 return meal_type_mapping[dish_type.lower()]
 
         # Default based on preparation time
-        prep_time = recipe.get('readyInMinutes', 30)
+        prep_time = recipe.get('readyInMinutes') or 30
         if prep_time <= 15:
             return 'snack'
         elif prep_time <= 30:
@@ -501,9 +501,9 @@ class SpoonacularService:
 
     def _determine_difficulty(self, recipe: Dict) -> str:
         """Determine recipe difficulty based on various factors"""
-        prep_time = recipe.get('preparationMinutes', 0)
-        cook_time = recipe.get('cookingMinutes', 0)
-        total_time = recipe.get('readyInMinutes', 30)
+        prep_time = recipe.get('preparationMinutes') or 0
+        cook_time = recipe.get('cookingMinutes') or 0
+        total_time = recipe.get('readyInMinutes') or 30
         ingredient_count = len(recipe.get('extendedIngredients', []))
         instruction_count = sum(
             len(group.get('steps', []))

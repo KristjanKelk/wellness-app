@@ -460,30 +460,41 @@ class MealPlanViewSet(viewsets.ModelViewSet):
                 results = search_recipes_by_dietary_preferences(prefs)
                 if results:
                     data = results[0]
-                    recipe = Recipe.objects.create(
-                        title=data['title'],
-                        summary=data.get('summary', ''),
-                        cuisine=data.get('cuisine', ''),
-                        meal_type=data.get('meal_type', meal_type),
-                        servings=data.get('servings', 1),
-                        prep_time_minutes=data.get('prep_time_minutes', 0),
-                        cook_time_minutes=data.get('cook_time_minutes', 0),
-                        total_time_minutes=data.get('total_time_minutes', 0),
-                        difficulty_level=data.get('difficulty_level', 'medium'),
-                        spoonacular_id=data.get('spoonacular_id'),
-                        ingredients_data=data.get('ingredients_data', []),
-                        instructions=data.get('instructions', []),
-                        calories_per_serving=data.get('calories_per_serving', 0),
-                        protein_per_serving=data.get('protein_per_serving', 0),
-                        carbs_per_serving=data.get('carbs_per_serving', 0),
-                        fat_per_serving=data.get('fat_per_serving', 0),
-                        fiber_per_serving=data.get('fiber_per_serving', 0),
-                        dietary_tags=data.get('dietary_tags', []),
-                        allergens=data.get('allergens', []),
-                        image_url=data.get('image_url', ''),
-                        source_url=data.get('source_url', ''),
-                        source_type=data.get('source_type', 'spoonacular'),
-                    )
+                    # Try to reuse an existing recipe if one matches the
+                    # spoonacular_id to avoid duplicates. If multiple matches
+                    # exist, just grab the first one.
+                    if data.get('spoonacular_id'):
+                        recipe = (Recipe.objects
+                                  .filter(spoonacular_id=data['spoonacular_id'])
+                                  .first())
+                    else:
+                        recipe = None
+
+                    if not recipe:
+                        recipe = Recipe.objects.create(
+                            title=data['title'],
+                            summary=data.get('summary', ''),
+                            cuisine=data.get('cuisine', ''),
+                            meal_type=data.get('meal_type', meal_type),
+                            servings=data.get('servings', 1),
+                            prep_time_minutes=data.get('prep_time_minutes', 0),
+                            cook_time_minutes=data.get('cook_time_minutes', 0),
+                            total_time_minutes=data.get('total_time_minutes', 0),
+                            difficulty_level=data.get('difficulty_level', 'medium'),
+                            spoonacular_id=data.get('spoonacular_id'),
+                            ingredients_data=data.get('ingredients_data', []),
+                            instructions=data.get('instructions', []),
+                            calories_per_serving=data.get('calories_per_serving', 0),
+                            protein_per_serving=data.get('protein_per_serving', 0),
+                            carbs_per_serving=data.get('carbs_per_serving', 0),
+                            fat_per_serving=data.get('fat_per_serving', 0),
+                            fiber_per_serving=data.get('fiber_per_serving', 0),
+                            dietary_tags=data.get('dietary_tags', []),
+                            allergens=data.get('allergens', []),
+                            image_url=data.get('image_url', ''),
+                            source_url=data.get('source_url', ''),
+                            source_type=data.get('source_type', 'spoonacular'),
+                        )
 
             if recipe:
                 meal_recipes[meal_type] = {
