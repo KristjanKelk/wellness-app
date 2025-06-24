@@ -381,6 +381,13 @@ class MealPlanViewSet(viewsets.ModelViewSet):
                     status=status.HTTP_400_BAD_REQUEST
                 )
 
+            from datetime import datetime
+
+            if isinstance(start_date, str):
+                start_date_obj = datetime.strptime(start_date, '%Y-%m-%d').date()
+            else:
+                start_date_obj = start_date
+
             # TODO: Implement AI meal plan generation
             # For now, return a mock response based on user's preferences
             mock_meal_plan = self._generate_mock_meal_plan(
@@ -388,14 +395,6 @@ class MealPlanViewSet(viewsets.ModelViewSet):
                 start_date=start_date_obj,
                 plan_type=plan_type,
             )
-
-            # Create meal plan with proper date formatting
-            from datetime import datetime
-
-            if isinstance(start_date, str):
-                start_date_obj = datetime.strptime(start_date, '%Y-%m-%d').date()
-            else:
-                start_date_obj = start_date
 
             meal_plan = MealPlan.objects.create(
                 user=request.user,
@@ -422,14 +421,15 @@ class MealPlanViewSet(viewsets.ModelViewSet):
             )
 
     def _generate_mock_meal_plan(self, profile, start_date=None, plan_type='daily'):
-        """Generate a mock meal plan based on user preferences
+        """Generate a simple meal plan using available recipes.
 
-        The returned structure mimics what the frontend expects from the real
-        AI service.  It includes a ``meals`` dictionary keyed by date with a
-        list of meal entries for that day.
+        This selects recipes from the local database that match the user's
+        preferences. If no suitable recipe exists for a meal type, the function
+        fetches one from Spoonacular and stores it for future use.
         """
         from datetime import date as date_cls
         from django.utils import timezone
+        from .services.spoonacular_service import search_recipes_by_dietary_preferences
 
         if start_date is None:
             start_date = timezone.now().date()
@@ -438,97 +438,77 @@ class MealPlanViewSet(viewsets.ModelViewSet):
 
         date_str = start_date.isoformat()
 
-        is_vegan = 'vegan' in profile.dietary_preferences
-        is_keto = 'keto' in profile.dietary_preferences
+        meal_recipes = {}
+        for meal_type in ['breakfast', 'lunch', 'dinner']:
+            recipes = Recipe.objects.filter(meal_type=meal_type)
 
-        if is_vegan:
-            meals = {
-                'breakfast': {
-                    'name': 'Vegan Protein Smoothie Bowl',
-                    'calories': int(profile.calorie_target * 0.25),
-                    'protein': int(profile.protein_target * 0.25),
-                    'carbs': int(profile.carb_target * 0.25),
-                    'fat': int(profile.fat_target * 0.25)
-                },
-                'lunch': {
-                    'name': 'Quinoa Buddha Bowl with Tahini',
-                    'calories': int(profile.calorie_target * 0.35),
-                    'protein': int(profile.protein_target * 0.35),
-                    'carbs': int(profile.carb_target * 0.35),
-                    'fat': int(profile.fat_target * 0.35)
-                },
-                'dinner': {
-                    'name': 'Lentil Curry with Brown Rice',
-                    'calories': int(profile.calorie_target * 0.40),
-                    'protein': int(profile.protein_target * 0.40),
-                    'carbs': int(profile.carb_target * 0.40),
-                    'fat': int(profile.fat_target * 0.40)
+            for pref in profile.dietary_preferences:
+                recipes = recipes.filter(dietary_tags__contains=[pref])
+            for allergen in profile.allergies_intolerances:
+                recipes = recipes.exclude(allergens__contains=[allergen])
+            if profile.cuisine_preferences:
+                recipes = recipes.filter(cuisine__in=profile.cuisine_preferences)
+
+            recipe = recipes.order_by('?').first()
+
+            if not recipe:
+                prefs = {
+                    'dietary_preferences': profile.dietary_preferences,
+                    'allergies_intolerances': profile.allergies_intolerances,
+                    'cuisine_preferences': profile.cuisine_preferences,
                 }
-            }
-        elif is_keto:
-            meals = {
-                'breakfast': {
-                    'name': 'Keto Avocado and Eggs',
-                    'calories': int(profile.calorie_target * 0.25),
-                    'protein': int(profile.protein_target * 0.25),
-                    'carbs': int(profile.carb_target * 0.25),
-                    'fat': int(profile.fat_target * 0.25)
-                },
-                'lunch': {
-                    'name': 'Keto Chicken Caesar Salad',
-                    'calories': int(profile.calorie_target * 0.35),
-                    'protein': int(profile.protein_target * 0.35),
-                    'carbs': int(profile.carb_target * 0.35),
-                    'fat': int(profile.fat_target * 0.35)
-                },
-                'dinner': {
-                    'name': 'Keto Salmon with Asparagus',
-                    'calories': int(profile.calorie_target * 0.40),
-                    'protein': int(profile.protein_target * 0.40),
-                    'carbs': int(profile.carb_target * 0.40),
-                    'fat': int(profile.fat_target * 0.40)
+                results = search_recipes_by_dietary_preferences(prefs)
+                if results:
+                    data = results[0]
+                    recipe = Recipe.objects.create(
+                        title=data['title'],
+                        summary=data.get('summary', ''),
+                        cuisine=data.get('cuisine', ''),
+                        meal_type=data.get('meal_type', meal_type),
+                        servings=data.get('servings', 1),
+                        prep_time_minutes=data.get('prep_time_minutes', 0),
+                        cook_time_minutes=data.get('cook_time_minutes', 0),
+                        total_time_minutes=data.get('total_time_minutes', 0),
+                        difficulty_level=data.get('difficulty_level', 'medium'),
+                        spoonacular_id=data.get('spoonacular_id'),
+                        ingredients_data=data.get('ingredients_data', []),
+                        instructions=data.get('instructions', []),
+                        calories_per_serving=data.get('calories_per_serving', 0),
+                        protein_per_serving=data.get('protein_per_serving', 0),
+                        carbs_per_serving=data.get('carbs_per_serving', 0),
+                        fat_per_serving=data.get('fat_per_serving', 0),
+                        fiber_per_serving=data.get('fiber_per_serving', 0),
+                        dietary_tags=data.get('dietary_tags', []),
+                        allergens=data.get('allergens', []),
+                        image_url=data.get('image_url', ''),
+                        source_url=data.get('source_url', ''),
+                        source_type=data.get('source_type', 'spoonacular'),
+                    )
+
+            if recipe:
+                meal_recipes[meal_type] = {
+                    'name': recipe.title,
+                    'calories': int(recipe.calories_per_serving),
+                    'protein': int(recipe.protein_per_serving),
+                    'carbs': int(recipe.carbs_per_serving),
+                    'fat': int(recipe.fat_per_serving),
                 }
-            }
-        else:
-            meals = {
-                'breakfast': {
-                    'name': 'Protein Oatmeal with Berries',
-                    'calories': int(profile.calorie_target * 0.25),
-                    'protein': int(profile.protein_target * 0.25),
-                    'carbs': int(profile.carb_target * 0.25),
-                    'fat': int(profile.fat_target * 0.25)
-                },
-                'lunch': {
-                    'name': 'Grilled Chicken Quinoa Bowl',
-                    'calories': int(profile.calorie_target * 0.35),
-                    'protein': int(profile.protein_target * 0.35),
-                    'carbs': int(profile.carb_target * 0.35),
-                    'fat': int(profile.fat_target * 0.35)
-                },
-                'dinner': {
-                    'name': 'Salmon with Sweet Potato and Vegetables',
-                    'calories': int(profile.calorie_target * 0.40),
-                    'protein': int(profile.protein_target * 0.40),
-                    'carbs': int(profile.carb_target * 0.40),
-                    'fat': int(profile.fat_target * 0.40)
-                }
-            }
 
         daily_meals = [
             {
                 'meal_type': 'breakfast',
                 'time': '08:00',
-                'recipe': meals['breakfast'],
+                'recipe': meal_recipes.get('breakfast', {}),
             },
             {
                 'meal_type': 'lunch',
                 'time': '12:30',
-                'recipe': meals['lunch'],
+                'recipe': meal_recipes.get('lunch', {}),
             },
             {
                 'meal_type': 'dinner',
                 'time': '19:00',
-                'recipe': meals['dinner'],
+                'recipe': meal_recipes.get('dinner', {}),
             },
         ]
 
