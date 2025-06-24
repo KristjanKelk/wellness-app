@@ -383,7 +383,11 @@ class MealPlanViewSet(viewsets.ModelViewSet):
 
             # TODO: Implement AI meal plan generation
             # For now, return a mock response based on user's preferences
-            mock_meal_plan = self._generate_mock_meal_plan(nutrition_profile)
+            mock_meal_plan = self._generate_mock_meal_plan(
+                nutrition_profile,
+                start_date=start_date_obj,
+                plan_type=plan_type,
+            )
 
             # Create meal plan with proper date formatting
             from datetime import datetime
@@ -417,14 +421,28 @@ class MealPlanViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
-    def _generate_mock_meal_plan(self, profile):
-        """Generate a mock meal plan based on user preferences"""
-        is_vegetarian = 'vegetarian' in profile.dietary_preferences
+    def _generate_mock_meal_plan(self, profile, start_date=None, plan_type='daily'):
+        """Generate a mock meal plan based on user preferences
+
+        The returned structure mimics what the frontend expects from the real
+        AI service.  It includes a ``meals`` dictionary keyed by date with a
+        list of meal entries for that day.
+        """
+        from datetime import date as date_cls
+        from django.utils import timezone
+
+        if start_date is None:
+            start_date = timezone.now().date()
+        if isinstance(start_date, str):
+            start_date = date_cls.fromisoformat(start_date)
+
+        date_str = start_date.isoformat()
+
         is_vegan = 'vegan' in profile.dietary_preferences
         is_keto = 'keto' in profile.dietary_preferences
 
         if is_vegan:
-            return {
+            meals = {
                 'breakfast': {
                     'name': 'Vegan Protein Smoothie Bowl',
                     'calories': int(profile.calorie_target * 0.25),
@@ -448,7 +466,7 @@ class MealPlanViewSet(viewsets.ModelViewSet):
                 }
             }
         elif is_keto:
-            return {
+            meals = {
                 'breakfast': {
                     'name': 'Keto Avocado and Eggs',
                     'calories': int(profile.calorie_target * 0.25),
@@ -472,8 +490,7 @@ class MealPlanViewSet(viewsets.ModelViewSet):
                 }
             }
         else:
-            # Standard balanced meal plan
-            return {
+            meals = {
                 'breakfast': {
                     'name': 'Protein Oatmeal with Berries',
                     'calories': int(profile.calorie_target * 0.25),
@@ -496,6 +513,31 @@ class MealPlanViewSet(viewsets.ModelViewSet):
                     'fat': int(profile.fat_target * 0.40)
                 }
             }
+
+        daily_meals = [
+            {
+                'meal_type': 'breakfast',
+                'time': '08:00',
+                'recipe': meals['breakfast'],
+            },
+            {
+                'meal_type': 'lunch',
+                'time': '12:30',
+                'recipe': meals['lunch'],
+            },
+            {
+                'meal_type': 'dinner',
+                'time': '19:00',
+                'recipe': meals['dinner'],
+            },
+        ]
+
+        return {
+            'plan_type': plan_type,
+            'meals': {
+                date_str: daily_meals,
+            },
+        }
 
     @action(detail=True, methods=['post'])
     def regenerate_meal(self, request, pk=None):
