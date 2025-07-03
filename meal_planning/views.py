@@ -7,6 +7,7 @@ from django.shortcuts import get_object_or_404
 from django.db import transaction
 from django.db import models
 from .models import NutritionProfile, Recipe, Ingredient, MealPlan, UserRecipeRating, NutritionLog
+from .services.ai_meal_planning_service import AIMealPlanningService
 from .serializers import (
     NutritionProfileSerializer, RecipeSerializer, IngredientSerializer,
     MealPlanSerializer, UserRecipeRatingSerializer, NutritionLogSerializer
@@ -365,7 +366,7 @@ class MealPlanViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['post'])
     def generate(self, request):
-        """Generate a new meal plan using AI (mock implementation for now)"""
+        """Generate a new meal plan using the AI meal planning service"""
         try:
             # Get user's nutrition profile
             nutrition_profile = get_object_or_404(NutritionProfile, user=request.user)
@@ -388,26 +389,12 @@ class MealPlanViewSet(viewsets.ModelViewSet):
             else:
                 start_date_obj = start_date
 
-            # TODO: Implement AI meal plan generation
-            # For now, return a mock response based on user's preferences
-            mock_meal_plan = self._generate_mock_meal_plan(
-                nutrition_profile,
-                start_date=start_date_obj,
-                plan_type=plan_type,
-            )
-
-            meal_plan = MealPlan.objects.create(
+            # Use the AI meal planning service to generate a full meal plan
+            ai_service = AIMealPlanningService()
+            meal_plan = ai_service.generate_meal_plan(
                 user=request.user,
                 plan_type=plan_type,
                 start_date=start_date_obj,
-                end_date=start_date_obj,  # For daily plans
-                meal_plan_data=mock_meal_plan,
-                total_calories=float(nutrition_profile.calorie_target),
-                avg_daily_calories=float(nutrition_profile.calorie_target),
-                total_protein=float(nutrition_profile.protein_target),
-                total_carbs=float(nutrition_profile.carb_target),
-                total_fat=float(nutrition_profile.fat_target),
-                ai_model_used='mock_v1.0'
             )
 
             serializer = self.get_serializer(meal_plan)
