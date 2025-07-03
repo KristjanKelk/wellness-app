@@ -65,3 +65,14 @@ INFO 2025-06-18 23:45:33,982 spoonacular_service Rate limiting: sleeping for 58.
 INFO 2025-06-18 23:46:32,970 spoonacular_service Making request to Spoonacular: /food/ingredients/1005006/information
 INFO 2025-06-18 23:46:34,172 spoonacular_service Rate limiting: sleeping for 58.98 seconds
 INFO 2025-06-18 23:47:33,160 spoonacular_service Making request to Spoonacular: /food/ingredients/6999/information
+INFO 2025-06-24 21:48:08,106 spoonacular_service Making request to Spoonacular: /recipes/complexSearch
+INFO 2025-06-24 21:59:50,207 spoonacular_service Making request to Spoonacular: /recipes/complexSearch
+DEBUG 2025-06-24 21:59:50,902 spoonacular_service Cache hit for endpoint: /recipes/complexSearch
+INFO 2025-06-24 22:05:19,201 spoonacular_service Making request to Spoonacular: /recipes/complexSearch
+DEBUG 2025-06-24 22:06:57,000 spoonacular_service Cache hit for endpoint: /recipes/complexSearch
+INFO 2025-06-24 22:18:52,126 spoonacular_service Making request to Spoonacular: /recipes/complexSearch
+DEBUG 2025-06-24 22:18:52,783 spoonacular_service Cache hit for endpoint: /recipes/complexSearch
+DEBUG 2025-06-24 22:18:52,797 spoonacular_service Cache hit for endpoint: /recipes/complexSearch
+DEBUG 2025-06-24 22:19:15,763 spoonacular_service Cache hit for endpoint: /recipes/complexSearch
+DEBUG 2025-06-24 22:19:15,785 spoonacular_service Cache hit for endpoint: /recipes/complexSearch
+DEBUG 2025-06-24 22:19:15,800 spoonacular_service Cache hit for endpoint: /recipes/complexSearch
