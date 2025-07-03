@@ -460,9 +460,6 @@ class MealPlanViewSet(viewsets.ModelViewSet):
                 results = search_recipes_by_dietary_preferences(prefs)
                 if results:
                     data = results[0]
-                    # Try to reuse an existing recipe if one matches the
-                    # spoonacular_id to avoid duplicates. If multiple matches
-                    # exist, just grab the first one.
                     if data.get('spoonacular_id'):
                         recipe = (Recipe.objects
                                   .filter(spoonacular_id=data['spoonacular_id'])
