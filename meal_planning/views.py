@@ -297,7 +297,12 @@ class RecipeViewSet(viewsets.ReadOnlyModelViewSet):
         if data.get('cuisine_preferences'):
             queryset = queryset.filter(cuisine__in=data['cuisine_preferences'])
 
-        serializer = self.get_serializer(queryset[:20], many=True)
+        page = self.paginate_queryset(queryset)
+        if page is not None:
+            serializer = self.get_serializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+
+        serializer = self.get_serializer(queryset, many=True)
         return Response(serializer.data)
 
     @action(detail=True, methods=['post'])
