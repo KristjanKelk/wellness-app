@@ -170,6 +170,17 @@ POST /api/wellness-scores/calculate/      # Calculate new score
 GET /api/analytics/milestones/            # Achievement tracking
 ```
 
+### Meal Planning & Recipe Endpoints
+```
+GET/POST /api/recipes/                    # Browse recipes (paginated)
+POST /api/recipes/search/                 # Advanced recipe search
+POST /api/recipes/{id}/rate/              # Rate a recipe
+GET/POST /api/meal-plans/                 # Manage meal plans
+POST /api/meal-plans/generate/            # Generate meal plan with AI
+```
+Recipe list and search endpoints support pagination. Clients may specify
+`page_size` to control results per page (default is 20).
+
 ## 🏗 Key Features Implementation
 
 ### Wellness Score Calculation
