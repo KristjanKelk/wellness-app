@@ -229,3 +229,35 @@ Automatic tracking and celebration of achievements:
 - Chart.js for beautiful data visualizations
 - Vue.js community for excellent documentation
 - Django REST Framework for robust API development
+
+## 🚢 Deployment on Render.com
+
+This repository includes a `render.yaml` blueprint for deploying the project on
+[Render](https://render.com). After linking your GitHub account, create a new
+Blueprint and select this file. The blueprint provisions:
+
+1. **wellness-backend** – a Python web service running `gunicorn` with Django.
+   It installs dependencies, applies migrations, and serves static files.
+   Set the `SECRET_KEY`, `OPENAI_API_KEY`, and `SPOONACULAR_API_KEY`
+   environment variables. The service receives a `DATABASE_URL` automatically
+   from the PostgreSQL instance named **wellness-db**.
+2. **wellness-frontend** – a static site built from the `frontend` directory.
+   Render runs `npm install && npm run build` and serves the `dist` directory.
+
+If you prefer the manual approach, create these services individually on Render:
+
+```text
+Backend (Python Web Service)
+  Build Command: pip install -r requirements.txt && \
+                 python manage.py collectstatic --noinput && \
+                 python manage.py migrate --noinput
+  Start Command: gunicorn wellness_project.wsgi:application
+
+Frontend (Static Site)
+  Root Directory: frontend
+  Build Command: npm install && npm run build
+  Publish Directory: dist
+```
+
+Ensure that your environment variables match those in your local `.env` file so
+the application can run successfully on Render.
