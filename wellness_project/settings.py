@@ -333,7 +333,7 @@ SPOONACULAR_ENDPOINTS = {
 # Spoonacular API rate limiting (free tier: 150 requests/day)
 SPOONACULAR_RATE_LIMIT = {
     'requests_per_day': 150,
-    'requests_per_minute': 1,
+    'requests_per_minute': 10,
     'cache_duration': 3600,  # Cache responses for 1 hour
 }
 
