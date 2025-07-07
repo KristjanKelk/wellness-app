@@ -35,9 +35,13 @@ SPOONACULAR_BASE_URL = 'https://api.spoonacular.com'
 DEBUG = False
 
 ALLOWED_HOSTS = [
-    'https://wellness-app-tx2c.onrender.com',
-    'https://wellness-app-fronend.onrender.com',
+    'wellness-app-tx2c.onrender.com',
+    'wellness-app-frontend.onrender.com',
     'localhost',]
+
+CSRF_TRUSTED_ORIGINS = [
+     'https://wellness-app-tx2c.onrender.com',
+     'https://wellness-app-frontend.onrender.com',]
 
 # Frontend URL for email links
 FRONTEND_URL = 'http://localhost:8080'
