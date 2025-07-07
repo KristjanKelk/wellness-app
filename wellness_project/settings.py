@@ -57,6 +57,7 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'django.contrib.postgres',
     'django_celery_beat',
+    'django.contrib.sites',
 
     # Third-party apps
     'rest_framework',
@@ -98,6 +99,8 @@ AUTHENTICATION_BACKENDS = [
     'allauth.account.auth_backends.AuthenticationBackend',
 ]
 
+SITE_ID = 1
+
 # OAuth configuration
 SOCIALACCOUNT_PROVIDERS = {
     'google': {
@@ -137,7 +140,7 @@ ACCOUNT_EMAIL_VERIFICATION = 'mandatory'
 CORS_ALLOW_ALL_ORIGINS = False
 
 CORS_ALLOWED_ORIGINS = [
-   'https://wellness-app-frontend.onrender.com',
+   'https://wellness-app-fronend.onrender.com',
    'https://wellness-app-tx2c.onrender.com',]
 CORS_ALLOW_CREDENTIALS = True
 
