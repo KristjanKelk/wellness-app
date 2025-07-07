@@ -2,10 +2,8 @@
 import axios from 'axios';
 import AuthService from './auth.service';
 
-const API_URL = (
-  process.env.VUE_APP_API_URL ||
-  'http://localhost:8000/api'
-).replace(/\/+$/, '') + '/';
+const API_URL = (process.env.VUE_APP_API_URL || 'http://localhost:8000/api')
+  .replace(/\/+$/, '') + '/';
 
 /**
  * Handles OAuth authentication operations

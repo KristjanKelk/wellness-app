@@ -35,7 +35,7 @@ SPOONACULAR_BASE_URL = 'https://api.spoonacular.com'
 DEBUG = False
 
 ALLOWED_HOSTS = [
-    'wellness-app-tx2c.onrender.com',
+    'https://wellness-app-tx2c.onrender.com',
     'https://wellness-app-fronend.onrender.com/login']
 
 # Frontend URL for email links
@@ -131,12 +131,10 @@ ACCOUNT_EMAIL_VERIFICATION = 'mandatory'
 # CORS settings
 CORS_ALLOW_ALL_ORIGINS = True  # ONLY in development
 CORS_ALLOWED_ORIGINS = [
-    "https://wellness-app-fronend.onrender.com",
+  'https://wellness-app-frontend.onrender.com',
+  'https://wellness-app-tx2c.onrender.com',
 ]
-# CORS_ALLOWED_ORIGINS = [
-#     "http://localhost:8080",
-#     "http://127.0.0.1:8080",
-# ]
+
 
 # Specify which headers can be included in requests
 CORS_ALLOW_HEADERS = [
