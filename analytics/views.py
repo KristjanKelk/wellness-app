@@ -5,13 +5,13 @@ from rest_framework.decorators import action
 from django.utils import timezone
 from datetime import datetime, timedelta
 from django.conf import settings
-from openai import OpenAI
 from django.db.models import Count, Sum, Q
 from collections import Counter
 import re
+import openai
 
 
-client = OpenAI(api_key=settings.OPENAI_API_KEY)
+openai.api_key = settings.OPENAI_API_KEY
 
 from .models import AIInsight, WellnessScore, Milestone, HealthSummary, SummaryMetric
 from .serializers import AIInsightSerializer, WellnessScoreSerializer, MilestoneSerializer,HealthSummarySerializer, HealthSummaryCreateSerializer, HealthSummaryListSerializer, SummaryStatsSerializer,SummaryInsightSerializer, SummaryMetricSerializer
@@ -364,12 +364,17 @@ class AIInsightViewSet(viewsets.ModelViewSet):
             # Build enhanced prompt
             prompt = self._build_enhanced_prompt(context_data)
 
-            resp = client.chat.completions.create(
+            resp = openai.ChatCompletion.create(
                 model="gpt-3.5-turbo-1106",
                 messages=[
-                    {"role": "system",
-                     "content": "You are a certified wellness coach providing personalized health advice. Focus on specific, actionable recommendations."},
-                    {"role": "user", "content": prompt}
+                    {
+                        "role": "system",
+                        "content": "You are a certified wellness coach…"
+                    },
+                    {
+                        "role": "user",
+                        "content": prompt
+                    }
                 ],
                 max_tokens=200,
                 temperature=0.7
