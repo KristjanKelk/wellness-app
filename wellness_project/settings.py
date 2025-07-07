@@ -36,7 +36,8 @@ DEBUG = False
 
 ALLOWED_HOSTS = [
     'https://wellness-app-tx2c.onrender.com',
-    'https://wellness-app-fronend.onrender.com/login']
+    'https://wellness-app-fronend.onrender.com',
+    'localhost',]
 
 # Frontend URL for email links
 FRONTEND_URL = 'http://localhost:8080'
@@ -129,12 +130,14 @@ ACCOUNT_AUTHENTICATION_METHOD = 'username_email'
 ACCOUNT_EMAIL_VERIFICATION = 'mandatory'
 
 # CORS settings
-CORS_ALLOW_ALL_ORIGINS = True  # ONLY in development
+CORS_ALLOW_ALL_ORIGINS = False
 CORS_ALLOWED_ORIGINS = [
-  'https://wellness-app-frontend.onrender.com',
-  'https://wellness-app-tx2c.onrender.com',
+    'https://wellness-app-frontend.onrender.com',
+    'https://wellness-app-tx2c.onrender.com',
+    'http://localhost:8080',
 ]
 
+CORS_ALLOW_CREDENTIALS = True
 
 # Specify which headers can be included in requests
 CORS_ALLOW_HEADERS = [
@@ -158,10 +161,6 @@ CORS_ALLOW_METHODS = [
     'PUT',
 ]
 
-CORS_ALLOW_CREDENTIALS = True
-CORS_ALLOWED_ORIGINS = [
-    "http://localhost:8080",
-]
 
 # CELERY CONFIGURATION
 CELERY_BROKER_URL = 'redis://localhost:6379/0'
