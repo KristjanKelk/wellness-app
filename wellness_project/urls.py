@@ -1,6 +1,7 @@
 # wellness_project/urls.py
 from django.contrib import admin
 from django.urls import path, include
+from django.http import HttpResponse
 from rest_framework.routers import DefaultRouter
 from rest_framework_simplejwt.views import TokenRefreshView, TokenVerifyView
 
@@ -19,7 +20,7 @@ router = DefaultRouter()
 
 router.register(r'health-profiles', HealthProfileViewSet, basename='health-profile')
 router.register(r'weight-history', WeightHistoryViewSet, basename='weight-history')
-router.register(r'analytics/aiinsight',AIInsightViewSet, basename='aiinsight')
+router.register(r'analytics/aiinsight', AIInsightViewSet, basename='aiinsight')
 router.register(r'analytics/wellness-score', WellnessScoreViewSet, basename='wellnessscore')
 router.register(r'analytics/milestones', MilestoneViewSet, basename='milestone')
 router.register(r'analytics/health-summaries', HealthSummaryViewSet, basename='health-summary')
@@ -28,6 +29,9 @@ router.register(r'insights', AIInsightViewSet, basename='insight')
 router.register(r'wellness-scores', WellnessScoreViewSet, basename='wellness-score')
 
 urlpatterns = [
+    # health check so "/" returns 200
+    path('', lambda request: HttpResponse('OK')),
+
     path('admin/', admin.site.urls),
     path('api/', include(router.urls)),
     path('api-auth/', include('rest_framework.urls')),
