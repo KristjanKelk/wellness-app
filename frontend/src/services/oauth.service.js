@@ -2,7 +2,10 @@
 import axios from 'axios';
 import AuthService from './auth.service';
 
-const API_URL = 'http://localhost:8000/api/';
+const API_URL = (
+  process.env.VUE_APP_API_URL ||
+  'http://localhost:8000/api'
+).replace(/\/+$/, '') + '/';
 
 /**
  * Handles OAuth authentication operations
@@ -16,42 +19,40 @@ class OAuthService {
     try {
       // Clear any previous OAuth data
       localStorage.removeItem('oauth_state');
-      sessionStorage.removeItem('auth_in_progress');
       sessionStorage.setItem('auth_in_progress', 'true');
       sessionStorage.setItem('oauth_provider', provider);
 
-      const response = await axios.get(`${API_URL}oauth/${provider}/`);
+      const response = await axios.get(`${API_URL}oauth/${provider}/`, {
+        withCredentials: true,
+      });
 
-      if (response.data && response.data.authorization_url) {
+      const { authorization_url, state } = response.data || {};
 
-        if (response.data.state) {
-          localStorage.setItem('oauth_state', response.data.state);
+      if (authorization_url) {
+        if (state) {
+          localStorage.setItem('oauth_state', state);
         }
-
-        window.location.href = response.data.authorization_url;
+        // Redirect browser to provider's OAuth page
+        window.location.href = authorization_url;
         return true;
-      } else {
-        console.error('Invalid OAuth response:', response.data);
-        throw new Error(`Failed to start ${provider} authentication`);
       }
-    } catch (error) {
-      console.error(`OAuth login error for ${provider}:`, error);
+
+      console.error('Invalid OAuth response:', response.data);
+      throw new Error(`Failed to start ${provider} authentication`);
+    } catch (err) {
+      console.error(`OAuth login error for ${provider}:`, err);
       sessionStorage.removeItem('auth_in_progress');
       sessionStorage.removeItem('oauth_provider');
-      throw error;
+      throw err;
     }
   }
 
-  /**
-   * Redirect to Google OAuth
-   */
+  /** Redirect to Google OAuth */
   async loginWithGoogle() {
     return this.initiateOAuth('google');
   }
 
-  /**
-   * Redirect to GitHub OAuth
-   */
+  /** Redirect to GitHub OAuth */
   async loginWithGitHub() {
     return this.initiateOAuth('github');
   }
@@ -59,7 +60,7 @@ class OAuthService {
   /**
    * Process OAuth callback
    * @param {URLSearchParams} queryParams - URL query parameters
-   * @returns {Promise} Promise resolving to user data
+   * @returns {Promise<Object>} user data (tokens, profile, etc)
    */
   async processCallback(queryParams) {
     try {
@@ -69,45 +70,42 @@ class OAuthService {
         throw new Error('Missing authorization code in callback');
       }
 
-      const state = queryParams.get('state');
+      const returnedState = queryParams.get('state');
       const storedState = localStorage.getItem('oauth_state');
-
-      if (storedState && state !== storedState) {
-        throw new Error('OAuth state mismatch - possible CSRF attack');
+      if (storedState !== returnedState) {
+        throw new Error('OAuth state mismatch – possible CSRF attack');
       }
 
-      const response = await axios.post(`${API_URL}oauth/${provider}/`, {
-        code,
-        state
-      });
+      const response = await axios.post(
+        `${API_URL}oauth/${provider}/`,
+        { code, state: returnedState },
+        { withCredentials: true }
+      );
 
-      if (!response.data || !response.data.access) {
+      const { access, refresh, user } = response.data || {};
+      if (!access) {
         console.error('Invalid backend response:', response.data);
         throw new Error('Invalid authentication response from server');
       }
 
-      AuthService.storeUser(response.data, true);
+      // Save tokens & user profile however your AuthService expects
+      AuthService.storeUser({ access, refresh, user }, true);
 
+      // Cleanup
       localStorage.removeItem('oauth_state');
       sessionStorage.removeItem('auth_in_progress');
       sessionStorage.removeItem('oauth_provider');
 
       return response.data;
-    } catch (error) {
-      console.error('OAuth callback processing error:', error);
-
+    } catch (err) {
+      console.error('OAuth callback processing error:', err);
       localStorage.removeItem('oauth_state');
       sessionStorage.removeItem('auth_in_progress');
       sessionStorage.removeItem('oauth_provider');
-
-      if (error.response && error.response.data) {
-
-        if (error.response.data.detail) {
-          throw new Error(error.response.data.detail);
-        }
-      }
-
-      throw new Error(error.message || 'Authentication failed');
+      // Bubble up either backend detail or generic message
+      throw new Error(
+        err.response?.data?.detail || err.message || 'Authentication failed'
+      );
     }
   }
 }
