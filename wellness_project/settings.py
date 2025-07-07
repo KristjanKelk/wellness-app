@@ -32,9 +32,9 @@ SPOONACULAR_API_KEY = config('SPOONACULAR_API_KEY')
 SPOONACULAR_BASE_URL = 'https://api.spoonacular.com'
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = False
 
-ALLOWED_HOSTS = config("ALLOWED_HOSTS", default="").split(",")
+ALLOWED_HOSTS = ['wellness-app-tx2c.onrender.com']
 
 # Frontend URL for email links
 FRONTEND_URL = 'http://localhost:8080'
