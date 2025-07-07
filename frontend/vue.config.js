@@ -1,33 +1,27 @@
-// frontend/vue.config.js
-const { defineConfig } = require('@vue/cli-service')
-const webpack = require('webpack')
-const path = require('path')
+const { defineConfig } = require('@vue/cli-service');
+const webpack = require('webpack');
+const path = require('path');
 
 module.exports = defineConfig({
-  // base URL for your app when deployed
+  // when you do `npm run build`, your dist/ will use "/" as the base
   publicPath: process.env.NODE_ENV === 'production' ? '/' : '/',
-
-  // where to put built files (for Django’s collectstatic)
-  outputDir: path.resolve(__dirname, '../static/frontend'),
-
-  // where to write index.html (so your Django templates can pick it up)
-  indexPath: path.resolve(__dirname, '../templates/index.html'),
-
-  // sub-folder under outputDir/static for js/css/img
-  assetsDir: 'static',
+  outputDir:  'dist',
+  assetsDir:  'static',
 
   transpileDependencies: true,
+
   configureWebpack: {
+    plugins: [
+      // this was your hydration flag
+      new webpack.DefinePlugin({
+        __VUE_PROD_HYDRATION_MISMATCH_DETAILS__: JSON.stringify(false)
+      })
+    ],
     resolve: {
       alias: {
         '@': path.resolve(__dirname, 'src/')
       }
-    },
-    plugins: [
-      new webpack.DefinePlugin({
-        __VUE_PROD_HYDRATION_MISMATCH_DETAILS__: JSON.stringify(false)
-      })
-    ]
+    }
   },
   devServer: {
     proxy: {
