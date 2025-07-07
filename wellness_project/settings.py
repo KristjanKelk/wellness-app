@@ -34,7 +34,9 @@ SPOONACULAR_BASE_URL = 'https://api.spoonacular.com'
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = [
+    "wellness-app-tx2c.onrender.com"
+]
 
 # Frontend URL for email links
 FRONTEND_URL = 'http://localhost:8080'
