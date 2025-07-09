@@ -24,6 +24,7 @@ class OAuthBaseAPI(APIView):
     token_url = None
     user_url = None
     scope = None
+    throttle_classes = []
 
     def get(self, request, *args, **kwargs):
         """Generate authorization URL for OAuth"""
