@@ -283,11 +283,11 @@ WSGI_APPLICATION = 'wellness_project.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': 'wellness_db',
-        'USER': 'wellness_user',
-        'PASSWORD': 'wellness',  # Use the password you set
-        'HOST': 'localhost',
-        'PORT': '5432',
+        'NAME':     config('PGDATABASE'),
+        'USER':     config('PGUSER'),
+        'PASSWORD': config('PGPASSWORD'),
+        'HOST':     config('PGHOST'),
+        'PORT':     config('PGPORT', default='5432'),
     }
 }
 
