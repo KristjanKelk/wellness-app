@@ -45,7 +45,7 @@ ALLOWED_HOSTS = [
 
 CSRF_TRUSTED_ORIGINS = [
      'https://wellness-app-tx2c.onrender.com',
-     'https://wellness-app-frontend.onrender.com',
+     'https://wellness-app-fronend.onrender.com',
      'http://localhost:8080',
      'http://127.0.0.1:8080',
 ]
@@ -146,7 +146,7 @@ ACCOUNT_SIGNUP_FIELDS = ['username*','email*','password1*','password2*']
 CORS_ALLOW_ALL_ORIGINS = False
 
 CORS_ALLOWED_ORIGINS = [
-   'https://wellness-app-frontend.onrender.com',
+   'https://wellness-app-fronend.onrender.com',
    'https://wellness-app-tx2c.onrender.com',
     'http://localhost:8080',
     'http://127.0.0.1:8080',
