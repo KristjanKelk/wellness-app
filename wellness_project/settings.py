@@ -51,7 +51,7 @@ CSRF_TRUSTED_ORIGINS = [
 ]
 
 # Frontend URL for email links
-FRONTEND_URL = config('FRONTEND_URL', 'http://localhost:8080')
+FRONTEND_URL = "https://wellness-app-fronend.onrender.com"
 
 # Application definition
 
