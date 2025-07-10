@@ -1,10 +1,11 @@
 // src/services/auth.service.js
 import axios from 'axios';
 
-const API_URL = (
-   (process.env.VUE_APP_API_URL || 'http://localhost:8000/api')
-     .replace(/\/+$/, '')
- ) + '/';
+const raw = process.env.VUE_APP_API_URL
+             || `${window.location.origin}/api`;
+
+export const API_URL = raw.replace(/\/+$/, '') + '/';
+
 const TOKEN_KEY = 'user';
 
 /**
