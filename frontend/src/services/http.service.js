@@ -3,13 +3,21 @@ import axios from 'axios';
 import AuthService from './auth.service';
 import store from '../store';
 
+// Compute base-URL once, either from your VUE_APP_API_URL or fallback to Render:
+const API_URL = (
+  process.env.VUE_APP_API_URL ||
+  'https://wellness-app-tx2c.onrender.com/api'
+)
+  .replace(/\/+$/, '') + '/';
+
 // Create axios instance
 const apiClient = axios.create({
-    baseURL: 'http://localhost:8000/api/',
+    baseURL: API_URL,
     headers: {
         'Content-Type': 'application/json',
     },
-    timeout: 10000
+    timeout: 10000,
+    withCredentials: true,   // if you need cookies/CORS creds
 });
 
 // Add request interceptor
