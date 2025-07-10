@@ -1,10 +1,10 @@
 // src/services/auth.service.js
 import axios from 'axios';
 
-const raw = process.env.VUE_APP_API_URL
-             || `${window.location.origin}/api`;
-
-export const API_URL = raw.replace(/\/+$/, '') + '/';
+export const API_URL = (
+  process.env.VUE_APP_API_URL ||
+  'https://wellness-app-tx2c.onrender.com/api'
+).replace(/\/+$/, '') + '/';
 
 const TOKEN_KEY = 'user';
 
