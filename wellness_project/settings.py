@@ -181,15 +181,23 @@ CORS_ALLOW_METHODS = [
 ]
 
 
-REDIS_URL = config("REDIS_URL", default="redis://localhost:6379/0")
+REDIS_URL = config("REDIS_URL", default="")
 
-CELERY_BROKER_URL   = REDIS_URL
-CELERY_RESULT_BACKEND = REDIS_URL
+if REDIS_URL:
+    CELERY_BROKER_URL = REDIS_URL
+    CELERY_RESULT_BACKEND = REDIS_URL
+    CACHE_BACKEND = "django.core.cache.backends.redis.RedisCache"
+    CACHE_LOCATION = REDIS_URL.rsplit("/", 1)[0] + "/1"
+else:
+    CELERY_BROKER_URL = None
+    CELERY_RESULT_BACKEND = None
+    CACHE_BACKEND = "django.core.cache.backends.locmem.LocMemCache"
+    CACHE_LOCATION = ""
 
 CACHES = {
     "default": {
-        "BACKEND": "django.core.cache.backends.redis.RedisCache",
-        "LOCATION": REDIS_URL.rsplit("/", 1)[0] + "/1",
+        "BACKEND": CACHE_BACKEND,
+        "LOCATION": CACHE_LOCATION,
         "TIMEOUT": 3600,
         "KEY_PREFIX": "wellness_nutrition",
     }
@@ -410,16 +418,6 @@ NUTRITION_CONSTANTS = {
         'high_protein': {'protein': 0.35, 'carbs': 0.35, 'fat': 0.30},
         'low_carb': {'protein': 0.30, 'carbs': 0.20, 'fat': 0.50},
         'mediterranean': {'protein': 0.20, 'carbs': 0.50, 'fat': 0.30},
-    }
-}
-
-# Cache configuration for API responses and calculations
-CACHES = {
-    'default': {
-        'BACKEND': 'django.core.cache.backends.redis.RedisCache',
-        'LOCATION': 'redis://localhost:6379/1',
-        'KEY_PREFIX': 'wellness_nutrition',
-        'TIMEOUT': 3600,  # 1 hour default
     }
 }
 
