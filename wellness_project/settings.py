@@ -14,6 +14,10 @@ from pathlib import Path
 from decouple import config
 import os
 
+# Optional Redis URL for caching and Celery. If not provided, fall back to
+# in-memory backends so the application can run without Redis.
+REDIS_URL = config('REDIS_URL', default=None)
+
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 
@@ -161,8 +165,13 @@ CORS_ALLOWED_ORIGINS = [
 ]
 
 # CELERY CONFIGURATION
-CELERY_BROKER_URL = 'redis://localhost:6379/0'
-CELERY_RESULT_BACKEND = 'redis://localhost:6379/0'
+# Use Redis if REDIS_URL is provided, otherwise fall back to in-memory broker.
+if REDIS_URL:
+    CELERY_BROKER_URL = f'{REDIS_URL}/0'
+    CELERY_RESULT_BACKEND = f'{REDIS_URL}/0'
+else:
+    CELERY_BROKER_URL = 'memory://'
+    CELERY_RESULT_BACKEND = 'cache+memory://'
 
 # Celery Task Settings
 CELERY_ACCEPT_CONTENT = ['json']
@@ -382,11 +391,20 @@ NUTRITION_CONSTANTS = {
     }
 }
 
-# Cache configuration for API responses and calculations
+# Cache configuration for API responses and calculations. If a REDIS_URL is
+# specified use Redis, otherwise fall back to the local memory cache so the
+# application can run without external services.
+if REDIS_URL:
+    _cache_backend = 'django.core.cache.backends.redis.RedisCache'
+    _cache_location = f'{REDIS_URL}/1'
+else:
+    _cache_backend = 'django.core.cache.backends.locmem.LocMemCache'
+    _cache_location = 'unique-wellness'
+
 CACHES = {
     'default': {
-        'BACKEND': 'django.core.cache.backends.redis.RedisCache',
-        'LOCATION': 'redis://localhost:6379/1',
+        'BACKEND': _cache_backend,
+        'LOCATION': _cache_location,
         'KEY_PREFIX': 'wellness_nutrition',
         'TIMEOUT': 3600,  # 1 hour default
     }
