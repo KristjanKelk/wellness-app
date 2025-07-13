@@ -181,9 +181,19 @@ CORS_ALLOW_METHODS = [
 ]
 
 
-# CELERY CONFIGURATION
-CELERY_BROKER_URL = 'redis://localhost:6379/0'
-CELERY_RESULT_BACKEND = 'redis://localhost:6379/0'
+REDIS_URL = config("REDIS_URL", default="redis://localhost:6379/0")
+
+CELERY_BROKER_URL   = REDIS_URL
+CELERY_RESULT_BACKEND = REDIS_URL
+
+CACHES = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.redis.RedisCache",
+        "LOCATION": REDIS_URL.rsplit("/", 1)[0] + "/1",
+        "TIMEOUT": 3600,
+        "KEY_PREFIX": "wellness_nutrition",
+    }
+}
 
 # Celery Task Settings
 CELERY_ACCEPT_CONTENT = ['json']
