@@ -8,6 +8,8 @@ from .models import HealthProfile, WeightHistory, Activity
 from .serializers import HealthProfileSerializer, WeightHistorySerializer, ActivitySerializer
 from django.db.models import Avg, Count, Sum
 from django.db.models.functions import TruncDay, TruncWeek, TruncMonth
+import logging
+logger = logging.getLogger("django")
 
 class HealthProfileViewSet(viewsets.ModelViewSet):
     """
@@ -24,11 +26,13 @@ class HealthProfileViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['get', 'put', 'patch'])
     def my_profile(self, request):
+        logger.info("my_profile called for user %s", request.user)
         """
         Get or update the current user's health profile
         """
         try:
             profile = HealthProfile.objects.get(user=request.user)
+            logger.info("HealthProfile fetched for user %s", request.user)
 
             if request.method in ['PUT', 'PATCH']:
                 serializer = self.get_serializer(profile, data=request.data, partial=request.method == 'PATCH')
