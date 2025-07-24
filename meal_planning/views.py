@@ -1261,6 +1261,11 @@ class NutritionProfileViewSet(viewsets.ModelViewSet):
         """Partially update user's nutrition profile"""
         return nutrition_profile_view(request)
     
+    @action(detail=False, methods=['get', 'post', 'patch'])
+    def current(self, request):
+        """Get or update the current user's nutrition profile"""
+        return nutrition_profile_view(request)
+    
     @action(detail=False, methods=['get'])
     def supported_options(self, request):
         """Get supported dietary preferences, allergies, cuisines, etc."""
