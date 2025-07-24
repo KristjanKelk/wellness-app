@@ -6,6 +6,7 @@
 - **Domain Typo**: The frontend domain has a typo (`wellness-app-fronend.onrender.com` instead of `wellness-app-frontend.onrender.com`)
 - **Conflicting CORS Settings**: `CORS_ALLOW_ALL_ORIGINS = True` was conflicting with specific allowed origins
 - **Missing CORS Headers**: Some required headers were missing for proper API communication
+- **Deprecated Setting**: `CORS_REPLACE_HTTPS_REFERER` has been removed in django-cors-headers 4.0+
 
 ### 2. Service Hibernation (Render.com Free Tier)
 - **503 Errors**: Backend service goes to sleep after 15 minutes of inactivity
@@ -16,9 +17,14 @@
 
 ### 1. Backend CORS Configuration (`wellness_project/settings.py`)
 
+#### Deprecated Setting Removal (January 2025)
+- **Removed**: `CORS_REPLACE_HTTPS_REFERER = True` (deprecated in django-cors-headers 4.0+)
+- **Replacement**: Using `CSRF_TRUSTED_ORIGINS` for CSRF protection (already configured)
+- **Impact**: Fixes deployment error: `corsheaders.E013) The CORS_REPLACE_HTTPS_REFERER setting has been removed`
+
 ```python
-# Fixed CORS settings
-CORS_ALLOW_ALL_ORIGINS = False  # Changed from True for better security
+# Fixed CORS settings (consolidated and cleaned up)
+CORS_ALLOW_ALL_ORIGINS = True  # Temporarily for debugging (set to False for production)
 
 CORS_ALLOWED_ORIGINS = [
    'https://wellness-app-fronend.onrender.com',  # Keep typo version for compatibility
