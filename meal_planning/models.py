@@ -2,10 +2,47 @@
 from django.db import models
 from django.contrib.auth import get_user_model
 from django.core.validators import MinValueValidator, MaxValueValidator
-from django.contrib.postgres.fields import ArrayField
+try:
+    from django.contrib.postgres.fields import ArrayField
+except ImportError:
+    ArrayField = None
 import uuid
+from django.conf import settings
+import json
 
 User = get_user_model()
+
+
+class CompatibleArrayField(models.JSONField):
+    """
+    A field that stores arrays and is compatible with both SQLite and PostgreSQL
+    """
+    def __init__(self, base_field=None, size=None, **kwargs):
+        # Accept base_field for PostgreSQL compatibility but ignore it for JSONField
+        kwargs.setdefault('default', list)
+        super().__init__(**kwargs)
+    
+    def from_db_value(self, value, expression, connection):
+        if value is None:
+            return value
+        if isinstance(value, str):
+            try:
+                return json.loads(value)
+            except (json.JSONDecodeError, TypeError):
+                return []
+        return value or []
+    
+    def to_python(self, value):
+        if value is None:
+            return []
+        if isinstance(value, str):
+            try:
+                return json.loads(value)
+            except (json.JSONDecodeError, TypeError):
+                return []
+        if isinstance(value, list):
+            return value
+        return []
 
 
 class NutritionProfile(models.Model):
@@ -65,20 +102,20 @@ class NutritionProfile(models.Model):
     ]
 
     # Nutrition preferences
-    dietary_preferences = ArrayField(
-        models.CharField(max_length=50, choices=DIETARY_PREFERENCES),
+    dietary_preferences = CompatibleArrayField(
+        base_field=models.CharField(max_length=50, choices=DIETARY_PREFERENCES),
         default=list, blank=True
     )
-    allergies_intolerances = ArrayField(
-        models.CharField(max_length=50, choices=ALLERGIES_INTOLERANCES),
+    allergies_intolerances = CompatibleArrayField(
+        base_field=models.CharField(max_length=50, choices=ALLERGIES_INTOLERANCES),
         default=list, blank=True
     )
-    cuisine_preferences = ArrayField(
-        models.CharField(max_length=50, choices=CUISINE_PREFERENCES),
+    cuisine_preferences = CompatibleArrayField(
+        base_field=models.CharField(max_length=50, choices=CUISINE_PREFERENCES),
         default=list, blank=True
     )
-    disliked_ingredients = ArrayField(
-        models.CharField(max_length=100),
+    disliked_ingredients = CompatibleArrayField(
+        base_field=models.CharField(max_length=100),
         default=list, blank=True
     )
 
@@ -218,15 +255,15 @@ class Ingredient(models.Model):
     category = models.CharField(max_length=50, choices=FOOD_CATEGORIES, default='other')
 
     # Dietary tags for filtering
-    dietary_tags = ArrayField(
-        models.CharField(max_length=50),
+    dietary_tags = CompatibleArrayField(
+        base_field=models.CharField(max_length=50),
         default=list, blank=True,
         help_text="vegetarian, vegan, gluten-free, etc."
     )
 
     # Common allergens
-    allergens = ArrayField(
-        models.CharField(max_length=50),
+    allergens = CompatibleArrayField(
+        base_field=models.CharField(max_length=50),
         default=list, blank=True
     )
 
@@ -295,12 +332,12 @@ class Recipe(models.Model):
     fiber_per_serving = models.FloatField(default=0)
 
     # Dietary and allergen information
-    dietary_tags = ArrayField(
-        models.CharField(max_length=50),
+    dietary_tags = CompatibleArrayField(
+        base_field=models.CharField(max_length=50),
         default=list, blank=True
     )
-    allergens = ArrayField(
-        models.CharField(max_length=50),
+    allergens = CompatibleArrayField(
+        base_field=models.CharField(max_length=50),
         default=list, blank=True
     )
 
@@ -318,10 +355,9 @@ class Recipe(models.Model):
     source_type = models.CharField(max_length=50, choices=SOURCE_TYPES)
 
     # Vector embeddings for RAG (future implementation)
-    embedding_vector = ArrayField(
-        models.FloatField(),
-        size=1536,  # OpenAI embedding dimension
-        null=True, blank=True
+    embedding_vector = models.JSONField(
+        null=True, blank=True,
+        help_text="OpenAI embedding vector (1536 dimensions)"
     )
 
     # User engagement (for community-driven RAG bonus)
