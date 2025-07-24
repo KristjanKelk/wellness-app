@@ -275,10 +275,155 @@ class RecipeViewSet(viewsets.ReadOnlyModelViewSet):
 
         return queryset.order_by('-rating_avg', '-created_at')
 
+    @action(detail=False, methods=['get'])
+    def search_spoonacular(self, request):
+        """Search recipes directly from Spoonacular API"""
+        try:
+            from meal_planning.services.spoonacular_service import get_spoonacular_service, SpoonacularAPIError
+            
+            # Get search parameters
+            query = request.query_params.get('query', '')
+            cuisine = request.query_params.get('cuisine', '')
+            diet = request.query_params.get('diet', '')
+            intolerances = request.query_params.get('intolerances', '')
+            max_calories = request.query_params.get('max_calories', '')
+            meal_type = request.query_params.get('meal_type', '')
+            number = int(request.query_params.get('number', 12))
+            offset = int(request.query_params.get('offset', 0))
+            
+            # Get user's nutrition profile for better filtering
+            try:
+                nutrition_profile = request.user.nutrition_profile
+                if not diet and nutrition_profile.dietary_preferences:
+                    diet = ','.join(nutrition_profile.dietary_preferences)
+                if not intolerances and nutrition_profile.allergies_intolerances:
+                    intolerances = ','.join(nutrition_profile.allergies_intolerances)
+            except:
+                pass
+            
+            service = get_spoonacular_service()
+            
+            # Search Spoonacular API
+            search_results = service.search_recipes(
+                query=query,
+                cuisine=cuisine,
+                diet=diet,
+                intolerances=intolerances,
+                number=number,
+                offset=offset
+            )
+            
+            # Normalize and save recipes to local database for future use
+            saved_recipes = []
+            for spoon_recipe in search_results.get('results', []):
+                try:
+                    # Check if recipe already exists
+                    existing_recipe = Recipe.objects.filter(
+                        spoonacular_id=spoon_recipe.get('id')
+                    ).first()
+                    
+                    if existing_recipe:
+                        saved_recipes.append(existing_recipe)
+                    else:
+                        # Normalize and create new recipe
+                        normalized_data = service.normalize_recipe_data(spoon_recipe)
+                        
+                        # Filter by meal_type if specified
+                        if meal_type and normalized_data.get('meal_type') != meal_type:
+                            continue
+                            
+                        # Filter by max_calories if specified
+                        if max_calories and normalized_data.get('calories_per_serving', 0) > int(max_calories):
+                            continue
+                        
+                        recipe = Recipe.objects.create(
+                            title=normalized_data['title'],
+                            summary=normalized_data.get('summary', ''),
+                            cuisine=normalized_data.get('cuisine', ''),
+                            meal_type=normalized_data.get('meal_type', 'lunch'),
+                            servings=normalized_data.get('servings', 4),
+                            prep_time_minutes=normalized_data.get('prep_time_minutes', 0),
+                            cook_time_minutes=normalized_data.get('cook_time_minutes', 0),
+                            total_time_minutes=normalized_data.get('total_time_minutes', 30),
+                            difficulty_level=normalized_data.get('difficulty_level', 'medium'),
+                            spoonacular_id=normalized_data.get('spoonacular_id'),
+                            ingredients_data=normalized_data.get('ingredients_data', []),
+                            instructions=normalized_data.get('instructions', []),
+                            calories_per_serving=normalized_data.get('calories_per_serving', 0),
+                            protein_per_serving=normalized_data.get('protein_per_serving', 0),
+                            carbs_per_serving=normalized_data.get('carbs_per_serving', 0),
+                            fat_per_serving=normalized_data.get('fat_per_serving', 0),
+                            fiber_per_serving=normalized_data.get('fiber_per_serving', 0),
+                            dietary_tags=normalized_data.get('dietary_tags', []),
+                            allergens=normalized_data.get('allergens', []),
+                            image_url=normalized_data.get('image_url', ''),
+                            source_url=normalized_data.get('source_url', ''),
+                            source_type='spoonacular',
+                            is_verified=True
+                        )
+                        saved_recipes.append(recipe)
+                        
+                except Exception as e:
+                    logger.warning(f"Failed to save recipe {spoon_recipe.get('id', 'unknown')}: {e}")
+                    continue
+            
+            # Serialize the saved recipes
+            serializer = self.get_serializer(saved_recipes, many=True)
+            
+            return Response({
+                'results': serializer.data,
+                'total_results': search_results.get('totalResults', 0),
+                'number': len(saved_recipes),
+                'offset': offset,
+                'source': 'spoonacular'
+            })
+            
+        except SpoonacularAPIError as e:
+            logger.error(f"Spoonacular API error: {e}")
+            return Response(
+                {'error': 'Recipe search temporarily unavailable', 'details': str(e)},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE
+            )
+        except Exception as e:
+            logger.error(f"Recipe search error: {e}")
+            return Response(
+                {'error': 'Recipe search failed', 'details': str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
     @action(detail=False, methods=['post'])
     def search(self, request):
-        """Advanced recipe search with nutritional filters"""
+        """Advanced recipe search with nutritional filters - Enhanced with Spoonacular"""
         data = request.data
+        
+        # Try Spoonacular search first for fresh results
+        try:
+            spoonacular_params = {
+                'query': data.get('search_query', ''),
+                'cuisine': ','.join(data.get('cuisine_preferences', [])),
+                'diet': ','.join(data.get('dietary_preferences', [])),
+                'intolerances': ','.join(data.get('allergies_to_avoid', [])),
+                'meal_type': data.get('meal_type', ''),
+                'max_calories': data.get('max_calories', ''),
+                'number': data.get('number', 10)
+            }
+            
+            # Use internal search_spoonacular method
+            spoonacular_request = type('MockRequest', (), {
+                'query_params': spoonacular_params,
+                'user': request.user
+            })()
+            
+            try:
+                spoonacular_response = self.search_spoonacular(spoonacular_request)
+                if spoonacular_response.status_code == 200:
+                    return spoonacular_response
+            except Exception as e:
+                logger.warning(f"Spoonacular search fallback: {e}")
+        except Exception as e:
+            logger.warning(f"Spoonacular search failed: {e}")
+        
+        # Fallback to local database search
         queryset = Recipe.objects.all()
 
         # Apply filters from search data
@@ -297,13 +442,25 @@ class RecipeViewSet(viewsets.ReadOnlyModelViewSet):
         if data.get('cuisine_preferences'):
             queryset = queryset.filter(cuisine__in=data['cuisine_preferences'])
 
+        if data.get('meal_type'):
+            queryset = queryset.filter(meal_type=data['meal_type'])
+
+        if data.get('max_calories'):
+            queryset = queryset.filter(calories_per_serving__lte=data['max_calories'])
+
+        if data.get('search_query'):
+            queryset = queryset.filter(title__icontains=data['search_query'])
+
         page = self.paginate_queryset(queryset)
         if page is not None:
             serializer = self.get_serializer(page, many=True)
             return self.get_paginated_response(serializer.data)
 
         serializer = self.get_serializer(queryset, many=True)
-        return Response(serializer.data)
+        return Response({
+            'results': serializer.data,
+            'source': 'local_database'
+        })
 
     @action(detail=True, methods=['post'])
     def rate(self, request, pk=None):
@@ -380,6 +537,18 @@ class MealPlanViewSet(viewsets.ModelViewSet):
             plan_data = request.data
             plan_type = plan_data.get('plan_type', 'daily')
             start_date = plan_data.get('start_date')
+            
+            # Handle custom calorie target - this fixes the n/a issue
+            custom_calories = plan_data.get('target_calories') or plan_data.get('custom_calories')
+            if custom_calories:
+                try:
+                    target_calories = int(custom_calories)
+                    logger.info(f"Using custom calorie target: {target_calories}")
+                except (ValueError, TypeError):
+                    logger.warning(f"Invalid custom calories value: {custom_calories}")
+                    target_calories = nutrition_profile.calorie_target
+            else:
+                target_calories = nutrition_profile.calorie_target
 
             if not start_date:
                 return Response(
@@ -394,19 +563,27 @@ class MealPlanViewSet(viewsets.ModelViewSet):
             else:
                 start_date_obj = start_date
 
+            # Log the meal plan generation request
+            logger.info(f"Generating meal plan for user {request.user.id}: "
+                       f"type={plan_type}, start={start_date_obj}, calories={target_calories}")
+
             # Use the AI meal planning service to generate a full meal plan
             ai_service = AIMealPlanningService()
             meal_plan = ai_service.generate_meal_plan(
                 user=request.user,
                 plan_type=plan_type,
                 start_date=start_date_obj,
+                target_calories=target_calories  # Pass the custom calories
             )
 
             serializer = self.get_serializer(meal_plan)
+            logger.info(f"Successfully generated meal plan {meal_plan.id} with {target_calories} target calories")
             return Response(serializer.data, status=status.HTTP_201_CREATED)
 
         except Exception as e:
             logger.error(f"Error generating meal plan: {str(e)}")
+            import traceback
+            traceback.print_exc()
             return Response(
                 {'error': 'Failed to generate meal plan', 'details': str(e)},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR

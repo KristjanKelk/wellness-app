@@ -235,13 +235,11 @@ if REDIS_URL:
     
     # Redis connection options with better timeout handling
     REDIS_CONNECTION_OPTIONS = {
-        "CONNECTION_POOL_KWARGS": {
-            "socket_connect_timeout": 5,
-            "socket_timeout": 5,
-            "retry_on_timeout": True,
-            "health_check_interval": 30,
-            "max_connections": 10,
-        }
+        "socket_connect_timeout": 5,
+        "socket_timeout": 5,
+        "retry_on_timeout": True,
+        "health_check_interval": 30,
+        "max_connections": 10,
     }
 else:
     CELERY_BROKER_URL = None
