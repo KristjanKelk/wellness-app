@@ -142,15 +142,16 @@ ACCOUNT_EMAIL_VERIFICATION = 'mandatory'  # Changed from 'none' to enable email 
 ACCOUNT_LOGIN_METHODS = {'username', 'email'}
 ACCOUNT_SIGNUP_FIELDS = ['username*','email*','password1*','password2*']
 
-# CORS settings
-# Allow all origins to handle service hibernation and 502 errors
-# This prevents CORS errors during service wake-up
+# CORS settings - Fixed for production deployment
+# Temporarily allow all origins during service hibernation/502 errors
+# This is necessary for Render.com's free tier service wake-up process
 CORS_ALLOW_ALL_ORIGINS = True
 
+# Specific allowed origins (keep both typo and correct versions)
 CORS_ALLOWED_ORIGINS = [
-   'https://wellness-app-fronend.onrender.com',  # Keep the typo version for compatibility
-   'https://wellness-app-frontend.onrender.com',  # Correct spelling
-   'https://wellness-app-tx2c.onrender.com',
+    'https://wellness-app-fronend.onrender.com',   # Current frontend domain (with typo)
+    'https://wellness-app-frontend.onrender.com',  # Correct spelling for future
+    'https://wellness-app-tx2c.onrender.com',      # Backend domain
     'http://localhost:8080',
     'http://127.0.0.1:8080',
     'http://localhost:3000',
@@ -222,12 +223,15 @@ if REDIS_URL:
     CACHE_LOCATION = REDIS_URL.rsplit("/", 1)[0] + "/1"
     
     # Redis connection options with better timeout handling
+    # Updated to fix connection_pool_kwargs error
     REDIS_CONNECTION_OPTIONS = {
-        "socket_connect_timeout": 5,
-        "socket_timeout": 5,
-        "retry_on_timeout": True,
-        "health_check_interval": 30,
-        "max_connections": 10,
+        "CONNECTION_POOL_KWARGS": {
+            "socket_connect_timeout": 5,
+            "socket_timeout": 5,
+            "retry_on_timeout": True,
+            "health_check_interval": 30,
+            "max_connections": 10,
+        }
     }
 else:
     CELERY_BROKER_URL = None

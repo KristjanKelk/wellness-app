@@ -28,10 +28,17 @@ import logging
 logger = logging.getLogger(__name__)
 
 @csrf_exempt
-@api_view(['GET'])
+@api_view(['GET', 'HEAD', 'OPTIONS'])
 @permission_classes([AllowAny])
 def health_check(request):
     """Simple health check endpoint for service monitoring"""
+    # Handle HEAD requests - return empty response with proper headers
+    if request.method == 'HEAD':
+        response = HttpResponse()
+        response['Allow'] = 'OPTIONS, GET, HEAD'
+        response['Content-Type'] = 'application/json'
+        return response
+    
     try:
         # Test database connection
         with connection.cursor() as cursor:
