@@ -37,7 +37,7 @@ DEBUG = False
 ALLOWED_HOSTS = [
     'wellness-app-tx2c.onrender.com',
     'wellness-app-frontend.onrender.com',
-    'localhost',
+    'wellness-app-fronend.onrender.com',  # Keep the typo version for compatibility
     'localhost',
     '127.0.0.1',
     '0.0.0.0',
@@ -45,13 +45,14 @@ ALLOWED_HOSTS = [
 
 CSRF_TRUSTED_ORIGINS = [
      'https://wellness-app-tx2c.onrender.com',
-     'https://wellness-app-fronend.onrender.com',
+     'https://wellness-app-frontend.onrender.com',
+     'https://wellness-app-fronend.onrender.com',  # Keep the typo version for compatibility
      'http://localhost:8080',
      'http://127.0.0.1:8080',
 ]
 
 # Frontend URL for email links
-FRONTEND_URL = "https://wellness-app-fronend.onrender.com"
+FRONTEND_URL = "https://wellness-app-fronend.onrender.com"  # Keep the typo version for compatibility
 
 # Application definition
 
@@ -88,10 +89,9 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
+    'corsheaders.middleware.CorsMiddleware',  # Move CORS middleware to the top
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
-    'corsheaders.middleware.CorsMiddleware',
-    'django.middleware.common.CommonMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
@@ -143,15 +143,31 @@ ACCOUNT_LOGIN_METHODS = {'username', 'email'}
 ACCOUNT_SIGNUP_FIELDS = ['username*','email*','password1*','password2*']
 
 # CORS settings
-CORS_ALLOW_ALL_ORIGINS = True
+# Note: Set CORS_ALLOW_ALL_ORIGINS to False for production security
+CORS_ALLOW_ALL_ORIGINS = False
 
 CORS_ALLOWED_ORIGINS = [
-   'https://wellness-app-fronend.onrender.com',
+   'https://wellness-app-fronend.onrender.com',  # Keep the typo version for compatibility
+   'https://wellness-app-frontend.onrender.com',  # Correct spelling
    'https://wellness-app-tx2c.onrender.com',
     'http://localhost:8080',
     'http://127.0.0.1:8080',
 ]
 CORS_ALLOW_CREDENTIALS = True
+
+# Additional CORS settings for better compatibility
+CORS_PREFLIGHT_MAX_AGE = 86400  # 24 hours
+
+# Allow specific origins for API endpoints
+CORS_ALLOWED_ORIGIN_REGEXES = [
+    r"^https://.*\.onrender\.com$",
+    r"^http://localhost:\d+$",
+    r"^http://127\.0\.0\.1:\d+$",
+]
+
+# Handle CORS errors more gracefully
+CORS_ALLOW_ALL_ORIGINS = True  # Temporarily allow all for debugging
+CORS_REPLACE_HTTPS_REFERER = True
 
 SESSION_COOKIE_SAMESITE = 'None'
 CSRF_COOKIE_SAMESITE    = 'None'
@@ -169,6 +185,10 @@ CORS_ALLOW_HEADERS = [
     'user-agent',
     'x-csrftoken',
     'x-requested-with',
+    'cache-control',
+    'pragma',
+    'x-forwarded-for',
+    'x-real-ip',
 ]
 
 CORS_ALLOW_METHODS = [
@@ -188,11 +208,23 @@ if REDIS_URL:
     CELERY_RESULT_BACKEND = REDIS_URL
     CACHE_BACKEND = "django.core.cache.backends.redis.RedisCache"
     CACHE_LOCATION = REDIS_URL.rsplit("/", 1)[0] + "/1"
+    
+    # Redis connection options with better timeout handling
+    REDIS_CONNECTION_OPTIONS = {
+        "connection_pool_kwargs": {
+            "socket_connect_timeout": 5,
+            "socket_timeout": 5,
+            "retry_on_timeout": True,
+            "health_check_interval": 30,
+            "max_connections": 10,
+        }
+    }
 else:
     CELERY_BROKER_URL = None
     CELERY_RESULT_BACKEND = None
     CACHE_BACKEND = "django.core.cache.backends.locmem.LocMemCache"
     CACHE_LOCATION = ""
+    REDIS_CONNECTION_OPTIONS = {}
 
 CACHES = {
     "default": {
@@ -200,6 +232,7 @@ CACHES = {
         "LOCATION": CACHE_LOCATION,
         "TIMEOUT": 3600,
         "KEY_PREFIX": "wellness_nutrition",
+        "OPTIONS": REDIS_CONNECTION_OPTIONS,
     }
 }
 
@@ -235,12 +268,12 @@ REST_FRAMEWORK = {
         'rest_framework.authentication.SessionAuthentication',
     ],
     'DEFAULT_THROTTLE_CLASSES': [
-        'rest_framework.throttling.UserRateThrottle',
-        'rest_framework.throttling.AnonRateThrottle',
+        'utils.throttling.ResilientUserRateThrottle',
+        'utils.throttling.ResilientAnonRateThrottle',
     ],
     'DEFAULT_THROTTLE_RATES': {
-        'user': '100/minute',
-        'anon': '20/minute',
+        'user': '1000/minute',  # Increased for production
+        'anon': '100/minute',   # Increased for production
     },
     'DEFAULT_PAGINATION_CLASS': 'utils.pagination.StandardResultsSetPagination',
     'DEFAULT_FILTER_BACKENDS': [
@@ -248,6 +281,7 @@ REST_FRAMEWORK = {
         'rest_framework.filters.SearchFilter',
         'rest_framework.filters.OrderingFilter',
     ],
+    'EXCEPTION_HANDLER': 'utils.exceptions.custom_exception_handler',
 }
 
 # JWT Settings

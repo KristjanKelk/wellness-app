@@ -12,6 +12,7 @@ from users.views import (
     GenerateTwoFactorView, VerifyTwoFactorView, DisableTwoFactorView,
     ChangePasswordView, ResetPasswordRequestView, ResetPasswordConfirmView,
     NotificationSettingsView, ExportUserDataView, TwoFactorTokenView,
+    CorsTestView, HealthCheckView,
 )
 from users.jwt import CustomTokenObtainPairView
 from users.oauth import GoogleOAuthAPI, GitHubOAuthAPI
@@ -41,6 +42,10 @@ urlpatterns = [
     path('api/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     path('api/token/verify/', TokenVerifyView.as_view(), name='token_verify'),
     path('api/token/2fa-verify/', TwoFactorTokenView.as_view(), name='token_verify_2fa'),
+
+    # Health check and CORS test endpoints
+    path('api/health/', HealthCheckView.as_view(), name='health-check'),
+    path('api/cors-test/', CorsTestView.as_view(), name='cors-test'),
 
     # User registration and profile management
     path('api/register/', RegisterView.as_view(), name='register'),
