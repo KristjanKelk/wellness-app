@@ -16,9 +16,84 @@ const apiClient = axios.create({
     headers: {
         'Content-Type': 'application/json',
     },
-    timeout: 10000,
+    timeout: 30000,  // Increased timeout for service wake-up
     withCredentials: true,   // if you need cookies/CORS creds
 });
+
+// Function to handle service hibernation (503 errors on Render.com)
+async function handleServiceHibernation(originalRequest) {
+    console.log('Service appears to be hibernating. Attempting to wake up...');
+    
+    // Show user-friendly message
+    if (store?.commit) {
+        store.commit('ui/setLoading', {
+            isLoading: true,
+            message: 'Service is starting up... This may take up to 60 seconds on the first request.'
+        });
+    }
+
+    // Multiple wake-up attempts with increasing delays
+    const maxAttempts = 4;
+    const delays = [5000, 10000, 15000, 20000]; // 5s, 10s, 15s, 20s
+    
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+        try {
+            console.log(`Wake-up attempt ${attempt + 1}/${maxAttempts}...`);
+            
+            if (store?.commit) {
+                store.commit('ui/setLoading', {
+                    isLoading: true,
+                    message: `Waking up service... Attempt ${attempt + 1}/${maxAttempts}`
+                });
+            }
+            
+            await new Promise(resolve => setTimeout(resolve, delays[attempt]));
+            
+            // Attempt to wake up the service
+            await axios.get(API_URL.replace('/api/', '/'), { 
+                timeout: 30000,
+                headers: {
+                    'Cache-Control': 'no-cache',
+                    'Pragma': 'no-cache'
+                }
+            });
+            
+            // Service responded, wait a bit for full initialization
+            await new Promise(resolve => setTimeout(resolve, 3000));
+            
+            console.log('Service wake-up successful, retrying original request...');
+            
+            // Retry original request
+            return apiClient(originalRequest);
+            
+        } catch (wakeupError) {
+            console.log(`Wake-up attempt ${attempt + 1} failed:`, wakeupError.message);
+            
+            if (attempt === maxAttempts - 1) {
+                // Last attempt failed, try the original request anyway
+                console.log('All wake-up attempts failed, trying original request...');
+                break;
+            }
+        }
+    }
+    
+    // Final attempt with the original request
+    try {
+        return await apiClient(originalRequest);
+    } catch (finalError) {
+        if (store?.commit) {
+            store.commit('ui/setError', {
+                message: 'Service is currently unavailable. Please try again in a few minutes.',
+                details: 'The backend service may be starting up or experiencing issues.'
+            });
+        }
+        throw finalError;
+    } finally {
+        if (store?.commit) {
+            store.commit('ui/setLoading', { isLoading: false });
+        }
+    }
+}
 
 // Add request interceptor
 apiClient.interceptors.request.use(
@@ -40,6 +115,22 @@ apiClient.interceptors.response.use(
     response => response,
     async error => {
         const originalRequest = error.config;
+
+        // Handle service hibernation (503 errors)
+        if (error.response?.status === 503 && !originalRequest._hibernation_retry) {
+            originalRequest._hibernation_retry = true;
+            return handleServiceHibernation(originalRequest);
+        }
+
+        // Handle 502 errors (bad gateway, often during service startup)
+        if (error.response?.status === 502 && !originalRequest._gateway_retry) {
+            originalRequest._gateway_retry = true;
+            console.log('Service gateway error, retrying in 5 seconds...');
+            await new Promise(resolve => setTimeout(resolve, 5000));
+            return apiClient(originalRequest);
+        }
+
+        // Handle authentication errors
         if (error.response?.status === 401 && !originalRequest._retry) {
             originalRequest._retry = true;
 
@@ -51,7 +142,7 @@ apiClient.interceptors.response.use(
                     if (store?.state?.auth?.status?.loggedIn) {
                         await store.dispatch('auth/refreshToken', response.access);
                     }
-                    return axios(originalRequest);
+                    return apiClient(originalRequest);
                 }
             } catch (refreshError) {
                 AuthService.logout();
@@ -65,13 +156,29 @@ apiClient.interceptors.response.use(
                 return Promise.reject(refreshError);
             }
         }
+
+        // Enhanced error logging
         if (error.response) {
-            console.error(
-                `API Error: ${error.response.status} ${error.response.statusText}`,
-                error.response.data
-            );
+            const errorInfo = {
+                status: error.response.status,
+                statusText: error.response.statusText,
+                url: error.config?.url,
+                method: error.config?.method,
+                data: error.response.data,
+                headers: error.response.headers
+            };
+            
+            if (error.response.status === 503) {
+                console.error('Service hibernation detected:', errorInfo);
+            } else if (error.response.status === 502) {
+                console.error('Service gateway error:', errorInfo);
+            } else {
+                console.error('API Error:', errorInfo);
+            }
+        } else if (error.code === 'ECONNABORTED') {
+            console.error('API Request timeout:', error.message);
         } else {
-            console.error('API Error:', error.message);
+            console.error('API Network error:', error.message);
         }
 
         return Promise.reject(error);
