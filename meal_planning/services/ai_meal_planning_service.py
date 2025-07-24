@@ -14,9 +14,16 @@ from django.core.cache import cache
 from django.utils import timezone
 
 import openai
-import chromadb
 import numpy as np
 from openai import OpenAI
+
+# Conditional chromadb import for RAG capabilities
+try:
+    import chromadb
+    CHROMADB_AVAILABLE = True
+except ImportError:
+    chromadb = None
+    CHROMADB_AVAILABLE = False
 
 from ..models import (
     NutritionProfile, Recipe, Ingredient, MealPlan, 
@@ -78,6 +85,11 @@ class AdvancedAIMealPlanningService:
     
     def setup_vector_database(self):
         """Initialize ChromaDB for RAG capabilities"""
+        if not CHROMADB_AVAILABLE:
+            logger.warning("ChromaDB not available - RAG capabilities disabled. Install 'chromadb' for enhanced functionality.")
+            self.chroma_client = None
+            return
+            
         try:
             self.chroma_client = chromadb.PersistentClient(
                 path=getattr(settings, 'CHROMA_PERSIST_DIRECTORY', './chroma_db')
