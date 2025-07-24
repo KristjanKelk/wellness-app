@@ -368,40 +368,161 @@ class AIMealPlanningService:
                                 nutrition_profile: NutritionProfile, strategy: Dict) -> Dict:
         """Generate a single recipe.
 
-        Priority is given to fetching an existing recipe from Spoonacular that matches the
-        user's dietary preferences and the current meal requirements. If no suitable
-        Spoonacular recipe is found (or the API call fails), the service falls back to the
-        AI-generated recipe pipeline that was originally implemented.
+        Enhanced to prioritize Spoonacular recipes with better search and fallback handling.
+        Also saves Spoonacular recipes to local database for future use.
         """
 
-        # 1) Try Spoonacular first ---------------------------------------------------------
+        # 1) Try Spoonacular first with enhanced search ---------------------------------
         try:
             from meal_planning.services.spoonacular_service import get_spoonacular_service, SpoonacularAPIError
 
             service = get_spoonacular_service()
 
+            # Build more comprehensive search parameters
             diet = ','.join(nutrition_profile.dietary_preferences)
             intolerances = ','.join(nutrition_profile.allergies_intolerances)
-
-            search_results = service.search_recipes(
-                query=meal_info.get('suggested_name', ''),
-                cuisine=meal_info.get('cuisine', ''),
-                diet=diet,
-                intolerances=intolerances,
-                number=1
-            )
-
-            if search_results.get('results'):
-                # We have at least one matching recipe – use it
-                spoonacular_recipe = search_results['results'][0]
-                normalized = service.normalize_recipe_data(spoonacular_recipe)
-                normalized['source_type'] = 'spoonacular'
-                return normalized
+            
+            # Try multiple search strategies for better results
+            search_strategies = [
+                # Strategy 1: Specific meal name with cuisine
+                {
+                    'query': meal_info.get('suggested_name', ''),
+                    'cuisine': meal_info.get('cuisine', ''),
+                    'diet': diet,
+                    'intolerances': intolerances,
+                    'number': 3
+                },
+                # Strategy 2: Meal type with cuisine
+                {
+                    'query': f"{meal_info.get('meal_type', 'healthy')} {meal_info.get('cuisine', '')}",
+                    'diet': diet,
+                    'intolerances': intolerances,
+                    'number': 5
+                },
+                # Strategy 3: Broader search by meal type
+                {
+                    'query': meal_info.get('meal_type', 'healthy meal'),
+                    'diet': diet,
+                    'intolerances': intolerances,
+                    'number': 10
+                }
+            ]
+            
+            for strategy_params in search_strategies:
+                try:
+                    search_results = service.search_recipes(**strategy_params)
+                    
+                    if search_results.get('results'):
+                        # Filter results by target calories if available
+                        target_calories = meal_info.get('target_calories', 0)
+                        suitable_recipes = []
+                        
+                        for spoon_recipe in search_results['results']:
+                            recipe_calories = spoon_recipe.get('nutrition', {}).get('nutrients', [])
+                            calories = 0
+                            for nutrient in recipe_calories:
+                                if nutrient.get('name') == 'Calories':
+                                    calories = nutrient.get('amount', 0)
+                                    break
+                            
+                            # Accept recipes within 30% of target calories
+                            if target_calories == 0 or abs(calories - target_calories) <= target_calories * 0.3:
+                                suitable_recipes.append(spoon_recipe)
+                        
+                        if suitable_recipes:
+                            # Use the best matching recipe
+                            best_recipe = suitable_recipes[0]
+                            normalized = service.normalize_recipe_data(best_recipe)
+                            
+                            # Save to local database for future use
+                            try:
+                                existing_recipe = Recipe.objects.filter(
+                                    spoonacular_id=normalized.get('spoonacular_id')
+                                ).first()
+                                
+                                if not existing_recipe:
+                                    Recipe.objects.create(
+                                        title=normalized['title'],
+                                        summary=normalized.get('summary', ''),
+                                        cuisine=normalized.get('cuisine', ''),
+                                        meal_type=normalized.get('meal_type', meal_info.get('meal_type', 'lunch')),
+                                        servings=normalized.get('servings', 4),
+                                        prep_time_minutes=normalized.get('prep_time_minutes', 0),
+                                        cook_time_minutes=normalized.get('cook_time_minutes', 0),
+                                        total_time_minutes=normalized.get('total_time_minutes', 30),
+                                        difficulty_level=normalized.get('difficulty_level', 'medium'),
+                                        spoonacular_id=normalized.get('spoonacular_id'),
+                                        ingredients_data=normalized.get('ingredients_data', []),
+                                        instructions=normalized.get('instructions', []),
+                                        calories_per_serving=normalized.get('calories_per_serving', 0),
+                                        protein_per_serving=normalized.get('protein_per_serving', 0),
+                                        carbs_per_serving=normalized.get('carbs_per_serving', 0),
+                                        fat_per_serving=normalized.get('fat_per_serving', 0),
+                                        fiber_per_serving=normalized.get('fiber_per_serving', 0),
+                                        dietary_tags=normalized.get('dietary_tags', []),
+                                        allergens=normalized.get('allergens', []),
+                                        image_url=normalized.get('image_url', ''),
+                                        source_url=normalized.get('source_url', ''),
+                                        source_type='spoonacular',
+                                        is_verified=True
+                                    )
+                                    logger.info(f"Saved new Spoonacular recipe: {normalized['title']}")
+                            except Exception as save_error:
+                                logger.warning(f"Failed to save Spoonacular recipe: {save_error}")
+                            
+                            normalized['source_type'] = 'spoonacular'
+                            logger.info(f"Using Spoonacular recipe: {normalized['title']}")
+                            return normalized
+                            
+                except Exception as strategy_error:
+                    logger.warning(f"Search strategy failed: {strategy_error}")
+                    continue
 
         except (ImportError, SpoonacularAPIError, Exception) as e:
             logger.warning(f"Spoonacular lookup failed, falling back to AI recipe: {e}")
 
-        # 2) Fall back to the original AI recipe generation -------------------------------
+        # 2) Check local database for existing Spoonacular recipes -------------------
+        try:
+            local_recipes = Recipe.objects.filter(
+                source_type='spoonacular',
+                meal_type=meal_info.get('meal_type', 'lunch')
+            )
+            
+            # Filter by dietary preferences
+            for pref in nutrition_profile.dietary_preferences:
+                local_recipes = local_recipes.filter(dietary_tags__contains=[pref])
+            
+            # Filter out allergens
+            for allergen in nutrition_profile.allergies_intolerances:
+                local_recipes = local_recipes.exclude(allergens__contains=[allergen])
+            
+            # Filter by cuisine preference
+            if meal_info.get('cuisine'):
+                local_recipes = local_recipes.filter(cuisine__icontains=meal_info.get('cuisine'))
+            
+            if local_recipes.exists():
+                local_recipe = local_recipes.order_by('?').first()  # Random selection
+                return {
+                    'title': local_recipe.title,
+                    'cuisine': local_recipe.cuisine,
+                    'ingredients': local_recipe.ingredients_data,
+                    'instructions': [inst.get('description', '') for inst in local_recipe.instructions],
+                    'prep_time': local_recipe.prep_time_minutes,
+                    'cook_time': local_recipe.cook_time_minutes,
+                    'total_time': local_recipe.total_time_minutes,
+                    'servings': local_recipe.servings,
+                    'estimated_nutrition': {
+                        'calories': local_recipe.calories_per_serving,
+                        'protein': local_recipe.protein_per_serving,
+                        'carbs': local_recipe.carbs_per_serving,
+                        'fat': local_recipe.fat_per_serving
+                    },
+                    'source_type': 'spoonacular_local'
+                }
+        except Exception as local_error:
+            logger.warning(f"Local recipe lookup failed: {local_error}")
+
+        # 3) Fall back to the original AI recipe generation -------------------------------
         try:
             recipe_prompt = f"""
             Create a detailed recipe for this meal:
