@@ -1,18 +1,25 @@
-WELLNESS PLATFORM
-====================
-
-VERIFY YOUR EMAIL ADDRESS
+{{ platform_name }} - Email Verification
 
 Hello {{ user.first_name|default:user.username }},
 
-Thank you for registering with Wellness Platform. To complete your registration and access all features, please verify your email address by visiting the link below:
+Thank you for joining {{ platform_name }}! We're excited to help you on your wellness journey.
+
+To complete your registration and access all features, please verify your email address by clicking the link below:
 
 {{ verification_url }}
 
-This verification link will expire in 24 hours.
+⏰ IMPORTANT: This verification link will expire in {{ expiry_hours }} hours for your security.
 
-If you did not create an account, you can safely ignore this email.
+What's waiting for you after verification:
+• Personalized fitness tracking and goal setting
+• Smart meal planning with nutrition insights  
+• AI-powered health recommendations
+• Comprehensive wellness analytics
+• Achievement tracking and milestones
+
+SECURITY NOTE: If you did not create an account with {{ platform_name }}, you can safely ignore this email. Your email address will not be added to our system.
 
 ---
-© {% now "Y" %} Wellness Platform. All rights reserved.
+© {% now "Y" %} {{ platform_name }}. All rights reserved.
 This is an automated message. Please do not reply to this email.
+If you need help, contact us at {{ support_email }}

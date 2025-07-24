@@ -11,6 +11,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
 import logging
 import redis.exceptions
+from django.conf import settings
 
 from .serializers import (
     UserSerializer,
@@ -202,20 +203,67 @@ class VerifyEmailView(APIView, EmailManagementMixin):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
+        # Mark email as verified
         user.email_verified = True
         user.email_verification_token = None
-        user.save()
+        user.email_verification_sent_at = None
+        user.save(update_fields=['email_verified', 'email_verification_token', 'email_verification_sent_at'])
 
-        return Response({"message": "Email verified successfully."})
+        # Send welcome email (don't fail if it doesn't work)
+        try:
+            AuthHelper.send_welcome_email(user)
+        except Exception as e:
+            logger.warning(f"Failed to send welcome email to {user.email}: {str(e)}")
+
+        logger.info(f"Email verified successfully for user: {user.username}")
+        
+        return Response({
+            "message": "Email verified successfully. Welcome to Wellness Platform!",
+            "user": {
+                "username": user.username,
+                "email": user.email,
+                "email_verified": user.email_verified
+            }
+        })
+
+    def get(self, request):
+        """Handle GET requests for email verification (for direct links)"""
+        token = request.GET.get('token')
+        if not token:
+            return Response(
+                {"detail": "Verification token is required."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Use the same logic as POST
+        request.data = {'token': token}
+        return self.post(request)
 
 
 class ResendVerificationEmailView(APIView):
     """Resend verification email view"""
-    permission_classes = [IsAuthenticated]
+    permission_classes = [AllowAny]  # Changed to allow unauthenticated users
 
     def post(self, request):
         """Resend verification email"""
-        user = request.user
+        # Check if user is authenticated or email is provided
+        if request.user.is_authenticated:
+            user = request.user
+        else:
+            email = request.data.get('email')
+            if not email:
+                return Response(
+                    {"detail": "Email address is required."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            try:
+                user = User.objects.get(email=email)
+            except User.DoesNotExist:
+                # Don't reveal if email exists or not for security
+                return Response(
+                    {"message": "If your email is registered, you will receive a verification email shortly."}
+                )
 
         if user.email_verified:
             return Response(
@@ -223,14 +271,15 @@ class ResendVerificationEmailView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        # Check if we've sent an email recently (prevent abuse)
+        # Check cooldown period
         if user.email_verification_sent_at:
-            cooldown_minutes = 5
+            cooldown_minutes = getattr(settings, 'EMAIL_VERIFICATION_COOLDOWN_MINUTES', 5)
             cooldown = user.email_verification_sent_at + timezone.timedelta(minutes=cooldown_minutes)
 
             if timezone.now() < cooldown:
+                remaining_minutes = int((cooldown - timezone.now()).total_seconds() / 60) + 1
                 return Response(
-                    {"detail": f"Please wait at least {cooldown_minutes} minutes before requesting another email."},
+                    {"detail": f"Please wait {remaining_minutes} more minutes before requesting another email."},
                     status=status.HTTP_400_BAD_REQUEST
                 )
 
@@ -238,13 +287,15 @@ class ResendVerificationEmailView(APIView):
         token = AuthHelper.generate_token()
         user.email_verification_token = token
         user.email_verification_sent_at = timezone.now()
-        user.save()
+        user.save(update_fields=['email_verification_token', 'email_verification_sent_at'])
 
         # Send verification email
         success = AuthHelper.send_verification_email(user, token)
 
         if success:
-            return Response({"message": "Verification email sent successfully."})
+            return Response({
+                "message": "Verification email sent successfully. Please check your inbox and spam folder."
+            })
         else:
             return Response(
                 {"detail": "Failed to send verification email. Please try again later."},

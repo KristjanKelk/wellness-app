@@ -138,7 +138,7 @@ SOCIALACCOUNT_PROVIDERS = {
 }
 
 ACCOUNT_UNIQUE_EMAIL = True
-ACCOUNT_EMAIL_VERIFICATION = 'none'
+ACCOUNT_EMAIL_VERIFICATION = 'mandatory'  # Changed from 'none' to enable email verification
 ACCOUNT_LOGIN_METHODS = {'username', 'email'}
 ACCOUNT_SIGNUP_FIELDS = ['username*','email*','password1*','password2*']
 
@@ -397,9 +397,25 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 AUTH_USER_MODEL = 'users.User'
 
-# Email Settings
-EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'  # For development
-DEFAULT_FROM_EMAIL = 'noreply@wellnessplatform.com'
+# Email Settings - Updated to use SendGrid for production
+EMAIL_BACKEND = config('EMAIL_BACKEND', default='django.core.mail.backends.smtp.EmailBackend')
+DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL', default='noreply@wellnessplatform.com')
+
+# SendGrid SMTP Configuration
+EMAIL_HOST = config('EMAIL_HOST', default='smtp.sendgrid.net')
+EMAIL_HOST_USER = config('EMAIL_HOST_USER', default='apikey')  # This is exactly the value 'apikey'
+EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD', default='')  # Your SendGrid API key
+EMAIL_PORT = config('EMAIL_PORT', default=587, cast=int)
+EMAIL_USE_TLS = config('EMAIL_USE_TLS', default=True, cast=bool)
+EMAIL_USE_SSL = config('EMAIL_USE_SSL', default=False, cast=bool)
+
+# Email settings for development/fallback
+if DEBUG and not EMAIL_HOST_PASSWORD:
+    EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+
+# Email verification settings
+EMAIL_VERIFICATION_TOKEN_EXPIRY_HOURS = 24
+EMAIL_VERIFICATION_COOLDOWN_MINUTES = 5
 
 # ========================================
 # NUTRITION FEATURE CONFIGURATIONS
