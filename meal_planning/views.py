@@ -1202,3 +1202,66 @@ def get_supported_options_view(request):
             ]
         }
     })
+
+
+# ViewSets for DRF Router Registration
+
+from rest_framework import viewsets
+from rest_framework.decorators import action
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
+from rest_framework import status
+from .serializers import RecipeSerializer, NutritionProfileSerializer
+
+
+class RecipeViewSet(viewsets.ModelViewSet):
+    """ViewSet for Recipe model"""
+    serializer_class = RecipeSerializer
+    permission_classes = [IsAuthenticated]
+    
+    def get_queryset(self):
+        return Recipe.objects.all()
+    
+    def list(self, request, *args, **kwargs):
+        """List recipes with filtering and search"""
+        return get_recipes_view(request)
+    
+    def retrieve(self, request, *args, **kwargs):
+        """Get detailed recipe information"""
+        recipe_id = kwargs.get('pk')
+        return get_recipe_detail_view(request, recipe_id)
+    
+    @action(detail=True, methods=['post'])
+    def rate(self, request, pk=None):
+        """Rate a recipe"""
+        return rate_recipe_view(request, pk)
+
+
+class NutritionProfileViewSet(viewsets.ModelViewSet):
+    """ViewSet for NutritionProfile operations"""
+    serializer_class = NutritionProfileSerializer
+    permission_classes = [IsAuthenticated]
+    
+    def get_queryset(self):
+        return NutritionProfile.objects.filter(user=self.request.user)
+    
+    def list(self, request, *args, **kwargs):
+        """Get user's nutrition profile"""
+        return nutrition_profile_view(request)
+    
+    def create(self, request, *args, **kwargs):
+        """Update user's nutrition profile"""
+        return nutrition_profile_view(request)
+    
+    def update(self, request, *args, **kwargs):
+        """Update user's nutrition profile"""
+        return nutrition_profile_view(request)
+    
+    def partial_update(self, request, *args, **kwargs):
+        """Partially update user's nutrition profile"""
+        return nutrition_profile_view(request)
+    
+    @action(detail=False, methods=['get'])
+    def supported_options(self, request):
+        """Get supported dietary preferences, allergies, cuisines, etc."""
+        return get_supported_options_view(request)
