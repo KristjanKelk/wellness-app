@@ -223,13 +223,11 @@ if REDIS_URL:
     
     # Redis connection options with better timeout handling
     REDIS_CONNECTION_OPTIONS = {
-        "connection_pool_kwargs": {
-            "socket_connect_timeout": 5,
-            "socket_timeout": 5,
-            "retry_on_timeout": True,
-            "health_check_interval": 30,
-            "max_connections": 10,
-        }
+        "socket_connect_timeout": 5,
+        "socket_timeout": 5,
+        "retry_on_timeout": True,
+        "health_check_interval": 30,
+        "max_connections": 10,
     }
 else:
     CELERY_BROKER_URL = None
@@ -298,10 +296,10 @@ REST_FRAMEWORK = {
 
 # JWT Settings
 SIMPLE_JWT = {
-    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=30),
+    'ACCESS_TOKEN_LIFETIME': timedelta(hours=2),  # Increased from 30 minutes
     'REFRESH_TOKEN_LIFETIME': timedelta(days=14),
     'ROTATE_REFRESH_TOKENS': True,
-    'BLACKLIST_AFTER_ROTATION': False,
+    'BLACKLIST_AFTER_ROTATION': True,  # Changed to True for better security
     'UPDATE_LAST_LOGIN': False,
 
     'ALGORITHM': 'HS256',
@@ -319,6 +317,11 @@ SIMPLE_JWT = {
     # Custom claims
     'JTI_CLAIM': 'jti',
     'TOKEN_USER_CLASS': 'users.User',
+    
+    # Token validation settings
+    'SLIDING_TOKEN_REFRESH_EXP_CLAIM': 'refresh_exp',
+    'SLIDING_TOKEN_LIFETIME': timedelta(hours=2),
+    'SLIDING_TOKEN_REFRESH_LIFETIME': timedelta(days=1),
 }
 
 ROOT_URLCONF = 'wellness_project.urls'

@@ -13,7 +13,11 @@ class ResilientThrottleMixin:
     """
     
     def __init__(self):
-        super().__init__()
+        try:
+            super().__init__()
+        except TypeError as e:
+            # Handle Redis connection issues during initialization
+            logger.warning(f"Throttling initialization error: {e}")
         self._fallback_cache = {}
         self._fallback_cache_timestamps = {}
     
@@ -50,12 +54,13 @@ class ResilientThrottleMixin:
         if self.rate is None:
             return True
 
-        self.key = self.get_cache_key(request, view)
-        if self.key is None:
-            return True
-
         try:
+            self.key = self.get_cache_key(request, view)
+            if self.key is None:
+                return True
+
             # Try to use Redis cache first
+            self.cache = self.get_cache()
             self.history = self.cache.get(self.key, [])
             self.now = self.timer()
 
@@ -68,17 +73,23 @@ class ResilientThrottleMixin:
 
             return self.throttle_success()
             
-        except (redis.exceptions.TimeoutError, redis.exceptions.ConnectionError) as e:
+        except (redis.exceptions.TimeoutError, redis.exceptions.ConnectionError, 
+                redis.exceptions.ResponseError, ConnectionError) as e:
             logger.warning(f"Redis throttling failed, using fallback: {e}")
             return self._fallback_allow_request(request, view)
         except Exception as e:
             logger.error(f"Throttling error: {e}")
-            # When in doubt, allow the request
+            # When in doubt, allow the request to prevent blocking users
             return True
     
     def _fallback_allow_request(self, request, view):
         """Fallback throttling using in-memory storage"""
         try:
+            if not hasattr(self, 'key') or self.key is None:
+                self.key = self.get_cache_key(request, view)
+                if self.key is None:
+                    return True
+            
             current_time = time.time()
             
             # Clean old entries
@@ -101,8 +112,26 @@ class ResilientThrottleMixin:
             
         except Exception as e:
             logger.error(f"Fallback throttling failed: {e}")
-            # When all fails, allow the request
+            # When all fails, allow the request to prevent blocking users
             return True
+
+    def wait(self):
+        """
+        Optionally, return a recommended next request time to the client.
+        """
+        try:
+            if self.history:
+                remaining_duration = self.duration - (self.now - self.history[-1])
+            else:
+                remaining_duration = self.duration
+
+            available_requests = self.num_requests - len(self.history) + 1
+            if available_requests <= 0:
+                return None
+
+            return remaining_duration / float(available_requests)
+        except Exception:
+            return None
 
 
 class FallbackCache:
@@ -120,9 +149,29 @@ class FallbackCache:
 
 class ResilientUserRateThrottle(ResilientThrottleMixin, UserRateThrottle):
     """User rate throttle that's resilient to Redis failures"""
-    pass
+    
+    def __init__(self):
+        try:
+            super().__init__()
+        except Exception as e:
+            logger.warning(f"ResilientUserRateThrottle init error: {e}")
+            # Set minimal required attributes
+            self.scope = 'user'
+            self.rate = '1000/minute'
+            self.num_requests = 1000
+            self.duration = 60
 
 
 class ResilientAnonRateThrottle(ResilientThrottleMixin, AnonRateThrottle):
     """Anonymous rate throttle that's resilient to Redis failures"""
-    pass
+    
+    def __init__(self):
+        try:
+            super().__init__()
+        except Exception as e:
+            logger.warning(f"ResilientAnonRateThrottle init error: {e}")
+            # Set minimal required attributes
+            self.scope = 'anon'
+            self.rate = '100/minute'
+            self.num_requests = 100
+            self.duration = 60

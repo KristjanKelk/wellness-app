@@ -14,7 +14,7 @@ from users.views import (
     NotificationSettingsView, ExportUserDataView, TwoFactorTokenView,
     CorsTestView, HealthCheckView,
 )
-from users.jwt import CustomTokenObtainPairView
+from users.jwt import CustomTokenObtainPairView, CustomTokenRefreshSerializer
 from users.oauth import GoogleOAuthAPI, GitHubOAuthAPI
 from meal_planning.views import RecipeViewSet, NutritionProfileViewSet
 from django.views.decorators.csrf import csrf_exempt
@@ -99,7 +99,7 @@ urlpatterns = [
 
     # JWT authentication endpoints
     path('api/token/', CustomTokenObtainPairView.as_view(), name='token_obtain_pair'),
-    path('api/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
+    path('api/token/refresh/', TokenRefreshView.as_view(serializer_class=CustomTokenRefreshSerializer), name='token_refresh'),
     path('api/token/verify/', TokenVerifyView.as_view(), name='token_verify'),
     path('api/token/2fa-verify/', TwoFactorTokenView.as_view(), name='token_verify_2fa'),
 
@@ -133,7 +133,7 @@ urlpatterns = [
     path('api/oauth/google/', GoogleOAuthAPI.as_view(), name='google-oauth'),
     path('api/oauth/github/', GitHubOAuthAPI.as_view(), name='github-oauth'),
 
-    #Meal planning
+    # Meal planning
     path('meal-planning/', include('meal_planning.urls')),
     # Add meal planning API endpoints directly under /api/ for easier frontend access  
     path('api/meal-planning/', include('meal_planning.urls', namespace='api_meal_planning')),
