@@ -9,6 +9,8 @@ from django.contrib.auth import get_user_model
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
+import logging
+import redis.exceptions
 
 from .serializers import (
     UserSerializer,
@@ -18,6 +20,9 @@ from .serializers import (
     TwoFactorVerifySerializer
 )
 from .auth import AuthHelper
+from utils.exceptions import ResilientThrottleMixin
+
+logger = logging.getLogger(__name__)
 
 User = get_user_model()
 
@@ -39,40 +44,65 @@ class CorsTestView(APIView):
 
 @method_decorator(csrf_exempt, name='dispatch')
 class HealthCheckView(APIView):
-    """Simple health check endpoint"""
+    """Enhanced health check endpoint"""
     permission_classes = [AllowAny]
 
     def get(self, request):
-        from django.db import connection
-        import datetime
+        health_status = {
+            "status": "healthy",
+            "timestamp": timezone.now().isoformat(),
+            "services": {}
+        }
         
+        # Check database
         try:
-            # Test database connection
+            from django.db import connection
             with connection.cursor() as cursor:
                 cursor.execute("SELECT 1")
-                db_status = "ok"
+            health_status["services"]["database"] = "healthy"
         except Exception as e:
-            db_status = f"error: {str(e)}"
+            health_status["services"]["database"] = f"unhealthy: {str(e)}"
+            health_status["status"] = "degraded"
         
-        return Response({
-            "status": "ok",
-            "timestamp": datetime.datetime.now().isoformat(),
-            "database": db_status,
-            "cors_headers": dict(request.headers),
-        })
+        # Check Redis cache
+        try:
+            from django.core.cache import cache
+            cache.set("health_check", "test", 30)
+            result = cache.get("health_check")
+            if result == "test":
+                health_status["services"]["redis_cache"] = "healthy"
+            else:
+                health_status["services"]["redis_cache"] = "unhealthy: cache test failed"
+                health_status["status"] = "degraded"
+        except redis.exceptions.TimeoutError:
+            health_status["services"]["redis_cache"] = "unhealthy: timeout"
+            health_status["status"] = "degraded"
+        except Exception as e:
+            health_status["services"]["redis_cache"] = f"unhealthy: {str(e)}"
+            health_status["status"] = "degraded"
+        
+        # Check CORS headers
+        health_status["services"]["cors_headers"] = {
+            "origin": request.headers.get("Origin", "not-provided"),
+            "user_agent": request.headers.get("User-Agent", "not-provided")
+        }
+        
+        return Response(health_status)
 
     def options(self, request):
-        """Handle preflight requests"""
+        """Handle preflight requests for health check"""
         return Response(status=status.HTTP_200_OK)
 
 
 @method_decorator(csrf_exempt, name='dispatch')
-class RegisterView(APIView):
-    """User registration view"""
+class RegisterView(ResilientThrottleMixin, APIView):
+    """User registration view with resilient Redis handling"""
     permission_classes = [AllowAny]
 
     def post(self, request):
         try:
+            logger.info(f"Registration attempt from IP: {request.META.get('REMOTE_ADDR')}")
+            
             serializer = UserRegistrationSerializer(data=request.data)
             if serializer.is_valid():
                 user = serializer.save()
@@ -83,17 +113,32 @@ class RegisterView(APIView):
                 user.email_verification_sent_at = timezone.now()
                 user.save()
 
-                # Send verification email
-                AuthHelper.send_verification_email(user, token)
+                # Send verification email (make this resilient too)
+                try:
+                    AuthHelper.send_verification_email(user, token)
+                    logger.info(f"User registered successfully: {user.username}")
+                except Exception as email_error:
+                    logger.warning(f"Email sending failed for user {user.username}: {email_error}")
+                    # Still return success - user is created, email can be resent later
 
                 return Response(
                     {"message": "User registered successfully. Please verify your email."},
                     status=status.HTTP_201_CREATED
                 )
+            
+            logger.warning(f"Registration validation failed: {serializer.errors}")
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-        except Exception as e:
+            
+        except redis.exceptions.TimeoutError as redis_error:
+            logger.error(f"Redis timeout during registration: {redis_error}")
             return Response(
-                {"error": f"Registration failed: {str(e)}"},
+                {"error": "Service temporarily busy. Please try again in a moment."},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE
+            )
+        except Exception as e:
+            logger.error(f"Registration failed with error: {str(e)}")
+            return Response(
+                {"error": "Registration failed. Please try again."},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
