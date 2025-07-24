@@ -37,7 +37,7 @@ DEBUG = False
 ALLOWED_HOSTS = [
     'wellness-app-tx2c.onrender.com',
     'wellness-app-frontend.onrender.com',
-    'localhost',
+    'wellness-app-fronend.onrender.com',  # Keep the typo version for compatibility
     'localhost',
     '127.0.0.1',
     '0.0.0.0',
@@ -45,13 +45,14 @@ ALLOWED_HOSTS = [
 
 CSRF_TRUSTED_ORIGINS = [
      'https://wellness-app-tx2c.onrender.com',
-     'https://wellness-app-fronend.onrender.com',
+     'https://wellness-app-frontend.onrender.com',
+     'https://wellness-app-fronend.onrender.com',  # Keep the typo version for compatibility
      'http://localhost:8080',
      'http://127.0.0.1:8080',
 ]
 
 # Frontend URL for email links
-FRONTEND_URL = "https://wellness-app-fronend.onrender.com"
+FRONTEND_URL = "https://wellness-app-fronend.onrender.com"  # Keep the typo version for compatibility
 
 # Application definition
 
@@ -88,10 +89,9 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
+    'corsheaders.middleware.CorsMiddleware',  # Move CORS middleware to the top
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
-    'corsheaders.middleware.CorsMiddleware',
-    'django.middleware.common.CommonMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
@@ -143,15 +143,20 @@ ACCOUNT_LOGIN_METHODS = {'username', 'email'}
 ACCOUNT_SIGNUP_FIELDS = ['username*','email*','password1*','password2*']
 
 # CORS settings
-CORS_ALLOW_ALL_ORIGINS = True
+# Note: Set CORS_ALLOW_ALL_ORIGINS to False for production security
+CORS_ALLOW_ALL_ORIGINS = False
 
 CORS_ALLOWED_ORIGINS = [
-   'https://wellness-app-fronend.onrender.com',
+   'https://wellness-app-fronend.onrender.com',  # Keep the typo version for compatibility
+   'https://wellness-app-frontend.onrender.com',  # Correct spelling
    'https://wellness-app-tx2c.onrender.com',
     'http://localhost:8080',
     'http://127.0.0.1:8080',
 ]
 CORS_ALLOW_CREDENTIALS = True
+
+# Additional CORS settings for better compatibility
+CORS_PREFLIGHT_MAX_AGE = 86400  # 24 hours
 
 SESSION_COOKIE_SAMESITE = 'None'
 CSRF_COOKIE_SAMESITE    = 'None'
@@ -169,6 +174,10 @@ CORS_ALLOW_HEADERS = [
     'user-agent',
     'x-csrftoken',
     'x-requested-with',
+    'cache-control',
+    'pragma',
+    'x-forwarded-for',
+    'x-real-ip',
 ]
 
 CORS_ALLOW_METHODS = [
