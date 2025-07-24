@@ -10,6 +10,8 @@ const API_URL = (
 )
   .replace(/\/+$/, '') + '/';
 
+console.log('API Base URL configured:', API_URL);
+
 // Create axios instance
 const apiClient = axios.create({
     baseURL: API_URL,
@@ -125,9 +127,15 @@ apiClient.interceptors.response.use(
         // Handle 502 errors (bad gateway, often during service startup)
         if (error.response?.status === 502 && !originalRequest._gateway_retry) {
             originalRequest._gateway_retry = true;
-            console.log('Service gateway error, retrying in 5 seconds...');
-            await new Promise(resolve => setTimeout(resolve, 5000));
-            return apiClient(originalRequest);
+            console.log('Service gateway error (502), attempting wake-up...');
+            return handleServiceHibernation(originalRequest);
+        }
+
+        // Handle CORS-related network errors during service wake-up
+        if (error.code === 'ERR_NETWORK' && !originalRequest._network_retry) {
+            originalRequest._network_retry = true;
+            console.log('Network error detected, possibly CORS during service wake-up...');
+            return handleServiceHibernation(originalRequest);
         }
 
         // Handle authentication errors
