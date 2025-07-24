@@ -75,4 +75,6 @@ urlpatterns = [
 
     #Meal planning
     path('meal-planning/', include('meal_planning.urls')),
+    # Add meal planning API endpoints directly under /api/ for easier frontend access  
+    path('api/meal-planning/', include('meal_planning.urls', namespace='api_meal_planning')),
 ]

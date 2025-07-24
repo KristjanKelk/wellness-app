@@ -8,10 +8,10 @@ from django.conf import settings
 from django.db.models import Count, Sum, Q
 from collections import Counter
 import re
-import openai
+from openai import OpenAI
 
-
-openai.api_key = settings.OPENAI_API_KEY
+# Initialize OpenAI client
+client = OpenAI(api_key=settings.OPENAI_API_KEY)
 
 from .models import AIInsight, WellnessScore, Milestone, HealthSummary, SummaryMetric
 from .serializers import AIInsightSerializer, WellnessScoreSerializer, MilestoneSerializer,HealthSummarySerializer, HealthSummaryCreateSerializer, HealthSummaryListSerializer, SummaryStatsSerializer,SummaryInsightSerializer, SummaryMetricSerializer
@@ -364,12 +364,16 @@ class AIInsightViewSet(viewsets.ModelViewSet):
             # Build enhanced prompt
             prompt = self._build_enhanced_prompt(context_data)
 
-            resp = openai.ChatCompletion.create(
+            # Check if OpenAI API key is configured
+            if not settings.OPENAI_API_KEY or settings.OPENAI_API_KEY == 'your-openai-api-key-here':
+                raise Exception("OpenAI API key not configured")
+                
+            resp = client.chat.completions.create(
                 model="gpt-3.5-turbo-1106",
                 messages=[
                     {
                         "role": "system",
-                        "content": "You are a certified wellness coach…"
+                        "content": "You are a certified wellness coach who provides personalized health recommendations based on user data."
                     },
                     {
                         "role": "user",
