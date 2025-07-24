@@ -175,7 +175,7 @@ class Activity(models.Model):
     activity_type = models.CharField(max_length=20, choices=ACTIVITY_TYPE_CHOICES)
     duration_minutes = models.PositiveIntegerField()
     location = models.CharField(max_length=20, choices=LOCATION_CHOICES, default='home')
-    distance_km = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
+    distance_km = models.DecimalField(max_digits=8, decimal_places=2, null=True, blank=True)
     calories_burned = models.PositiveIntegerField(null=True, blank=True)
     notes = models.TextField(blank=True, null=True)
     performed_at = models.DateTimeField(auto_now_add=True)
