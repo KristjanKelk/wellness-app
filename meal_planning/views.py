@@ -277,33 +277,36 @@ class RecipeViewSet(viewsets.ReadOnlyModelViewSet):
 
     @action(detail=False, methods=['get'])
     def search_spoonacular(self, request):
-        """Search recipes directly from Spoonacular API"""
+        """Search recipes with fallback to local database when API fails"""
+        from meal_planning.services.spoonacular_service import get_spoonacular_service, SpoonacularAPIError
+        from django.db.models import Q
+        import re
+        
+        # Get search parameters
+        query = request.query_params.get('query', '')
+        cuisine = request.query_params.get('cuisine', '')
+        diet = request.query_params.get('diet', '')
+        intolerances = request.query_params.get('intolerances', '')
+        max_calories = request.query_params.get('max_calories', '')
+        meal_type = request.query_params.get('meal_type', '')
+        number = int(request.query_params.get('number', 12))
+        offset = int(request.query_params.get('offset', 0))
+        
+        # Get user's nutrition profile for better filtering
         try:
-            from meal_planning.services.spoonacular_service import get_spoonacular_service, SpoonacularAPIError
-            
-            # Get search parameters
-            query = request.query_params.get('query', '')
-            cuisine = request.query_params.get('cuisine', '')
-            diet = request.query_params.get('diet', '')
-            intolerances = request.query_params.get('intolerances', '')
-            max_calories = request.query_params.get('max_calories', '')
-            meal_type = request.query_params.get('meal_type', '')
-            number = int(request.query_params.get('number', 12))
-            offset = int(request.query_params.get('offset', 0))
-            
-            # Get user's nutrition profile for better filtering
-            try:
-                nutrition_profile = request.user.nutrition_profile
-                if not diet and nutrition_profile.dietary_preferences:
-                    diet = ','.join(nutrition_profile.dietary_preferences)
-                if not intolerances and nutrition_profile.allergies_intolerances:
-                    intolerances = ','.join(nutrition_profile.allergies_intolerances)
-            except:
-                pass
-            
+            nutrition_profile = request.user.nutrition_profile
+            if not diet and nutrition_profile.dietary_preferences:
+                diet = ','.join(nutrition_profile.dietary_preferences)
+            if not intolerances and nutrition_profile.allergies_intolerances:
+                intolerances = ','.join(nutrition_profile.allergies_intolerances)
+        except:
+            pass
+        
+        # Try Spoonacular API first with shorter timeout
+        try:
             service = get_spoonacular_service()
             
-            # Search Spoonacular API
+            # Search Spoonacular API with reduced timeout
             search_results = service.search_recipes(
                 query=query,
                 cuisine=cuisine,
@@ -375,19 +378,206 @@ class RecipeViewSet(viewsets.ReadOnlyModelViewSet):
                 'total_results': search_results.get('totalResults', 0),
                 'number': len(saved_recipes),
                 'offset': offset,
-                'source': 'spoonacular'
+                'source': 'spoonacular_api'
             })
             
-        except SpoonacularAPIError as e:
-            logger.error(f"Spoonacular API error: {e}")
-            return Response(
-                {'error': 'Recipe search temporarily unavailable', 'details': str(e)},
-                status=status.HTTP_503_SERVICE_UNAVAILABLE
+        except (SpoonacularAPIError, ConnectionError, TimeoutError, Exception) as e:
+            logger.warning(f"Spoonacular API failed, falling back to local search: {e}")
+            
+            # Fallback to local database search
+            return self._search_local_recipes(
+                query=query,
+                cuisine=cuisine,
+                diet=diet,
+                intolerances=intolerances,
+                max_calories=max_calories,
+                meal_type=meal_type,
+                number=number,
+                offset=offset,
+                request=request
             )
+
+    def _search_local_recipes(self, query, cuisine, diet, intolerances, max_calories, meal_type, number, offset, request):
+        """
+        Search local database for recipes with intelligent filtering
+        """
+        from django.db.models import Q
+        import re
+        
+        # Start with all recipes
+        queryset = Recipe.objects.all()
+        
+        # Text search in title, summary, and ingredients
+        if query:
+            query_terms = re.findall(r'\w+', query.lower())
+            search_q = Q()
+            
+            for term in query_terms:
+                search_q |= (
+                    Q(title__icontains=term) |
+                    Q(summary__icontains=term) |
+                    Q(cuisine__icontains=term) |
+                    Q(ingredients_data__icontains=term)
+                )
+            
+            queryset = queryset.filter(search_q)
+        
+        # Filter by cuisine
+        if cuisine:
+            cuisine_terms = [c.strip() for c in cuisine.split(',') if c.strip()]
+            cuisine_q = Q()
+            for c in cuisine_terms:
+                cuisine_q |= Q(cuisine__icontains=c)
+            queryset = queryset.filter(cuisine_q)
+        
+        # Filter by dietary preferences
+        if diet:
+            diet_terms = [d.strip().lower().replace('-', '_') for d in diet.split(',') if d.strip()]
+            for diet_term in diet_terms:
+                queryset = queryset.filter(dietary_tags__contains=[diet_term])
+        
+        # Filter by intolerances (exclude recipes with these allergens)
+        if intolerances:
+            intolerance_terms = [i.strip().lower() for i in intolerances.split(',') if i.strip()]
+            for intolerance in intolerance_terms:
+                # Map common intolerances to allergen names
+                allergen_mapping = {
+                    'gluten': 'gluten',
+                    'dairy': 'dairy',
+                    'nuts': 'nuts',
+                    'peanuts': 'peanuts',
+                    'shellfish': 'shellfish',
+                    'fish': 'fish',
+                    'eggs': 'eggs',
+                    'soy': 'soy'
+                }
+                mapped_allergen = allergen_mapping.get(intolerance, intolerance)
+                queryset = queryset.exclude(allergens__contains=[mapped_allergen])
+        
+        # Filter by meal type
+        if meal_type:
+            queryset = queryset.filter(meal_type=meal_type)
+        
+        # Filter by max calories
+        if max_calories:
+            try:
+                max_cal = int(max_calories)
+                queryset = queryset.filter(calories_per_serving__lte=max_cal)
+            except ValueError:
+                pass
+        
+        # Order by relevance (prioritize Spoonacular recipes, then by rating)
+        queryset = queryset.order_by('-is_verified', '-calories_per_serving', 'title')
+        
+        # Apply pagination
+        total_count = queryset.count()
+        recipes = queryset[offset:offset + number]
+        
+        # Serialize results
+        serializer = self.get_serializer(recipes, many=True)
+        
+        return Response({
+            'results': serializer.data,
+            'total_results': total_count,
+            'number': len(recipes),
+            'offset': offset,
+            'source': 'local_database',
+            'message': 'Showing cached recipes (Spoonacular API temporarily unavailable)'
+        })
+
+    @action(detail=False, methods=['post'])
+    def generate_ai_meal_plan(self, request):
+        """Generate AI-powered personalized meal plan"""
+        try:
+            from meal_planning.services.ai_meal_planner import get_ai_meal_planner
+            
+            # Get parameters from request
+            days = int(request.data.get('days', 7))
+            target_calories = request.data.get('target_calories')
+            dietary_preferences = request.data.get('dietary_preferences', [])
+            allergies = request.data.get('allergies', [])
+            cuisine_preferences = request.data.get('cuisine_preferences', [])
+            
+            # Get user profile if available
+            user_profile = None
+            try:
+                if hasattr(request.user, 'nutrition_profile'):
+                    profile = request.user.nutrition_profile
+                    user_profile = {
+                        'daily_calorie_goal': profile.daily_calorie_goal,
+                        'activity_level': profile.activity_level,
+                        'fitness_goal': profile.fitness_goal,
+                        'dietary_preferences': profile.dietary_preferences or [],
+                        'allergies_intolerances': profile.allergies_intolerances or []
+                    }
+                    
+                    # Use profile preferences if not provided in request
+                    if not dietary_preferences and profile.dietary_preferences:
+                        dietary_preferences = profile.dietary_preferences
+                    if not allergies and profile.allergies_intolerances:
+                        allergies = profile.allergies_intolerances
+                        
+            except Exception as e:
+                logger.warning(f"Could not load user nutrition profile: {e}")
+            
+            # Generate meal plan
+            planner = get_ai_meal_planner()
+            meal_plan = planner.create_meal_plan(
+                user_profile=user_profile,
+                days=days,
+                dietary_preferences=dietary_preferences,
+                allergies=allergies,
+                cuisine_preferences=cuisine_preferences,
+                target_calories=target_calories
+            )
+            
+            return Response(meal_plan)
+            
         except Exception as e:
-            logger.error(f"Recipe search error: {e}")
+            logger.error(f"AI meal plan generation error: {e}")
             return Response(
-                {'error': 'Recipe search failed', 'details': str(e)},
+                {
+                    'error': 'Failed to generate meal plan',
+                    'details': str(e),
+                    'suggestion': 'Try running the recipe caching command or check your preferences'
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    @action(detail=False, methods=['post'])
+    def suggest_substitutions(self, request):
+        """Suggest recipe substitutions for meal plan optimization"""
+        try:
+            from meal_planning.services.ai_meal_planner import get_ai_meal_planner
+            
+            recipe_id = request.data.get('recipe_id')
+            meal_type = request.data.get('meal_type')
+            dietary_preferences = request.data.get('dietary_preferences', [])
+            target_calories = request.data.get('target_calories')
+            
+            if not recipe_id or not meal_type:
+                return Response(
+                    {'error': 'recipe_id and meal_type are required'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            planner = get_ai_meal_planner()
+            substitutions = planner.suggest_recipe_substitutions(
+                current_recipe_id=recipe_id,
+                meal_type=meal_type,
+                dietary_preferences=dietary_preferences,
+                target_calories=target_calories
+            )
+            
+            return Response({
+                'substitutions': substitutions,
+                'count': len(substitutions)
+            })
+            
+        except Exception as e:
+            logger.error(f"Recipe substitution error: {e}")
+            return Response(
+                {'error': 'Failed to suggest substitutions', 'details': str(e)},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 

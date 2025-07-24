@@ -95,7 +95,8 @@ class SpoonacularService:
 
         try:
             logger.info(f"Making request to Spoonacular: {endpoint}")
-            response = requests.get(url, params=params, timeout=30)
+            # Reduced timeout to fail faster and allow fallback
+            response = requests.get(url, params=params, timeout=10)
             response.raise_for_status()
 
             # Update rate limit counters
