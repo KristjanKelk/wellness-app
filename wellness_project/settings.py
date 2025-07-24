@@ -223,7 +223,7 @@ if REDIS_URL:
     
     # Redis connection options with better timeout handling
     REDIS_CONNECTION_OPTIONS = {
-        "connection_pool_kwargs": {
+        "CONNECTION_POOL_KWARGS": {
             "socket_connect_timeout": 5,
             "socket_timeout": 5,
             "retry_on_timeout": True,

@@ -3,7 +3,24 @@ import axios from 'axios';
 import AuthService from './auth.service';
 import store from '../store';
 
-const API_BASE_URL = 'http://localhost:8000/meal-planning/api';
+// Derive the Meal-Planning base-URL dynamically so that it works in
+// both local development and when the app is deployed (e.g. Render).
+//
+// 1. We start with VUE_APP_API_URL if it exists – this is the same env
+//    var used by http.service.js and normally points to
+//    "https://your-backend.onrender.com/api" in prod *or*
+//    "http://localhost:8000/api" in dev.
+// 2. We strip the trailing "/api" segment (because the meal-planning
+//    endpoints live at "/meal-planning/api/…" instead of the generic
+//    "/api/…" prefix).
+// 3. Finally we append "/meal-planning/api".
+//
+// If the env var isn’t provided we fall back to localhost so that the
+// developer experience stays unchanged.
+
+const DEFAULT_API_ROOT = 'http://localhost:8000/api';
+const API_ROOT = (process.env.VUE_APP_API_URL || DEFAULT_API_ROOT).replace(/\/api\/?$/, '');
+const API_BASE_URL = `${API_ROOT}/meal-planning/api`;
 
 // Create axios instance with base configuration - MATCHING your http.service.js pattern
 const api = axios.create({
