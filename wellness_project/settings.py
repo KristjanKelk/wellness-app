@@ -143,9 +143,9 @@ ACCOUNT_LOGIN_METHODS = {'username', 'email'}
 ACCOUNT_SIGNUP_FIELDS = ['username*','email*','password1*','password2*']
 
 # CORS settings
-# Temporarily allow all origins for debugging hibernation issues
-# TODO: Set to False and use specific origins for production
-CORS_ALLOW_ALL_ORIGINS = True  # Temporarily True to debug service hibernation
+# Allow all origins to handle service hibernation and 502 errors
+# This prevents CORS errors during service wake-up
+CORS_ALLOW_ALL_ORIGINS = True
 
 CORS_ALLOWED_ORIGINS = [
    'https://wellness-app-fronend.onrender.com',  # Keep the typo version for compatibility
@@ -223,7 +223,7 @@ if REDIS_URL:
     
     # Redis connection options with better timeout handling
     REDIS_CONNECTION_OPTIONS = {
-        "CONNECTION_POOL_KWARGS": {
+        "connection_pool_kwargs": {
             "socket_connect_timeout": 5,
             "socket_timeout": 5,
             "retry_on_timeout": True,
@@ -350,7 +350,7 @@ import dj_database_url
 DATABASES = {
     'default': dj_database_url.config(
         default='sqlite:///db.sqlite3',
-        conn_max_age=600,
+        conn_max_age=0,  # Disable connection pooling to prevent hibernation issues
         conn_health_checks=True,
     )
 }

@@ -105,17 +105,16 @@ except Exception as e:
     echo "🚀 Starting Gunicorn server..."
     echo "================================================"
     
-    # Start the application with optimized settings
+    # Start the application with optimized settings for hibernation handling
     exec gunicorn wellness_project.wsgi:application \
         --bind 0.0.0.0:10000 \
-        --workers 2 \
+        --workers 1 \
         --worker-class sync \
-        --worker-connections 1000 \
-        --timeout 120 \
-        --keep-alive 2 \
-        --max-requests 1000 \
-        --max-requests-jitter 50 \
-        --preload \
+        --worker-connections 500 \
+        --timeout 300 \
+        --keep-alive 5 \
+        --max-requests 100 \
+        --max-requests-jitter 10 \
         --access-logfile - \
         --error-logfile - \
         --log-level info

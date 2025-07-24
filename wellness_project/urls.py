@@ -16,6 +16,63 @@ from users.views import (
 )
 from users.jwt import CustomTokenObtainPairView
 from users.oauth import GoogleOAuthAPI, GitHubOAuthAPI
+from meal_planning.views import RecipeViewSet, NutritionProfileViewSet
+from django.views.decorators.csrf import csrf_exempt
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import AllowAny
+from rest_framework.response import Response
+from django.utils import timezone
+from django.db import connection
+import logging
+
+logger = logging.getLogger(__name__)
+
+@csrf_exempt
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def health_check(request):
+    """Simple health check endpoint for service monitoring"""
+    try:
+        # Test database connection
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT 1")
+        
+        # Test cache if available
+        cache_status = "healthy"
+        try:
+            from django.core.cache import cache
+            cache.set('health_check', 'ok', 30)
+            if cache.get('health_check') != 'ok':
+                cache_status = "unhealthy"
+        except Exception as e:
+            cache_status = f"error: {str(e)}"
+        
+        return Response({
+            'status': 'healthy',
+            'timestamp': timezone.now().isoformat(),
+            'services': {
+                'database': 'healthy',
+                'cache': cache_status
+            }
+        })
+    except Exception as e:
+        logger.error(f"Health check failed: {str(e)}")
+        return Response({
+            'status': 'unhealthy',
+            'timestamp': timezone.now().isoformat(),
+            'error': str(e)
+        }, status=503)
+
+@csrf_exempt
+@api_view(['GET', 'POST', 'OPTIONS'])
+@permission_classes([AllowAny])
+def cors_test(request):
+    """CORS test endpoint for debugging"""
+    return Response({
+        "message": f"CORS {request.method} test successful",
+        "origin": request.META.get('HTTP_ORIGIN', 'unknown'),
+        "method": request.method
+    })
 
 router = DefaultRouter()
 
@@ -28,13 +85,16 @@ router.register(r'analytics/health-summaries', HealthSummaryViewSet, basename='h
 router.register(r'activities', ActivityViewSet, basename='activity')
 router.register(r'insights', AIInsightViewSet, basename='insight')
 router.register(r'wellness-scores', WellnessScoreViewSet, basename='wellness-score')
+router.register(r'meal-planning/recipes', RecipeViewSet, basename='recipe')
+router.register(r'meal-planning/nutrition-profile', NutritionProfileViewSet, basename='nutritionprofile')
 
 urlpatterns = [
     # health check so "/" returns 200
-    path('', lambda request: HttpResponse('OK')),
+    path('', health_check),
 
     path('admin/', admin.site.urls),
     path('api/', include(router.urls)),
+    path('api/', include('users.urls')),
     path('api-auth/', include('rest_framework.urls')),
 
     # JWT authentication endpoints
@@ -44,8 +104,8 @@ urlpatterns = [
     path('api/token/2fa-verify/', TwoFactorTokenView.as_view(), name='token_verify_2fa'),
 
     # Health check and CORS test endpoints
-    path('api/health/', HealthCheckView.as_view(), name='health-check'),
-    path('api/cors-test/', CorsTestView.as_view(), name='cors-test'),
+    path('api/health/', health_check, name='health-check'),
+    path('api/cors-test/', cors_test, name='cors-test'),
 
     # User registration and profile management
     path('api/register/', RegisterView.as_view(), name='register'),
