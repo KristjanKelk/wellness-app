@@ -34,6 +34,7 @@ django-filter>=23.1,<24.0
 # Updated OpenAI with function calling support
 openai>=1.0.0,<2.0.0
 # Vector database and RAG support
+chromadb>=0.4.0,<1.0.0
 faiss-cpu>=1.7.0,<2.0.0
 sentence-transformers>=2.2.0,<3.0.0
 # Advanced nutrition analysis
