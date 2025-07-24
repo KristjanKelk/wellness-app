@@ -241,6 +241,11 @@ export const mealPlanningApi = {
     return api.post(`/recipes/${recipeId}/rate/`, { rating, review })
   },
 
+  // Spoonacular recipe search
+  searchSpoonacular(params = {}) {
+    return api.get('/recipes/search_spoonacular/', { params })
+  },
+
   // Enhanced recipe methods for AI features (with fallbacks)
   async generateRecipe(recipeParams) {
     try {

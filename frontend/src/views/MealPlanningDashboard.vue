@@ -23,8 +23,6 @@
       <div class="tab-content">
         <div v-if="activeTab === 'recipes'" class="tab-panel">
           <recipe-browser
-            :recipes="recipes"
-            :loading="recipesLoading"
             @recipe-selected="selectRecipe"
           />
         </div>
@@ -88,9 +86,7 @@ export default {
         { id: 'meal-plans', name: 'Meal Plans', icon: 'fas fa-calendar-alt' },
         { id: 'analytics', name: 'Analytics', icon: 'fas fa-chart-line' }
       ],
-      recipes: [],
       nutritionProfile: null,
-      recipesLoading: false,
       profileLoading: false,
       mealPlansLoading: false,
       showRecipeModal: false,
@@ -111,25 +107,7 @@ export default {
   },
   methods: {
     async loadInitialData() {
-      await Promise.all([
-        this.loadRecipes(),
-        this.loadNutritionProfile()
-      ])
-    },
-
-    async loadRecipes() {
-      this.recipesLoading = true
-      try {
-        const response = await mealPlanningApi.getRecipes()
-        this.recipes = response.data.results || response.data || []
-      } catch (error) {
-        console.error('Failed to load recipes:', error)
-        // Show user-friendly error
-        this.$toast?.error?.('Failed to load recipes') ||
-        alert('Failed to load recipes')
-      } finally {
-        this.recipesLoading = false
-      }
+      await this.loadNutritionProfile()
     },
 
     async loadNutritionProfile() {
