@@ -211,6 +211,18 @@ class SpoonacularService:
 
         return self._make_request(self.endpoints['ingredient_search'], params)
 
+    def get_ingredient_info(self, ingredient_id: int, unit: str = "grams", amount: int = 100) -> Dict:
+        """
+        Get detailed information about a specific ingredient (alias for get_ingredient_information)
+        """
+        return self.get_ingredient_information(ingredient_id, unit, amount)
+
+    def get_recipe_info(self, recipe_id: int, include_nutrition: bool = True) -> Dict:
+        """
+        Get detailed information about a specific recipe (alias for get_recipe_information)
+        """
+        return self.get_recipe_information(recipe_id, include_nutrition)
+
     def get_ingredient_information(self, ingredient_id: int, unit: str = "grams", amount: int = 100) -> Dict:
         """
         Get detailed information about a specific ingredient
