@@ -6,6 +6,9 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from django.contrib.auth import get_user_model
+from django.http import JsonResponse
+from django.views.decorators.csrf import csrf_exempt
+from django.utils.decorators import method_decorator
 
 from .serializers import (
     UserSerializer,
@@ -19,29 +22,84 @@ from .auth import AuthHelper
 User = get_user_model()
 
 
+@method_decorator(csrf_exempt, name='dispatch')
+class CorsTestView(APIView):
+    """Simple CORS test endpoint"""
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        return Response({"message": "CORS test successful", "status": "ok"})
+
+    def post(self, request):
+        return Response({"message": "CORS POST test successful", "data": request.data})
+
+    def options(self, request):
+        return Response({"message": "CORS OPTIONS test successful"})
+
+
+@method_decorator(csrf_exempt, name='dispatch')
+class HealthCheckView(APIView):
+    """Simple health check endpoint"""
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        from django.db import connection
+        import datetime
+        
+        try:
+            # Test database connection
+            with connection.cursor() as cursor:
+                cursor.execute("SELECT 1")
+                db_status = "ok"
+        except Exception as e:
+            db_status = f"error: {str(e)}"
+        
+        return Response({
+            "status": "ok",
+            "timestamp": datetime.datetime.now().isoformat(),
+            "database": db_status,
+            "cors_headers": dict(request.headers),
+        })
+
+    def options(self, request):
+        """Handle preflight requests"""
+        return Response(status=status.HTTP_200_OK)
+
+
+@method_decorator(csrf_exempt, name='dispatch')
 class RegisterView(APIView):
     """User registration view"""
     permission_classes = [AllowAny]
 
     def post(self, request):
-        serializer = UserRegistrationSerializer(data=request.data)
-        if serializer.is_valid():
-            user = serializer.save()
+        try:
+            serializer = UserRegistrationSerializer(data=request.data)
+            if serializer.is_valid():
+                user = serializer.save()
 
-            # Generate verification token
-            token = AuthHelper.generate_token()
-            user.email_verification_token = token
-            user.email_verification_sent_at = timezone.now()
-            user.save()
+                # Generate verification token
+                token = AuthHelper.generate_token()
+                user.email_verification_token = token
+                user.email_verification_sent_at = timezone.now()
+                user.save()
 
-            # Send verification email
-            AuthHelper.send_verification_email(user, token)
+                # Send verification email
+                AuthHelper.send_verification_email(user, token)
 
+                return Response(
+                    {"message": "User registered successfully. Please verify your email."},
+                    status=status.HTTP_201_CREATED
+                )
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
             return Response(
-                {"message": "User registered successfully. Please verify your email."},
-                status=status.HTTP_201_CREATED
+                {"error": f"Registration failed: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def options(self, request):
+        """Handle preflight requests"""
+        return Response(status=status.HTTP_200_OK)
 
 
 class UserProfileView(APIView):
