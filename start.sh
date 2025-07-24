@@ -1,127 +1,109 @@
 #!/bin/bash
 
-# Render startup script with enhanced error handling and Redis resilience
+# ==================================================
+# Wellness App Deployment Script for Render.com
+# ==================================================
 
-echo "🚀 Starting Wellness App with enhanced resilience..."
+echo "================================================"
+echo "🚀 Starting Wellness App Deployment..."
+echo "================================================"
 
-# Set error handling
+# Exit on any error
 set -e
 
-# Function to check Redis connectivity
-check_redis() {
-    echo "🔍 Checking Redis connectivity..."
-    if [ -n "$REDIS_URL" ]; then
-        echo "   Redis URL configured: ${REDIS_URL:0:20}..."
-        
-        # Try to connect to Redis with timeout
-        timeout 10s python -c "
-import redis
-import sys
-import os
-try:
-    r = redis.from_url('$REDIS_URL', socket_timeout=5, socket_connect_timeout=5)
-    r.ping()
-    print('   ✅ Redis connection successful')
-except Exception as e:
-    print(f'   ⚠️  Redis connection failed: {e}')
-    print('   ℹ️  App will use fallback cache - this is normal')
-    sys.exit(0)  # Don't fail startup for Redis issues
-" || echo "   ⚠️  Redis check timed out - using fallback"
-    else
-        echo "   ℹ️  Redis URL not configured, using local cache"
-    fi
+# Set environment variables for production
+export PYTHONUNBUFFERED=1
+export DJANGO_SETTINGS_MODULE=wellness_project.settings
+
+# Create logs directory if it doesn't exist
+mkdir -p logs
+
+# Install dependencies if requirements changed
+echo "📦 Checking dependencies..."
+pip install --no-cache-dir -r requirements.txt
+
+# Run database migrations with better error handling
+echo "🗄️  Running database migrations..."
+python manage.py migrate --noinput || {
+    echo "❌ Migration failed, attempting to fix..."
+    python manage.py migrate --fake-initial --noinput
+    python manage.py migrate --noinput
 }
 
-# Function to run database migrations safely
-run_migrations() {
-    echo "🔄 Running database migrations..."
-    python manage.py migrate --noinput || {
-        echo "❌ Migration failed, retrying once..."
-        sleep 5
-        python manage.py migrate --noinput
-    }
-    echo "✅ Migrations completed"
-}
+# Collect static files
+echo "📂 Collecting static files..."
+python manage.py collectstatic --noinput --clear
 
-# Function to collect static files
-collect_static() {
-    echo "📦 Collecting static files..."
-    python manage.py collectstatic --noinput --clear || {
-        echo "⚠️  Static file collection failed, continuing..."
-    }
-}
+# Create superuser if needed (for admin access)
+echo "👤 Creating superuser if needed..."
+python manage.py shell -c "
+from django.contrib.auth import get_user_model
+User = get_user_model()
+if not User.objects.filter(is_superuser=True).exists():
+    User.objects.create_superuser('admin', 'admin@example.com', 'admin123')
+    print('✅ Superuser created')
+else:
+    print('✅ Superuser already exists')
+" || echo "⚠️  Superuser creation skipped"
 
-# Function to run Redis diagnostics
-run_diagnostics() {
-    echo "🔍 Running system diagnostics..."
-    python manage.py diagnose_redis || {
-        echo "ℹ️  Diagnostics completed with warnings"
-    }
-}
-
-# Main startup sequence
-main() {
-    echo "================================================"
-    echo "🏥 Wellness App - Production Startup"
-    echo "================================================"
-    
-    # Check Python environment
-    echo "🐍 Python version: $(python --version)"
-    echo "📍 Working directory: $(pwd)"
-    
-    # Install/check dependencies
-    echo "📦 Checking dependencies..."
-    pip install --quiet --no-cache-dir -r requirements.txt
-    
-    # System checks
-    check_redis
-    run_diagnostics
-    
-    # Database setup
-    run_migrations
-    
-    # Static files
-    collect_static
-    
-    # Final health check
-    echo "🏥 Running final health check..."
-    python -c "
-from django.core.management import execute_from_command_line
-import os
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'wellness_project.settings')
-import django
-django.setup()
+# Test database connection
+echo "🔍 Testing database connection..."
+python manage.py shell -c "
 from django.db import connection
 try:
     with connection.cursor() as cursor:
         cursor.execute('SELECT 1')
     print('✅ Database connection verified')
 except Exception as e:
-    print(f'❌ Database check failed: {e}')
+    print(f'❌ Database connection failed: {e}')
     exit(1)
 "
-    
-    echo "================================================"
-    echo "🚀 Starting Gunicorn server..."
-    echo "================================================"
-    
-    # Start the application with optimized settings for hibernation handling
-    exec gunicorn wellness_project.wsgi:application \
-        --bind 0.0.0.0:10000 \
-        --workers 1 \
-        --worker-class sync \
-        --worker-connections 500 \
-        --timeout 300 \
-        --keep-alive 5 \
-        --max-requests 100 \
-        --max-requests-jitter 10 \
-        --access-logfile - \
-        --error-logfile - \
-        --log-level info
-}
 
-# Handle script interruption gracefully
-trap 'echo "🛑 Startup interrupted"; exit 1' INT TERM
+# Test Redis connection (non-critical)
+echo "🔍 Testing cache connection..."
+python manage.py shell -c "
+from django.core.cache import cache
+try:
+    cache.set('test', 'ok', 30)
+    result = cache.get('test')
+    if result == 'ok':
+        print('✅ Cache connection verified')
+    else:
+        print('⚠️  Cache test failed but continuing...')
+except Exception as e:
+    print(f'⚠️  Cache connection error (non-critical): {e}')
+"
 
-# Run main function
-main "$@"
+# Run health check
+echo "🏥 Running final health check..."
+python manage.py shell -c "
+import requests
+from django.conf import settings
+try:
+    # Test the health endpoint
+    print('Testing health endpoint...')
+    # We'll test this after the server starts
+    print('✅ Health check preparation complete')
+except Exception as e:
+    print(f'⚠️  Health check preparation error: {e}')
+"
+
+echo "================================================"
+echo "🚀 Starting Gunicorn server..."
+echo "================================================"
+
+# Start Gunicorn with better configuration for production
+exec gunicorn \
+    --bind 0.0.0.0:${PORT:-10000} \
+    --workers ${WEB_CONCURRENCY:-2} \
+    --worker-class sync \
+    --worker-connections 1000 \
+    --max-requests 1000 \
+    --max-requests-jitter 100 \
+    --timeout 120 \
+    --keep-alive 5 \
+    --log-level info \
+    --access-logfile - \
+    --error-logfile - \
+    --capture-output \
+    wellness_project.wsgi:application

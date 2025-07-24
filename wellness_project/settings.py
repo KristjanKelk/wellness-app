@@ -143,9 +143,8 @@ ACCOUNT_LOGIN_METHODS = {'username', 'email'}
 ACCOUNT_SIGNUP_FIELDS = ['username*','email*','password1*','password2*']
 
 # CORS settings - Fixed for production deployment
-# Temporarily allow all origins during service hibernation/502 errors
-# This is necessary for Render.com's free tier service wake-up process
-CORS_ALLOW_ALL_ORIGINS = True
+# Disabled CORS_ALLOW_ALL_ORIGINS for better security
+CORS_ALLOW_ALL_ORIGINS = False
 
 # Specific allowed origins (keep both typo and correct versions)
 CORS_ALLOWED_ORIGINS = [
@@ -222,16 +221,13 @@ if REDIS_URL:
     CACHE_BACKEND = "django.core.cache.backends.redis.RedisCache"
     CACHE_LOCATION = REDIS_URL.rsplit("/", 1)[0] + "/1"
     
-    # Redis connection options with better timeout handling
-    # Updated to fix connection_pool_kwargs error
+    # Fixed Redis connection options - removed problematic CONNECTION_POOL_KWARGS
     REDIS_CONNECTION_OPTIONS = {
-        "CONNECTION_POOL_KWARGS": {
-            "socket_connect_timeout": 5,
-            "socket_timeout": 5,
-            "retry_on_timeout": True,
-            "health_check_interval": 30,
-            "max_connections": 10,
-        }
+        "socket_connect_timeout": 5,
+        "socket_timeout": 5,
+        "retry_on_timeout": True,
+        "health_check_interval": 30,
+        "max_connections": 10,
     }
 else:
     CELERY_BROKER_URL = None

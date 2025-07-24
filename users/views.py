@@ -65,21 +65,26 @@ class HealthCheckView(APIView):
             health_status["services"]["database"] = f"unhealthy: {str(e)}"
             health_status["status"] = "degraded"
         
-        # Check Redis cache
+        # Check Redis/cache with better error handling
         try:
             from django.core.cache import cache
             cache.set("health_check", "test", 30)
             result = cache.get("health_check")
             if result == "test":
-                health_status["services"]["redis_cache"] = "healthy"
+                health_status["services"]["cache"] = "healthy"
             else:
-                health_status["services"]["redis_cache"] = "unhealthy: cache test failed"
+                health_status["services"]["cache"] = "unhealthy: cache test failed"
                 health_status["status"] = "degraded"
         except redis.exceptions.TimeoutError:
-            health_status["services"]["redis_cache"] = "unhealthy: timeout"
+            health_status["services"]["cache"] = "unhealthy: timeout"
             health_status["status"] = "degraded"
         except Exception as e:
-            health_status["services"]["redis_cache"] = f"unhealthy: {str(e)}"
+            # Handle the specific CONNECTION_POOL_KWARGS error more gracefully
+            error_msg = str(e)
+            if "CONNECTION_POOL_KWARGS" in error_msg:
+                health_status["services"]["cache"] = "error: AbstractConnection.__init__() got an unexpected keyword argument 'CONNECTION_POOL_KWARGS'"
+            else:
+                health_status["services"]["cache"] = f"error: {error_msg}"
             health_status["status"] = "degraded"
         
         # Check CORS headers
