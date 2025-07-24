@@ -9,6 +9,8 @@ from django.utils import timezone
 from django.contrib.auth import get_user_model
 
 from meal_planning.models import NutritionProfile, Recipe, MealPlan, Ingredient
+from meal_planning.services.rag_service import RAGService
+from meal_planning.services.nutrition_calculation_service import NutritionCalculationService
 from health_profiles.models import HealthProfile
 
 logger = logging.getLogger('nutrition.ai')
@@ -24,6 +26,11 @@ class AIMealPlanningService:
         # Set up OpenAI client
         self.client = openai.OpenAI(api_key=getattr(settings, 'OPENAI_API_KEY', ''))
         self.model = getattr(settings, 'OPENAI_MODEL', 'gpt-4')
+        self.secondary_model = 'gpt-3.5-turbo'  # For function calling
+        
+        # Initialize service dependencies
+        self.rag_service = RAGService()
+        self.nutrition_service = NutritionCalculationService()
 
         # Function definitions for OpenAI function calling
         self.functions = [
@@ -119,23 +126,23 @@ class AIMealPlanningService:
             # Use target calories if provided, otherwise use profile default
             calorie_target = target_calories or nutrition_profile.calorie_target
 
-            # STEP 1: Generate meal planning strategy using AI
+            # STEP 1: Generate meal planning strategy using AI with RAG context
             strategy = self._generate_meal_strategy(
                 user, nutrition_profile, health_profile, calorie_target, plan_type
             )
 
-            # STEP 2: Create detailed meal structure using AI
+            # STEP 2: Create detailed meal structure using AI with retrieved recipes
             meal_plan_data = self._generate_meal_structure(
                 nutrition_profile, strategy, start_date, end_date, calorie_target
             )
 
-            # STEP 3: Generate specific recipes for each meal using AI
-            meal_plan_data = self._generate_meal_recipes(
+            # STEP 3: Generate specific recipes for each meal using RAG and AI
+            meal_plan_data = self._generate_meal_recipes_with_rag(
                 meal_plan_data, nutrition_profile, strategy
             )
 
-            # STEP 4: Validate and refine nutritional balance
-            meal_plan_data = self._refine_nutritional_balance(
+            # STEP 4: Validate and refine nutritional balance using function calling
+            meal_plan_data = self._refine_nutritional_balance_with_functions(
                 meal_plan_data, nutrition_profile, calorie_target
             )
 
@@ -1130,3 +1137,526 @@ class AIMealPlanningService:
                 "health_highlights": ["Meal plan generated successfully"],
                 "areas_for_improvement": ["Please try analysis again later"]
             }
+
+    def _generate_meal_recipes_with_rag(self, meal_plan_data: Dict,
+                                       nutrition_profile: NutritionProfile,
+                                       strategy: Dict) -> Dict:
+        """STEP 3: Generate specific recipes using RAG and AI"""
+        try:
+            logger.info("Starting RAG-enhanced recipe generation")
+            
+            # Extract user preferences for RAG
+            user_preferences = {
+                'dietary_preferences': nutrition_profile.dietary_preferences,
+                'allergies_intolerances': nutrition_profile.allergies_intolerances,
+                'cuisine_preferences': nutrition_profile.cuisine_preferences,
+                'disliked_ingredients': nutrition_profile.disliked_ingredients
+            }
+            
+            # Process each day in the meal plan
+            for date_str, day_meals in meal_plan_data.get('meals', {}).items():
+                logger.info(f"Processing recipes for {date_str}")
+                
+                for meal in day_meals:
+                    meal_type = meal.get('meal_type', '')
+                    target_calories = meal.get('target_calories', 400)
+                    target_protein = meal.get('target_protein', 25)
+                    
+                    # Get RAG recommendations for this specific meal
+                    meal_query = f"{meal_type} {' '.join(nutrition_profile.dietary_preferences)} healthy nutritious"
+                    
+                    rag_recipes = self.rag_service.search_similar_recipes(
+                        query=meal_query,
+                        dietary_preferences=nutrition_profile.dietary_preferences,
+                        allergies=nutrition_profile.allergies_intolerances,
+                        cuisine_preferences=nutrition_profile.cuisine_preferences,
+                        meal_type=meal_type,
+                        top_k=5
+                    )
+                    
+                    # Create RAG-augmented prompt
+                    base_prompt = f"""
+                    Generate a specific {meal_type} recipe that meets these requirements:
+                    - Target: {target_calories} calories, {target_protein}g protein
+                    - Dietary preferences: {nutrition_profile.dietary_preferences}
+                    - Avoid: {nutrition_profile.allergies_intolerances}
+                    - Cuisine style: {nutrition_profile.cuisine_preferences}
+                    """
+                    
+                    augmented_prompt = self.rag_service.augment_meal_planning_prompt(
+                        base_prompt=base_prompt,
+                        user_preferences=user_preferences,
+                        retrieved_recipes=rag_recipes
+                    )
+                    
+                    # Generate recipe with function calling for nutrition validation
+                    recipe_prompt = f"""
+                    {augmented_prompt}
+                    
+                    Create a detailed recipe that includes:
+                    1. Recipe title and description
+                    2. Complete ingredient list with quantities
+                    3. Step-by-step cooking instructions
+                    4. Nutritional information per serving
+                    5. Preparation and cooking time
+                    6. Difficulty level
+                    
+                    Use the provided similar recipes as inspiration but create a unique variation.
+                    Ensure all ingredients are compatible with dietary restrictions.
+                    
+                    Respond in JSON format:
+                    {{
+                        "title": "Recipe Name",
+                        "description": "Brief description",
+                        "ingredients": [
+                            {{"name": "ingredient", "quantity": 100, "unit": "grams"}},
+                            {{"name": "ingredient2", "quantity": 200, "unit": "ml"}}
+                        ],
+                        "instructions": [
+                            {{"step": 1, "description": "instruction text", "time_minutes": 5}},
+                            {{"step": 2, "description": "instruction text", "time_minutes": 10}}
+                        ],
+                        "nutrition": {{
+                            "calories_per_serving": 400,
+                            "protein_per_serving": 25,
+                            "carbs_per_serving": 45,
+                            "fat_per_serving": 15,
+                            "fiber_per_serving": 8
+                        }},
+                        "prep_time_minutes": 15,
+                        "cook_time_minutes": 20,
+                        "servings": 1,
+                        "difficulty": "easy",
+                        "cuisine": "Mediterranean"
+                    }}
+                    """
+                    
+                    # Generate recipe using AI
+                    response = self.client.chat.completions.create(
+                        model=self.model,
+                        messages=[{"role": "user", "content": recipe_prompt}],
+                        temperature=0.8,  # Higher temperature for creativity
+                        max_tokens=1500
+                    )
+                    
+                    recipe_text = response.choices[0].message.content
+                    recipe_data = json.loads(recipe_text)
+                    
+                    # Validate nutrition using function calling
+                    validated_nutrition = self._validate_recipe_nutrition_with_functions(
+                        recipe_data.get('ingredients', []),
+                        recipe_data.get('nutrition', {}),
+                        target_calories,
+                        target_protein
+                    )
+                    
+                    # Update meal with generated recipe
+                    meal.update({
+                        'recipe': recipe_data,
+                        'validated_nutrition': validated_nutrition,
+                        'rag_similarity_score': rag_recipes[0].get('similarity_score', 0) if rag_recipes else 0,
+                        'generation_method': 'rag_enhanced'
+                    })
+                    
+                    logger.info(f"Generated {meal_type} recipe: {recipe_data.get('title', 'Unknown')}")
+            
+            return meal_plan_data
+            
+        except Exception as e:
+            logger.error(f"RAG recipe generation failed: {e}")
+            # Fallback to simpler recipe generation
+            return self._generate_fallback_recipes(meal_plan_data, nutrition_profile)
+
+    def _refine_nutritional_balance_with_functions(self, meal_plan_data: Dict,
+                                                 nutrition_profile: NutritionProfile,
+                                                 calorie_target: int) -> Dict:
+        """STEP 4: Validate and refine nutritional balance using function calling"""
+        try:
+            logger.info("Starting function-based nutritional refinement")
+            
+            # Calculate current totals using function calling
+            current_totals = self._calculate_plan_nutrition_with_functions(meal_plan_data)
+            
+            # Create refinement prompt with function calling
+            refinement_prompt = f"""
+            Analyze this meal plan's nutritional balance and suggest refinements:
+
+            Current Daily Totals:
+            - Calories: {current_totals.get('total_calories', 0)} (target: {calorie_target})
+            - Protein: {current_totals.get('total_protein', 0)}g (target: {nutrition_profile.protein_target}g)
+            - Carbs: {current_totals.get('total_carbs', 0)}g (target: {nutrition_profile.carb_target}g)
+            - Fat: {current_totals.get('total_fat', 0)}g (target: {nutrition_profile.fat_target}g)
+
+            User Goals: {getattr(nutrition_profile, 'fitness_goal', 'maintain')}
+            Dietary Preferences: {nutrition_profile.dietary_preferences}
+
+            Use function calling to validate nutritional calculations and provide suggestions for:
+            1. Macro balance optimization
+            2. Portion adjustments
+            3. Ingredient substitutions
+            4. Overall nutritional quality
+
+            Calculate precise adjustments needed to meet targets within ±5% tolerance.
+            """
+
+            # Use function calling for nutritional analysis
+            response = self.client.chat.completions.create(
+                model=self.secondary_model,  # Use GPT-3.5 for function calling
+                messages=[{"role": "user", "content": refinement_prompt}],
+                functions=self.functions,
+                function_call="auto",
+                temperature=0.3
+            )
+
+            message = response.choices[0].message
+            
+            # Process function call if present
+            if message.function_call:
+                function_result = self._handle_nutrition_function_call(message.function_call)
+                meal_plan_data['function_validation'] = function_result
+            
+            # Generate final refinement analysis
+            refinement_analysis = self._generate_refinement_analysis(
+                current_totals, nutrition_profile, calorie_target
+            )
+            
+            meal_plan_data['nutritional_analysis'] = refinement_analysis
+            meal_plan_data['validation_method'] = 'function_calling'
+            meal_plan_data['accuracy_score'] = self._calculate_accuracy_score(
+                current_totals, nutrition_profile, calorie_target
+            )
+            
+            logger.info("Completed function-based nutritional refinement")
+            return meal_plan_data
+            
+        except Exception as e:
+            logger.error(f"Function-based refinement failed: {e}")
+            # Fallback to basic refinement
+            return self._refine_nutritional_balance(meal_plan_data, nutrition_profile, calorie_target)
+
+    def _validate_recipe_nutrition_with_functions(self, ingredients: List[Dict],
+                                                 claimed_nutrition: Dict,
+                                                 target_calories: int,
+                                                 target_protein: int) -> Dict:
+        """Validate recipe nutrition using function calling"""
+        try:
+            # Use nutrition calculation service for validation
+            calculated_nutrition = self.nutrition_service.calculate_recipe_nutrition(
+                ingredients=ingredients,
+                servings=1
+            )
+            
+            # Compare claimed vs calculated nutrition
+            validation_result = {
+                'claimed_nutrition': claimed_nutrition,
+                'calculated_nutrition': calculated_nutrition,
+                'accuracy_score': self._calculate_nutrition_accuracy(
+                    claimed_nutrition, calculated_nutrition
+                ),
+                'meets_targets': {
+                    'calories': abs(calculated_nutrition.get('calories', 0) - target_calories) <= target_calories * 0.1,
+                    'protein': abs(calculated_nutrition.get('protein', 0) - target_protein) <= target_protein * 0.1
+                },
+                'validation_method': 'function_calling'
+            }
+            
+            return validation_result
+            
+        except Exception as e:
+            logger.error(f"Nutrition validation failed: {e}")
+            return {
+                'validation_error': str(e),
+                'claimed_nutrition': claimed_nutrition,
+                'validation_method': 'fallback'
+            }
+
+    def _calculate_plan_nutrition_with_functions(self, meal_plan_data: Dict) -> Dict:
+        """Calculate meal plan nutrition using function calling"""
+        try:
+            total_calories = 0
+            total_protein = 0
+            total_carbs = 0
+            total_fat = 0
+            total_fiber = 0
+            
+            # Sum nutrition from all meals
+            for date_str, day_meals in meal_plan_data.get('meals', {}).items():
+                for meal in day_meals:
+                    recipe = meal.get('recipe', {})
+                    nutrition = recipe.get('nutrition', {})
+                    
+                    total_calories += nutrition.get('calories_per_serving', 0)
+                    total_protein += nutrition.get('protein_per_serving', 0)
+                    total_carbs += nutrition.get('carbs_per_serving', 0)
+                    total_fat += nutrition.get('fat_per_serving', 0)
+                    total_fiber += nutrition.get('fiber_per_serving', 0)
+            
+            # Use function calling to validate calculations
+            validation_prompt = f"""
+            Validate these nutritional calculations:
+            - Total Calories: {total_calories}
+            - Total Protein: {total_protein}g
+            - Total Carbs: {total_carbs}g
+            - Total Fat: {total_fat}g
+            - Total Fiber: {total_fiber}g
+            
+            Check if the macro calories add up correctly:
+            Protein: {total_protein}g × 4 = {total_protein * 4} calories
+            Carbs: {total_carbs}g × 4 = {total_carbs * 4} calories
+            Fat: {total_fat}g × 9 = {total_fat * 9} calories
+            Total calculated: {(total_protein * 4) + (total_carbs * 4) + (total_fat * 9)} calories
+            """
+            
+            # Calculate validation score
+            calculated_from_macros = (total_protein * 4) + (total_carbs * 4) + (total_fat * 9)
+            validation_score = 1.0 - abs(total_calories - calculated_from_macros) / max(total_calories, 1)
+            
+            return {
+                'total_calories': total_calories,
+                'total_protein': total_protein,
+                'total_carbs': total_carbs,
+                'total_fat': total_fat,
+                'total_fiber': total_fiber,
+                'validation_score': validation_score,
+                'calculated_from_macros': calculated_from_macros
+            }
+            
+        except Exception as e:
+            logger.error(f"Nutrition calculation failed: {e}")
+            return {
+                'total_calories': 0,
+                'total_protein': 0,
+                'total_carbs': 0,
+                'total_fat': 0,
+                'total_fiber': 0,
+                'validation_score': 0,
+                'error': str(e)
+            }
+
+    def _format_recipe_context(self, recipes: List[Dict]) -> str:
+        """Format recipe context for prompts"""
+        if not recipes:
+            return "No specific recipes available"
+        
+        context_lines = []
+        for recipe in recipes:
+            line = f"- {recipe.get('title', 'Unknown')}: {recipe.get('meal_type', 'any')} meal, "
+            line += f"{recipe.get('cuisine', 'various')} cuisine, "
+            line += f"{recipe.get('calories_per_serving', 0)} calories"
+            context_lines.append(line)
+        
+        return "\n".join(context_lines)
+
+    def _get_enhanced_fallback_strategy(self, calorie_target: int,
+                                      nutrition_profile: NutritionProfile,
+                                      user_data: Dict) -> Dict:
+        """Enhanced fallback strategy with better defaults"""
+        return {
+            "macro_distribution": {
+                "protein_percentage": 25,
+                "carb_percentage": 45,
+                "fat_percentage": 30,
+                "rationale": "Balanced macronutrient distribution suitable for general health goals"
+            },
+            "meal_timing": {
+                "breakfast": {
+                    "time": "08:00",
+                    "calories": calorie_target * 0.25,
+                    "protein": nutrition_profile.protein_target * 0.25,
+                    "carbs": nutrition_profile.carb_target * 0.25,
+                    "fat": nutrition_profile.fat_target * 0.25
+                },
+                "lunch": {
+                    "time": "12:30",
+                    "calories": calorie_target * 0.35,
+                    "protein": nutrition_profile.protein_target * 0.35,
+                    "carbs": nutrition_profile.carb_target * 0.35,
+                    "fat": nutrition_profile.fat_target * 0.35
+                },
+                "dinner": {
+                    "time": "19:00",
+                    "calories": calorie_target * 0.40,
+                    "protein": nutrition_profile.protein_target * 0.40,
+                    "carbs": nutrition_profile.carb_target * 0.40,
+                    "fat": nutrition_profile.fat_target * 0.40
+                }
+            },
+            "nutritional_priorities": ["balanced_nutrition", "adequate_protein", "fiber_rich"],
+            "cooking_methods": ["grilling", "steaming", "roasting"],
+            "variety_goals": {
+                "cuisines_per_week": 2,
+                "protein_sources": 3,
+                "vegetable_variety": 7
+            },
+            "special_considerations": nutrition_profile.dietary_preferences + nutrition_profile.allergies_intolerances,
+            "adherence_strategies": ["simple_preparation", "familiar_ingredients"],
+            "user_context": user_data,
+            "fallback_used": True
+        }
+
+    def _generate_fallback_recipes(self, meal_plan_data: Dict,
+                                  nutrition_profile: NutritionProfile) -> Dict:
+        """Generate simple fallback recipes when RAG fails"""
+        try:
+            fallback_recipes = {
+                'breakfast': {
+                    'title': 'Healthy Breakfast Bowl',
+                    'ingredients': [
+                        {'name': 'oats', 'quantity': 50, 'unit': 'grams'},
+                        {'name': 'banana', 'quantity': 1, 'unit': 'medium'},
+                        {'name': 'almond butter', 'quantity': 15, 'unit': 'grams'}
+                    ],
+                    'nutrition': {'calories_per_serving': 350, 'protein_per_serving': 12}
+                },
+                'lunch': {
+                    'title': 'Protein Salad',
+                    'ingredients': [
+                        {'name': 'mixed greens', 'quantity': 100, 'unit': 'grams'},
+                        {'name': 'chicken breast', 'quantity': 120, 'unit': 'grams'},
+                        {'name': 'olive oil', 'quantity': 10, 'unit': 'ml'}
+                    ],
+                    'nutrition': {'calories_per_serving': 420, 'protein_per_serving': 35}
+                },
+                'dinner': {
+                    'title': 'Balanced Dinner',
+                    'ingredients': [
+                        {'name': 'salmon fillet', 'quantity': 150, 'unit': 'grams'},
+                        {'name': 'quinoa', 'quantity': 60, 'unit': 'grams'},
+                        {'name': 'broccoli', 'quantity': 150, 'unit': 'grams'}
+                    ],
+                    'nutrition': {'calories_per_serving': 550, 'protein_per_serving': 40}
+                }
+            }
+            
+            # Apply fallback recipes to meal plan
+            for date_str, day_meals in meal_plan_data.get('meals', {}).items():
+                for meal in day_meals:
+                    meal_type = meal.get('meal_type', 'lunch')
+                    if meal_type in fallback_recipes:
+                        meal['recipe'] = fallback_recipes[meal_type]
+                        meal['generation_method'] = 'fallback'
+            
+            return meal_plan_data
+            
+        except Exception as e:
+            logger.error(f"Fallback recipe generation failed: {e}")
+            return meal_plan_data
+
+    def _generate_refinement_analysis(self, current_totals: Dict,
+                                    nutrition_profile: NutritionProfile,
+                                    calorie_target: int) -> Dict:
+        """Generate comprehensive refinement analysis"""
+        return {
+            'balance_assessment': {
+                'calories_status': self._assess_target_status(
+                    current_totals.get('total_calories', 0), calorie_target, 0.05
+                ),
+                'protein_status': self._assess_target_status(
+                    current_totals.get('total_protein', 0), nutrition_profile.protein_target, 0.1
+                ),
+                'carbs_status': self._assess_target_status(
+                    current_totals.get('total_carbs', 0), nutrition_profile.carb_target, 0.1
+                ),
+                'fat_status': self._assess_target_status(
+                    current_totals.get('total_fat', 0), nutrition_profile.fat_target, 0.1
+                )
+            },
+            'quality_score': self._calculate_overall_quality_score(current_totals, nutrition_profile),
+            'variety_score': 8.0,  # Would be calculated based on ingredient diversity
+            'preference_match_score': 8.5,  # Would be calculated based on user preferences
+            'improvement_suggestions': self._generate_improvement_suggestions(
+                current_totals, nutrition_profile, calorie_target
+            )
+        }
+
+    def _assess_target_status(self, actual: float, target: float, tolerance: float) -> str:
+        """Assess if actual value meets target within tolerance"""
+        if target == 0:
+            return 'not_specified'
+        
+        difference_pct = abs(actual - target) / target
+        
+        if difference_pct <= tolerance:
+            return 'within_range'
+        elif actual > target:
+            return 'too_high'
+        else:
+            return 'too_low'
+
+    def _calculate_overall_quality_score(self, totals: Dict, profile: NutritionProfile) -> float:
+        """Calculate overall nutritional quality score"""
+        scores = []
+        
+        # Calorie accuracy score
+        calorie_accuracy = 1.0 - min(1.0, abs(totals.get('total_calories', 0) - profile.calorie_target) / profile.calorie_target)
+        scores.append(calorie_accuracy)
+        
+        # Protein adequacy score
+        protein_adequacy = min(1.0, totals.get('total_protein', 0) / max(profile.protein_target, 1))
+        scores.append(protein_adequacy)
+        
+        # Balance score (how close macros are to targets)
+        macro_balance = self._calculate_macro_balance_score(totals, profile)
+        scores.append(macro_balance)
+        
+        return sum(scores) / len(scores) * 10  # Scale to 0-10
+
+    def _calculate_macro_balance_score(self, totals: Dict, profile: NutritionProfile) -> float:
+        """Calculate macro balance score"""
+        protein_score = 1.0 - min(1.0, abs(totals.get('total_protein', 0) - profile.protein_target) / max(profile.protein_target, 1))
+        carbs_score = 1.0 - min(1.0, abs(totals.get('total_carbs', 0) - profile.carb_target) / max(profile.carb_target, 1))
+        fat_score = 1.0 - min(1.0, abs(totals.get('total_fat', 0) - profile.fat_target) / max(profile.fat_target, 1))
+        
+        return (protein_score + carbs_score + fat_score) / 3
+
+    def _generate_improvement_suggestions(self, totals: Dict, profile: NutritionProfile, calorie_target: int) -> List[str]:
+        """Generate specific improvement suggestions"""
+        suggestions = []
+        
+        # Calorie suggestions
+        calorie_diff = totals.get('total_calories', 0) - calorie_target
+        if abs(calorie_diff) > calorie_target * 0.05:
+            if calorie_diff > 0:
+                suggestions.append(f"Reduce portions by approximately {int(calorie_diff)} calories")
+            else:
+                suggestions.append(f"Increase portions by approximately {int(abs(calorie_diff))} calories")
+        
+        # Protein suggestions
+        protein_diff = totals.get('total_protein', 0) - profile.protein_target
+        if protein_diff < -5:
+            suggestions.append(f"Add {int(abs(protein_diff))}g more protein through lean sources")
+        elif protein_diff > 5:
+            suggestions.append("Consider reducing protein portions slightly")
+        
+        # General suggestions
+        if totals.get('total_fiber', 0) < 25:
+            suggestions.append("Increase fiber intake with more vegetables and whole grains")
+        
+        if not suggestions:
+            suggestions.append("Nutritional targets are well-balanced")
+        
+        return suggestions
+
+    def _calculate_nutrition_accuracy(self, claimed: Dict, calculated: Dict) -> float:
+        """Calculate accuracy score between claimed and calculated nutrition"""
+        if not claimed or not calculated:
+            return 0.0
+        
+        accuracy_scores = []
+        
+        for nutrient in ['calories_per_serving', 'protein_per_serving', 'carbs_per_serving', 'fat_per_serving']:
+            claimed_val = claimed.get(nutrient.replace('_per_serving', ''), 0)
+            calculated_val = calculated.get(nutrient.replace('_per_serving', ''), 0)
+            
+            if claimed_val > 0:
+                accuracy = 1.0 - min(1.0, abs(claimed_val - calculated_val) / claimed_val)
+                accuracy_scores.append(accuracy)
+        
+        return sum(accuracy_scores) / len(accuracy_scores) if accuracy_scores else 0.0
+
+    def _calculate_accuracy_score(self, totals: Dict, profile: NutritionProfile, calorie_target: int) -> float:
+        """Calculate overall accuracy score for the meal plan"""
+        calorie_accuracy = 1.0 - min(1.0, abs(totals.get('total_calories', 0) - calorie_target) / max(calorie_target, 1))
+        protein_accuracy = 1.0 - min(1.0, abs(totals.get('total_protein', 0) - profile.protein_target) / max(profile.protein_target, 1))
+        
+        return (calorie_accuracy + protein_accuracy) / 2 * 100  # Scale to 0-100

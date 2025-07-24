@@ -27,9 +27,21 @@ SECRET_KEY = config('SECRET_KEY')
 OPENAI_API_KEY = config('OPENAI_API_KEY')
 AI_INSIGHT_DAILY_LIMIT = 3
 
-# Spoonacular API Configuration (ADD THIS TO YOUR .env FILE)
-SPOONACULAR_API_KEY = config('SPOONACULAR_API_KEY')
+# Spoonacular API Configuration
+SPOONACULAR_API_KEY = config('SPOONACULAR_API_KEY', default='')
 SPOONACULAR_BASE_URL = 'https://api.spoonacular.com'
+SPOONACULAR_ENDPOINTS = {
+    'search': '/recipes/complexSearch',
+    'recipe_info': '/recipes/{id}/information',
+    'ingredient_search': '/food/ingredients/search',
+    'ingredient_info': '/food/ingredients/{id}/information',
+    'bulk_ingredient_info': '/food/ingredients/{ids}/information',
+}
+SPOONACULAR_RATE_LIMIT = {
+    'requests_per_day': 150,  # Free tier limit
+    'requests_per_minute': 1,  # Conservative rate limiting
+    'cache_duration': 86400,  # 24 hours
+}
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = False
