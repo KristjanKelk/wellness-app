@@ -359,7 +359,42 @@ class AIMealPlanningService:
 
     def _generate_single_recipe(self, meal_info: Dict,
                                 nutrition_profile: NutritionProfile, strategy: Dict) -> Dict:
-        """Generate a single recipe using AI"""
+        """Generate a single recipe.
+
+        Priority is given to fetching an existing recipe from Spoonacular that matches the
+        user's dietary preferences and the current meal requirements. If no suitable
+        Spoonacular recipe is found (or the API call fails), the service falls back to the
+        AI-generated recipe pipeline that was originally implemented.
+        """
+
+        # 1) Try Spoonacular first ---------------------------------------------------------
+        try:
+            from meal_planning.services.spoonacular_service import get_spoonacular_service, SpoonacularAPIError
+
+            service = get_spoonacular_service()
+
+            diet = ','.join(nutrition_profile.dietary_preferences)
+            intolerances = ','.join(nutrition_profile.allergies_intolerances)
+
+            search_results = service.search_recipes(
+                query=meal_info.get('suggested_name', ''),
+                cuisine=meal_info.get('cuisine', ''),
+                diet=diet,
+                intolerances=intolerances,
+                number=1
+            )
+
+            if search_results.get('results'):
+                # We have at least one matching recipe – use it
+                spoonacular_recipe = search_results['results'][0]
+                normalized = service.normalize_recipe_data(spoonacular_recipe)
+                normalized['source_type'] = 'spoonacular'
+                return normalized
+
+        except (ImportError, SpoonacularAPIError, Exception) as e:
+            logger.warning(f"Spoonacular lookup failed, falling back to AI recipe: {e}")
+
+        # 2) Fall back to the original AI recipe generation -------------------------------
         try:
             recipe_prompt = f"""
             Create a detailed recipe for this meal:
