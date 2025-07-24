@@ -143,8 +143,8 @@ ACCOUNT_LOGIN_METHODS = {'username', 'email'}
 ACCOUNT_SIGNUP_FIELDS = ['username*','email*','password1*','password2*']
 
 # CORS settings
-# Note: Set CORS_ALLOW_ALL_ORIGINS to False for production security
-CORS_ALLOW_ALL_ORIGINS = False
+# Temporarily allow all origins for debugging (set to False for production)
+CORS_ALLOW_ALL_ORIGINS = True
 
 CORS_ALLOWED_ORIGINS = [
    'https://wellness-app-fronend.onrender.com',  # Keep the typo version for compatibility
@@ -153,10 +153,6 @@ CORS_ALLOWED_ORIGINS = [
     'http://localhost:8080',
     'http://127.0.0.1:8080',
 ]
-CORS_ALLOW_CREDENTIALS = True
-
-# Additional CORS settings for better compatibility
-CORS_PREFLIGHT_MAX_AGE = 86400  # 24 hours
 
 # Allow specific origins for API endpoints
 CORS_ALLOWED_ORIGIN_REGEXES = [
@@ -165,9 +161,11 @@ CORS_ALLOWED_ORIGIN_REGEXES = [
     r"^http://127\.0\.0\.1:\d+$",
 ]
 
-# Handle CORS errors more gracefully
-CORS_ALLOW_ALL_ORIGINS = True  # Temporarily allow all for debugging
-CORS_REPLACE_HTTPS_REFERER = True
+CORS_ALLOW_CREDENTIALS = True
+CORS_PREFLIGHT_MAX_AGE = 86400  # 24 hours
+
+# Note: CORS_REPLACE_HTTPS_REFERER has been removed in django-cors-headers 4.0+
+# Use CSRF_TRUSTED_ORIGINS instead (configured above)
 
 SESSION_COOKIE_SAMESITE = 'None'
 CSRF_COOKIE_SAMESITE    = 'None'
