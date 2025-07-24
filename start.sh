@@ -107,7 +107,7 @@ except Exception as e:
     
     # Start the application with optimized settings
     exec gunicorn wellness_project.wsgi:application \
-        --bind 0.0.0.0:10000 \
+        --bind 0.0.0.0:${PORT:-10000} \
         --workers 2 \
         --worker-class sync \
         --worker-connections 1000 \
