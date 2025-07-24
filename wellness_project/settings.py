@@ -143,8 +143,9 @@ ACCOUNT_LOGIN_METHODS = {'username', 'email'}
 ACCOUNT_SIGNUP_FIELDS = ['username*','email*','password1*','password2*']
 
 # CORS settings
-# Temporarily allow all origins for debugging (set to False for production)
-CORS_ALLOW_ALL_ORIGINS = True
+# Temporarily allow all origins for debugging hibernation issues
+# TODO: Set to False and use specific origins for production
+CORS_ALLOW_ALL_ORIGINS = True  # Temporarily True to debug service hibernation
 
 CORS_ALLOWED_ORIGINS = [
    'https://wellness-app-fronend.onrender.com',  # Keep the typo version for compatibility
@@ -152,9 +153,11 @@ CORS_ALLOWED_ORIGINS = [
    'https://wellness-app-tx2c.onrender.com',
     'http://localhost:8080',
     'http://127.0.0.1:8080',
+    'http://localhost:3000',
+    'http://127.0.0.1:3000',
 ]
 
-# Allow specific origins for API endpoints
+# Allow specific origins for API endpoints with regex patterns
 CORS_ALLOWED_ORIGIN_REGEXES = [
     r"^https://.*\.onrender\.com$",
     r"^http://localhost:\d+$",
@@ -163,6 +166,17 @@ CORS_ALLOWED_ORIGIN_REGEXES = [
 
 CORS_ALLOW_CREDENTIALS = True
 CORS_PREFLIGHT_MAX_AGE = 86400  # 24 hours
+
+# Enhanced CORS settings for better compatibility
+CORS_EXPOSE_HEADERS = [
+    'content-type',
+    'authorization',
+    'x-csrftoken',
+    'cache-control',
+    'expires',
+    'etag',
+    'last-modified',
+]
 
 # Note: CORS_REPLACE_HTTPS_REFERER has been removed in django-cors-headers 4.0+
 # Use CSRF_TRUSTED_ORIGINS instead (configured above)

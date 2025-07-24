@@ -28,26 +28,66 @@ async function handleServiceHibernation(originalRequest) {
     if (store?.commit) {
         store.commit('ui/setLoading', {
             isLoading: true,
-            message: 'Waking up service... This may take a minute on first load.'
+            message: 'Service is starting up... This may take up to 60 seconds on the first request.'
         });
     }
 
-    // Wait a bit and retry
-    await new Promise(resolve => setTimeout(resolve, 2000));
+    // Multiple wake-up attempts with increasing delays
+    const maxAttempts = 4;
+    const delays = [5000, 10000, 15000, 20000]; // 5s, 10s, 15s, 20s
     
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+        try {
+            console.log(`Wake-up attempt ${attempt + 1}/${maxAttempts}...`);
+            
+            if (store?.commit) {
+                store.commit('ui/setLoading', {
+                    isLoading: true,
+                    message: `Waking up service... Attempt ${attempt + 1}/${maxAttempts}`
+                });
+            }
+            
+            await new Promise(resolve => setTimeout(resolve, delays[attempt]));
+            
+            // Attempt to wake up the service
+            await axios.get(API_URL.replace('/api/', '/'), { 
+                timeout: 30000,
+                headers: {
+                    'Cache-Control': 'no-cache',
+                    'Pragma': 'no-cache'
+                }
+            });
+            
+            // Service responded, wait a bit for full initialization
+            await new Promise(resolve => setTimeout(resolve, 3000));
+            
+            console.log('Service wake-up successful, retrying original request...');
+            
+            // Retry original request
+            return apiClient(originalRequest);
+            
+        } catch (wakeupError) {
+            console.log(`Wake-up attempt ${attempt + 1} failed:`, wakeupError.message);
+            
+            if (attempt === maxAttempts - 1) {
+                // Last attempt failed, try the original request anyway
+                console.log('All wake-up attempts failed, trying original request...');
+                break;
+            }
+        }
+    }
+    
+    // Final attempt with the original request
     try {
-        // Attempt to wake up the service with a simple request
-        await axios.get(API_URL.replace('/api/', '/'), { timeout: 60000 });
-        
-        // Wait a bit more for full initialization
-        await new Promise(resolve => setTimeout(resolve, 3000));
-        
-        // Retry original request
-        return apiClient(originalRequest);
-    } catch (wakeupError) {
-        console.log('Service wake-up attempt completed, retrying original request...');
-        // Even if wake-up fails, try the original request
-        return apiClient(originalRequest);
+        return await apiClient(originalRequest);
+    } catch (finalError) {
+        if (store?.commit) {
+            store.commit('ui/setError', {
+                message: 'Service is currently unavailable. Please try again in a few minutes.',
+                details: 'The backend service may be starting up or experiencing issues.'
+            });
+        }
+        throw finalError;
     } finally {
         if (store?.commit) {
             store.commit('ui/setLoading', { isLoading: false });
