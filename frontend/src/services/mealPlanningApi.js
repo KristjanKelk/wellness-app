@@ -23,13 +23,94 @@ const API_ROOT = (process.env.VUE_APP_API_URL || DEFAULT_API_ROOT).replace(/\/ap
 const API_BASE_URL = `${API_ROOT}/meal-planning/api`;
 
 // Create axios instance with base configuration - MATCHING your http.service.js pattern
+// Increase timeout to 30 seconds (Render can take ~20-30 s to wake a sleeping service)
+// and enable credentials in case cookies are needed.
 const api = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 10000,
+  timeout: 30000,
   headers: {
     'Content-Type': 'application/json',
-  }
+  },
+  withCredentials: true,
 });
+
+// ---------------------------------------------------------------------------
+// Render hibernation helper (mirrors logic from http.service.js)
+// ---------------------------------------------------------------------------
+
+/**
+ * On Render the backend may spin down after a period of inactivity and respond
+ * with HTTP 503 for the first request.  This helper shows a user-friendly
+ * loading message, repeatedly pings the root URL to wake the service, then
+ * retries the original API request once the service is responsive.
+ *
+ * @param {import('axios').AxiosRequestConfig} originalRequest – The request
+ *        config that triggered the 503 so we can replay it once the service
+ *        is awake.
+ * @returns {Promise<import('axios').AxiosResponse>}
+ */
+async function handleServiceHibernation(originalRequest) {
+  console.log('[MealPlanningApi] Service appears to be hibernating. Attempting to wake up…');
+
+  // Inform the UI (optional – only if the store/ui module exists)
+  if (store?.commit) {
+    store.commit('ui/setLoading', {
+      isLoading: true,
+      message: 'Starting meal-planning service… this can take up to 60 s.'
+    });
+  }
+
+  // Attempt to wake the service with exponential back-off
+  const maxAttempts = 4;
+  const delays = [5000, 10000, 15000, 20000]; // 5 s, 10 s, 15 s, 20 s
+
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    try {
+      console.log(`[MealPlanningApi] Wake-up attempt ${attempt + 1}/${maxAttempts}`);
+
+      if (store?.commit) {
+        store.commit('ui/setLoading', {
+          isLoading: true,
+          message: `Waking meal-planning service… attempt ${attempt + 1}/${maxAttempts}`,
+        });
+      }
+
+      // Wait for the back-off delay
+      await new Promise(resolve => setTimeout(resolve, delays[attempt]));
+
+      // Ping the root of the backend (without /api) – that is enough to wake it
+      await axios.get(API_ROOT + '/', {
+        timeout: 30000,
+        headers: {
+          'Cache-Control': 'no-cache',
+          Pragma: 'no-cache',
+        },
+      });
+
+      // Give the application a couple of seconds to fully boot
+      await new Promise(resolve => setTimeout(resolve, 3000));
+
+      console.log('[MealPlanningApi] Service wake-up successful – retrying original request…');
+      return api(originalRequest);
+    } catch (wakeErr) {
+      console.warn(`[MealPlanningApi] Wake-up attempt ${attempt + 1} failed:`, wakeErr?.message || wakeErr);
+
+      // After last failed attempt, fall through to retry the request anyway
+      if (attempt === maxAttempts - 1) {
+        console.warn('[MealPlanningApi] All wake-up attempts exhausted – proceeding to final retry.');
+      }
+    }
+  }
+
+  // Final attempt with original request – if this still fails we propagate
+  try {
+    return await api(originalRequest);
+  } finally {
+    if (store?.commit) {
+      store.commit('ui/setLoading', { isLoading: false });
+    }
+  }
+}
 
 // Add request interceptor for authentication - SAME as your http.service.js
 api.interceptors.request.use(
@@ -51,6 +132,25 @@ api.interceptors.response.use(
   response => response,
   async error => {
     const originalRequest = error.config;
+
+    // -------------------------------------------------------------
+    // Gracefully handle Render hibernation (HTTP 503) and bad gateway (502)
+    // -------------------------------------------------------------
+    if (error.response?.status === 503 && !originalRequest._hibernation_retry) {
+      originalRequest._hibernation_retry = true;
+      return handleServiceHibernation(originalRequest);
+    }
+
+    if (error.response?.status === 502 && !originalRequest._gateway_retry) {
+      originalRequest._gateway_retry = true;
+      console.log('[MealPlanningApi] Gateway error – retrying in 5 s…');
+      await new Promise(resolve => setTimeout(resolve, 5000));
+      return api(originalRequest);
+    }
+
+    // -------------------------------------------------------------
+    // Authentication – refresh the JWT on 401, same as before
+    // -------------------------------------------------------------
     if (error.response?.status === 401 && !originalRequest._retry) {
       originalRequest._retry = true;
 
@@ -76,13 +176,28 @@ api.interceptors.response.use(
         return Promise.reject(refreshError);
       }
     }
+    // Enhanced diagnostic output (align with http.service.js)
     if (error.response) {
-      console.error(
-        `Meal Planning API Error: ${error.response.status} ${error.response.statusText}`,
-        error.response.data
-      );
+      const errorInfo = {
+        status: error.response.status,
+        statusText: error.response.statusText,
+        url: error.config?.url,
+        method: error.config?.method,
+        data: error.response.data,
+        headers: error.response.headers,
+      };
+
+      if (error.response.status === 503) {
+        console.error('[MealPlanningApi] Service hibernation detected:', errorInfo);
+      } else if (error.response.status === 502) {
+        console.error('[MealPlanningApi] Gateway error:', errorInfo);
+      } else {
+        console.error('[MealPlanningApi] API error:', errorInfo);
+      }
+    } else if (error.code === 'ECONNABORTED') {
+      console.error('[MealPlanningApi] Request timeout:', error.message);
     } else {
-      console.error('Meal Planning API Error:', error.message);
+      console.error('[MealPlanningApi] Network error:', error.message);
     }
 
     return Promise.reject(error);
