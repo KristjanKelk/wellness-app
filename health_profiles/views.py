@@ -46,12 +46,19 @@ class HealthProfileViewSet(viewsets.ModelViewSet):
 
         except HealthProfile.DoesNotExist:
             if request.method == 'GET':
-                return Response({'detail': 'Health profile not found'}, status=status.HTTP_404_NOT_FOUND)
+                # Instead of 404, return a basic template for health profile creation
+                return Response({
+                    'detail': 'Health profile not found',
+                    'create_url': '/api/health-profiles/my_profile/',
+                    'message': 'Please create your health profile to start tracking your wellness journey'
+                }, status=status.HTTP_404_NOT_FOUND)
 
             serializer = self.get_serializer(data=request.data)
             if serializer.is_valid():
                 serializer.save(user=request.user)
+                logger.info("Health profile created for user %s", request.user)
                 return Response(serializer.data, status=status.HTTP_201_CREATED)
+            logger.warning("Health profile creation failed for user %s: %s", request.user, serializer.errors)
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
@@ -249,7 +256,7 @@ class ActivityViewSet(viewsets.ModelViewSet):
                 performed_at__date__gte=current_week_start
             ).dates('performed_at', 'day').distinct().count()
 
-            if distinct_days > health_profile.weekly_activity_days or health_profile.weekly_activity_days is None:
+            if health_profile.weekly_activity_days is None or distinct_days > health_profile.weekly_activity_days:
                 health_profile.weekly_activity_days = distinct_days
                 health_profile.save(update_fields=['weekly_activity_days'])
 
