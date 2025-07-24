@@ -344,15 +344,15 @@ WSGI_APPLICATION = 'wellness_project.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/4.2/ref/settings/#databases
 
+import dj_database_url
+
+# Database configuration with support for both SQLite and PostgreSQL
 DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.postgresql',
-        'NAME':     config('PGDATABASE'),
-        'USER':     config('PGUSER'),
-        'PASSWORD': config('PGPASSWORD'),
-        'HOST':     config('PGHOST'),
-        'PORT':     config('PGPORT', default='5432'),
-    }
+    'default': dj_database_url.config(
+        default='sqlite:///db.sqlite3',
+        conn_max_age=600,
+        conn_health_checks=True,
+    )
 }
 
 # Password validation
