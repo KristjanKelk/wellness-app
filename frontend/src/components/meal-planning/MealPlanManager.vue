@@ -132,7 +132,7 @@
         <p>Previously generated personalized meal plans</p>
       </div>
 
-      <div v-if="loading" class="loading-state">
+      <div v-if="mealPlansLoading" class="loading-state">
         <div class="loading-spinner"></div>
         <p>Loading your meal plans...</p>
       </div>
@@ -249,6 +249,7 @@ export default {
   data() {
     return {
       mealPlans: [],
+      mealPlansLoading: false,
       selectedPlan: null,
       selectedPlanForAnalysis: null,
       currentAnalysis: null,
@@ -281,14 +282,18 @@ export default {
   },
   methods: {
     async loadMealPlans() {
+      this.mealPlansLoading = true
       try {
         const response = await mealPlanningApi.getMealPlans()
         // Handle different response structures safely
         this.mealPlans = response?.data?.results || response?.data || []
+        console.log('Loaded meal plans:', this.mealPlans.length)
       } catch (error) {
         console.error('Failed to load meal plans:', error)
         this.mealPlans = [] // Set empty array to prevent null errors
         this.showError('Failed to load meal plans')
+      } finally {
+        this.mealPlansLoading = false
       }
     },
 
