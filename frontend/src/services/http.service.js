@@ -16,7 +16,7 @@ const apiClient = axios.create({
     headers: {
         'Content-Type': 'application/json',
     },
-    timeout: 30000,  // Increased timeout for service wake-up
+    timeout: 90000,  // Increased timeout for service wake-up
     withCredentials: true,   // if you need cookies/CORS creds
 });
 

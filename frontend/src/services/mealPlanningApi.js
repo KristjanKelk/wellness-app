@@ -23,11 +23,14 @@ const API_ROOT = (process.env.VUE_APP_API_URL || DEFAULT_API_ROOT).replace(/\/ap
 const API_BASE_URL = `${API_ROOT}/meal-planning/api`;
 
 // Create axios instance with base configuration - MATCHING your http.service.js pattern
-// Increase timeout to 30 seconds (Render can take ~20-30 s to wake a sleeping service)
-// and enable credentials in case cookies are needed.
+// Increase timeout to 90 seconds because AI-powered meal-plan generation can
+// occasionally exceed 30 s, especially when the Render backend is waking up
+// from hibernation or when multiple sequential LLM calls are required.
+// Matching the http.service.js timeout keeps behaviour consistent across all
+// API clients.
 const api = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 30000,
+  timeout: 90000,
   headers: {
     'Content-Type': 'application/json',
   },
