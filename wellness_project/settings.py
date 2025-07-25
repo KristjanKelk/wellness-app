@@ -223,16 +223,8 @@ if REDIS_URL:
     CACHE_BACKEND = "django.core.cache.backends.redis.RedisCache"
     CACHE_LOCATION = REDIS_URL.rsplit("/", 1)[0] + "/1"
     
-    # Redis connection options with better timeout handling
-    REDIS_CONNECTION_OPTIONS = {
-        "connection_pool_kwargs": {
-            "socket_connect_timeout": 5,
-            "socket_timeout": 5,
-            "retry_on_timeout": True,
-            "health_check_interval": 30,
-            "max_connections": 10,
-        }
-    }
+    # Redis connection options for Django's native Redis cache backend
+    REDIS_CONNECTION_OPTIONS = {}
 else:
     CELERY_BROKER_URL = None
     CELERY_RESULT_BACKEND = None
