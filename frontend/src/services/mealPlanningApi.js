@@ -3,7 +3,19 @@ import axios from 'axios';
 import AuthService from './auth.service';
 import store from '../store';
 
-const API_BASE_URL = 'http://localhost:8000/meal-planning/api';
+// Determine API base-URL dynamically so it works in both development and production.
+// Priority: 1) explicit VUE_APP_MEAL_API_URL   2) generic VUE_APP_API_URL with /meal-planning path   3) Render default fallback
+
+const API_BASE_URL = (
+  // If a dedicated Meal-Planning URL is provided, use it as-is
+  process.env.VUE_APP_MEAL_API_URL ||
+  // Otherwise, reuse the generic API root (if present) and append the meal-planning postfix
+  (process.env.VUE_APP_API_URL
+    // Strip trailing /api or trailing slash, then append meal-planning path
+    ? process.env.VUE_APP_API_URL.replace(/\/api\/?$/, '').replace(/\/?$/, '') + '/meal-planning/api'
+    : null)
+  // Final fallback – public Render backend
+) || 'https://wellness-app-tx2c.onrender.com/meal-planning/api';
 
 // Create axios instance with base configuration - MATCHING your http.service.js pattern
 const api = axios.create({
