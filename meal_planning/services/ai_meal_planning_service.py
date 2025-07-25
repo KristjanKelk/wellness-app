@@ -7,6 +7,7 @@ from datetime import datetime, timedelta, date
 from django.conf import settings
 from django.utils import timezone
 from django.contrib.auth import get_user_model
+import importlib
 
 from meal_planning.models import NutritionProfile, Recipe, MealPlan, Ingredient
 from health_profiles.models import HealthProfile
@@ -21,9 +22,22 @@ class AIMealPlanningService:
     """
 
     def __init__(self):
-        # Set up OpenAI client
-        self.client = openai.OpenAI(api_key=getattr(settings, 'OPENAI_API_KEY', ''))
+        # Initialize OpenAI client with compatibility for both v1+ and legacy SDKs
+        api_key = getattr(settings, 'OPENAI_API_KEY', '')
         self.model = getattr(settings, 'OPENAI_MODEL', 'gpt-4')
+
+        # Try modern SDK first
+        try:
+            openai_mod = importlib.import_module('openai')
+            if hasattr(openai_mod, 'OpenAI'):
+                self.client = openai_mod.OpenAI(api_key=api_key)
+            else:
+                # Legacy SDK fallback – use top-level methods
+                openai_mod.api_key = api_key
+                self.client = openai_mod  # treat module as the client
+        except Exception as e:
+            logger.error(f"Failed to initialize OpenAI client: {e}")
+            self.client = None  # Allows graceful degradation
 
         # Function definitions for OpenAI function calling
         self.functions = [
