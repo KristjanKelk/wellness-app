@@ -1,159 +1,185 @@
 // src/utils/serviceWakeup.js
 import axios from 'axios';
 
-const BACKEND_URL = process.env.VUE_APP_API_URL || 'https://wellness-app-tx2c.onrender.com';
+export class ServiceWakeupManager {
+  constructor() {
+    this.isWakingUp = false;
+    this.wakeupPromise = null;
+    this.baseUrl = 'https://wellness-app-tx2c.onrender.com';
+  }
 
-/**
- * Wake up the backend service if it's hibernating
- * @returns {Promise<boolean>} True if service is awake, false otherwise
- */
-export async function wakeUpService() {
-    console.log('Attempting to wake up backend service...');
+  async wakeupService(showProgress = true) {
+    // If already waking up, return the existing promise
+    if (this.isWakingUp && this.wakeupPromise) {
+      return this.wakeupPromise;
+    }
+
+    this.isWakingUp = true;
+    
+    this.wakeupPromise = this._performWakeup(showProgress);
     
     try {
-        // Try to ping the service root endpoint
-        const response = await axios.get(BACKEND_URL + '/', {
-            timeout: 60000, // 60 seconds timeout for wake-up
-            headers: {
-                'Accept': 'text/html,application/json',
-            }
+      const result = await this.wakeupPromise;
+      return result;
+    } finally {
+      this.isWakingUp = false;
+      this.wakeupPromise = null;
+    }
+  }
+
+  async _performWakeup(showProgress) {
+    console.log('🔄 Starting service wake-up sequence...');
+    
+    const maxAttempts = 6;
+    const delays = [2000, 5000, 8000, 12000, 18000, 25000]; // Progressive delays
+    
+    let lastError = null;
+    
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      try {
+        if (showProgress) {
+          this._updateProgress(attempt + 1, maxAttempts, 'Pinging service...');
+        }
+        
+        console.log(`🔄 Wake-up attempt ${attempt + 1}/${maxAttempts}...`);
+        
+        // Wait before each attempt (except the first)
+        if (attempt > 0) {
+          await this._delay(delays[attempt - 1]);
+        }
+        
+        // Try to ping the service
+        const response = await axios.get(`${this.baseUrl}/`, {
+          timeout: 20000,
+          headers: {
+            'Cache-Control': 'no-cache',
+            'Pragma': 'no-cache',
+            'X-Wake-Up': 'true'
+          }
         });
         
-        // If we get any response (200, 404, etc.), the service is awake
-        if (response.status >= 200 && response.status < 600) {
-            console.log('Service is awake!');
-            return true;
+        if (response.status === 200) {
+          console.log('✅ Service is awake!');
+          
+          if (showProgress) {
+            this._updateProgress(maxAttempts, maxAttempts, 'Service is ready!');
+          }
+          
+          // Give the service a moment to fully initialize
+          await this._delay(2000);
+          
+          return { success: true, attempts: attempt + 1 };
         }
-    } catch (error) {
-        if (error.response) {
-            // Service responded with an error, but it's awake
-            console.log('Service is awake (responded with error):', error.response.status);
-            return true;
-        } else {
-            console.error('Failed to wake up service:', error.message);
-            return false;
+        
+      } catch (error) {
+        console.log(`❌ Wake-up attempt ${attempt + 1} failed:`, error.message);
+        lastError = error;
+        
+        if (showProgress) {
+          this._updateProgress(
+            attempt + 1, 
+            maxAttempts, 
+            `Attempt ${attempt + 1} failed, retrying...`
+          );
         }
+        
+        // If it's a 503, the service is definitely hibernating, continue trying
+        if (error.response?.status === 503) {
+          continue;
+        }
+        
+        // For other errors, still continue but adjust strategy
+        if (error.response?.status && error.response.status !== 502) {
+          // Service is responding but with an error, it might be starting up
+          continue;
+        }
+      }
     }
     
-    return false;
-}
-
-/**
- * Check if the error indicates service hibernation
- * @param {Error} error - The error to check
- * @returns {boolean} True if error indicates hibernation
- */
-export function isHibernationError(error) {
-    if (!error.response) return false;
+    // All attempts failed
+    console.error('❌ Failed to wake up service after all attempts');
     
-    const status = error.response.status;
-    const headers = error.response.headers || {};
-    
-    // Check for Render.com specific hibernation indicators
-    return (
-        status === 503 ||
-        status === 502 ||
-        headers['x-render-routing']?.includes('hibernate') ||
-        headers['x-render-routing']?.includes('dynamic-user-server-502')
-    );
-}
-
-/**
- * Retry a function with exponential backoff
- * @param {Function} fn - Function to retry
- * @param {number} maxAttempts - Maximum number of attempts
- * @param {number} baseDelay - Base delay in milliseconds
- * @returns {Promise} Promise resolving to function result
- */
-export async function retryWithBackoff(fn, maxAttempts = 3, baseDelay = 1000) {
-    let lastError;
-    
-    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-        try {
-            return await fn();
-        } catch (error) {
-            lastError = error;
-            
-            if (attempt === maxAttempts) {
-                break;
-            }
-            
-            // Calculate delay with exponential backoff
-            const delay = baseDelay * Math.pow(2, attempt - 1);
-            console.log(`Attempt ${attempt} failed, retrying in ${delay}ms...`);
-            
-            // Wait before retrying
-            await new Promise(resolve => setTimeout(resolve, delay));
-        }
+    if (showProgress) {
+      this._updateProgress(maxAttempts, maxAttempts, 'Wake-up failed, service may be offline');
     }
     
-    throw lastError;
-}
+    return { 
+      success: false, 
+      attempts: maxAttempts, 
+      lastError: lastError?.message || 'Unknown error' 
+    };
+  }
 
-/**
- * Enhanced service health check
- * @returns {Promise<Object>} Health check result
- */
-export async function checkServiceHealth() {
+  async checkServiceHealth() {
     try {
-        const response = await axios.get(BACKEND_URL + '/api/health/', {
-            timeout: 10000,
-            headers: {
-                'Accept': 'application/json',
-            }
-        });
-        
-        return {
-            isHealthy: true,
-            status: response.status,
-            data: response.data
-        };
+      const response = await axios.get(`${this.baseUrl}/api/health/`, {
+        timeout: 10000,
+        headers: {
+          'Cache-Control': 'no-cache'
+        }
+      });
+      
+      return {
+        isHealthy: response.status === 200,
+        status: response.status,
+        data: response.data
+      };
     } catch (error) {
-        return {
-            isHealthy: false,
-            status: error.response?.status || 0,
-            error: error.message,
-            isHibernating: isHibernationError(error)
-        };
+      return {
+        isHealthy: false,
+        status: error.response?.status || 0,
+        error: error.message,
+        isHibernating: error.response?.status === 503
+      };
     }
+  }
+
+  _updateProgress(current, total, message) {
+    // Emit a custom event that components can listen to
+    const event = new CustomEvent('service-wakeup-progress', {
+      detail: {
+        current,
+        total,
+        message,
+        percentage: Math.round((current / total) * 100)
+      }
+    });
+    
+    window.dispatchEvent(event);
+    
+    // Also log to console for debugging
+    console.log(`🔄 [${current}/${total}] ${message}`);
+  }
+
+  _delay(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  // Utility method to handle 503 errors in any API call
+  static async handleHibernationError(originalRequest, api) {
+    const manager = new ServiceWakeupManager();
+    
+    console.log('🔄 Detected service hibernation, attempting wake-up...');
+    
+    const result = await manager.wakeupService(true);
+    
+    if (result.success) {
+      console.log('✅ Service awakened, retrying original request...');
+      // Retry the original request
+      return api(originalRequest);
+    } else {
+      console.error('❌ Failed to wake up service, original request will likely fail');
+      // Still try the original request, it might work
+      throw new Error(`Service wake-up failed after ${result.attempts} attempts: ${result.lastError}`);
+    }
+  }
 }
 
-/**
- * Initialize service connection on app startup
- * @param {Function} onProgress - Progress callback
- * @returns {Promise<boolean>} True if successful
- */
-export async function initializeService(onProgress = () => {}) {
-    console.log('Initializing service connection...');
-    onProgress('Checking service status...');
-    
-    const health = await checkServiceHealth();
-    
-    if (health.isHealthy) {
-        onProgress('Service is ready!');
-        return true;
-    }
-    
-    if (health.isHibernating) {
-        onProgress('Service is sleeping, waking up...');
-        console.log('Service is hibernating, attempting wake-up...');
-        
-        const success = await retryWithBackoff(async () => {
-            onProgress('Attempting to wake up service...');
-            const wakeResult = await wakeUpService();
-            if (!wakeResult) {
-                throw new Error('Failed to wake up service');
-            }
-            return wakeResult;
-        }, 3, 2000);
-        
-        if (success) {
-            onProgress('Service is ready!');
-            return true;
-        }
-    }
-    
-    onProgress('Service connection failed');
-    console.error('Failed to initialize service connection');
-    return false;
-}
+// Singleton instance
+export const serviceWakeup = new ServiceWakeupManager();
+
+// Utility functions for common use cases
+export const wakeupService = (showProgress = true) => serviceWakeup.wakeupService(showProgress);
+export const checkServiceHealth = () => serviceWakeup.checkServiceHealth();
+
+export default serviceWakeup;

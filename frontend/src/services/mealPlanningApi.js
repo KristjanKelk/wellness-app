@@ -12,11 +12,86 @@ const API_BASE_URL = (
 // Create axios instance with base configuration - MATCHING your http.service.js pattern
 const api = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 10000,
+  timeout: 60000,  // Increased timeout for hibernation wake-up
   headers: {
     'Content-Type': 'application/json',
   }
 });
+
+// Function to handle service hibernation (503 errors on Render.com)
+async function handleServiceHibernation(originalRequest) {
+    console.log('🔄 Meal Planning service appears to be hibernating. Attempting to wake up...');
+    
+    // Show user-friendly message
+    if (store?.commit) {
+        store.commit('ui/setLoading', {
+            isLoading: true,
+            message: 'Waking up meal planning service... This may take up to 60 seconds.'
+        });
+    }
+
+    // Multiple wake-up attempts with increasing delays
+    const maxAttempts = 4;
+    const delays = [5000, 10000, 15000, 20000]; // 5s, 10s, 15s, 20s
+    
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+        try {
+            console.log(`🔄 Wake-up attempt ${attempt + 1}/${maxAttempts} for meal planning service...`);
+            
+            if (store?.commit) {
+                store.commit('ui/setLoading', {
+                    isLoading: true,
+                    message: `Waking up meal planning service... Attempt ${attempt + 1}/${maxAttempts}`
+                });
+            }
+            
+            await new Promise(resolve => setTimeout(resolve, delays[attempt]));
+            
+            // Attempt to wake up the service with base health check
+            await axios.get('https://wellness-app-tx2c.onrender.com/', { 
+                timeout: 30000,
+                headers: {
+                    'Cache-Control': 'no-cache',
+                    'Pragma': 'no-cache'
+                }
+            });
+            
+            // Service responded, wait a bit for full initialization
+            await new Promise(resolve => setTimeout(resolve, 3000));
+            
+            console.log('✅ Meal planning service wake-up successful, retrying original request...');
+            
+            // Retry original request
+            return api(originalRequest);
+            
+        } catch (wakeupError) {
+            console.log(`❌ Wake-up attempt ${attempt + 1} failed:`, wakeupError.message);
+            
+            if (attempt === maxAttempts - 1) {
+                // Last attempt failed, try the original request anyway
+                console.log('⚠️ All wake-up attempts failed, trying original request...');
+                break;
+            }
+        }
+    }
+    
+    // Final attempt with the original request
+    try {
+        return await api(originalRequest);
+    } catch (finalError) {
+        if (store?.commit) {
+            store.commit('ui/setError', {
+                message: 'Meal planning service is currently unavailable. Please try again in a few minutes.',
+                details: 'The backend service may be starting up or experiencing issues.'
+            });
+        }
+        throw finalError;
+    } finally {
+        if (store?.commit) {
+            store.commit('ui/setLoading', { isLoading: false });
+        }
+    }
+}
 
 // Add request interceptor for authentication - SAME as your http.service.js
 api.interceptors.request.use(
@@ -33,11 +108,27 @@ api.interceptors.request.use(
   }
 );
 
-// Add response interceptor for error handling - SAME as your http.service.js
+// Enhanced response interceptor with hibernation handling
 api.interceptors.response.use(
   response => response,
   async error => {
     const originalRequest = error.config;
+
+    // Handle service hibernation (503 errors)
+    if (error.response?.status === 503 && !originalRequest._hibernation_retry) {
+      originalRequest._hibernation_retry = true;
+      return handleServiceHibernation(originalRequest);
+    }
+
+    // Handle 502 errors (bad gateway, often during service startup)
+    if (error.response?.status === 502 && !originalRequest._gateway_retry) {
+      originalRequest._gateway_retry = true;
+      console.log('🔄 Meal planning service gateway error, retrying in 5 seconds...');
+      await new Promise(resolve => setTimeout(resolve, 5000));
+      return api(originalRequest);
+    }
+
+    // Handle authentication errors
     if (error.response?.status === 401 && !originalRequest._retry) {
       originalRequest._retry = true;
 
@@ -63,13 +154,29 @@ api.interceptors.response.use(
         return Promise.reject(refreshError);
       }
     }
+
+    // Enhanced error logging
     if (error.response) {
-      console.error(
-        `Meal Planning API Error: ${error.response.status} ${error.response.statusText}`,
-        error.response.data
-      );
+      const errorInfo = {
+        status: error.response.status,
+        statusText: error.response.statusText,
+        url: error.config?.url,
+        method: error.config?.method,
+        data: error.response.data,
+        headers: error.response.headers
+      };
+      
+      if (error.response.status === 503) {
+        console.error('🔄 Meal planning service hibernation detected:', errorInfo);
+      } else if (error.response.status === 502) {
+        console.error('🔄 Meal planning service gateway error:', errorInfo);
+      } else {
+        console.error('❌ Meal Planning API Error:', errorInfo);
+      }
+    } else if (error.code === 'ECONNABORTED') {
+      console.error('⏰ Meal Planning API Request timeout:', error.message);
     } else {
-      console.error('Meal Planning API Error:', error.message);
+      console.error('🌐 Meal Planning API Network error:', error.message);
     }
 
     return Promise.reject(error);

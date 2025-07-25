@@ -44,54 +44,126 @@ class CorsTestView(APIView):
 
 @method_decorator(csrf_exempt, name='dispatch')
 class HealthCheckView(APIView):
-    """Enhanced health check endpoint"""
+    """Enhanced health check endpoint with hibernation status"""
     permission_classes = [AllowAny]
 
     def get(self, request):
+        start_time = timezone.now()
+        
         health_status = {
             "status": "healthy",
-            "timestamp": timezone.now().isoformat(),
-            "services": {}
+            "timestamp": start_time.isoformat(),
+            "hibernation_info": {
+                "is_waking_up": request.headers.get("X-Wake-Up") == "true",
+                "wake_up_time": start_time.isoformat(),
+                "platform": "render.com",
+                "hibernation_timeout": "15 minutes",
+                "wake_up_expected_time": "30-60 seconds"
+            },
+            "services": {},
+            "performance": {}
         }
         
+        # Add hibernation status header for frontend
+        hibernation_status = "awake"
+        if request.headers.get("X-Wake-Up"):
+            hibernation_status = "waking-up"
+        
         # Check database
+        db_start = timezone.now()
         try:
             from django.db import connection
             with connection.cursor() as cursor:
                 cursor.execute("SELECT 1")
-            health_status["services"]["database"] = "healthy"
+            db_time = (timezone.now() - db_start).total_seconds()
+            health_status["services"]["database"] = {
+                "status": "healthy",
+                "response_time_ms": round(db_time * 1000, 2)
+            }
         except Exception as e:
-            health_status["services"]["database"] = f"unhealthy: {str(e)}"
+            db_time = (timezone.now() - db_start).total_seconds()
+            health_status["services"]["database"] = {
+                "status": "unhealthy",
+                "error": str(e),
+                "response_time_ms": round(db_time * 1000, 2)
+            }
             health_status["status"] = "degraded"
         
         # Check Redis cache
+        redis_start = timezone.now()
         try:
             from django.core.cache import cache
             cache.set("health_check", "test", 30)
             result = cache.get("health_check")
+            redis_time = (timezone.now() - redis_start).total_seconds()
+            
             if result == "test":
-                health_status["services"]["redis_cache"] = "healthy"
+                health_status["services"]["redis_cache"] = {
+                    "status": "healthy",
+                    "response_time_ms": round(redis_time * 1000, 2)
+                }
             else:
-                health_status["services"]["redis_cache"] = "unhealthy: cache test failed"
+                health_status["services"]["redis_cache"] = {
+                    "status": "unhealthy",
+                    "error": "cache test failed",
+                    "response_time_ms": round(redis_time * 1000, 2)
+                }
                 health_status["status"] = "degraded"
         except redis.exceptions.TimeoutError:
-            health_status["services"]["redis_cache"] = "unhealthy: timeout"
+            redis_time = (timezone.now() - redis_start).total_seconds()
+            health_status["services"]["redis_cache"] = {
+                "status": "unhealthy",
+                "error": "timeout",
+                "response_time_ms": round(redis_time * 1000, 2)
+            }
             health_status["status"] = "degraded"
         except Exception as e:
-            health_status["services"]["redis_cache"] = f"unhealthy: {str(e)}"
+            redis_time = (timezone.now() - redis_start).total_seconds()
+            health_status["services"]["redis_cache"] = {
+                "status": "unhealthy",
+                "error": str(e),
+                "response_time_ms": round(redis_time * 1000, 2)
+            }
             health_status["status"] = "degraded"
         
-        # Check CORS headers
+        # Check CORS headers and add debugging info
         health_status["services"]["cors_headers"] = {
             "origin": request.headers.get("Origin", "not-provided"),
-            "user_agent": request.headers.get("User-Agent", "not-provided")
+            "user_agent": request.headers.get("User-Agent", "not-provided"),
+            "x_wake_up": request.headers.get("X-Wake-Up", "not-provided"),
+            "cache_control": request.headers.get("Cache-Control", "not-provided")
         }
         
-        return Response(health_status)
+        # Add performance metrics
+        total_time = (timezone.now() - start_time).total_seconds()
+        health_status["performance"] = {
+            "total_response_time_ms": round(total_time * 1000, 2),
+            "hibernation_status": hibernation_status
+        }
+        
+        # Create response with custom headers
+        response = Response(health_status)
+        response['X-Hibernation-Status'] = hibernation_status
+        response['X-Wake-Up-Time'] = start_time.isoformat()
+        
+        # Add retry-after header if service seems slow (indicating wake-up)
+        if total_time > 5:  # If response took more than 5 seconds
+            response['Retry-After'] = '30'  # Suggest retry in 30 seconds
+        
+        return response
 
     def options(self, request):
         """Handle preflight requests for health check"""
-        return Response(status=status.HTTP_200_OK)
+        response = Response(status=status.HTTP_200_OK)
+        response['X-Hibernation-Status'] = 'preflight'
+        return response
+
+    def head(self, request):
+        """Handle HEAD requests for quick health checks"""
+        response = Response(status=status.HTTP_200_OK)
+        response['X-Hibernation-Status'] = 'awake'
+        response['X-Wake-Up-Time'] = timezone.now().isoformat()
+        return response
 
 
 @method_decorator(csrf_exempt, name='dispatch')
