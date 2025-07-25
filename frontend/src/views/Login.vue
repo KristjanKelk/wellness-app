@@ -59,13 +59,25 @@
           v-if="message"
         />
 
+        <!-- Retry button for timeout errors -->
+        <div v-if="showRetryButton" class="form-group text-center mt-3">
+          <BaseButton
+            variant="outline"
+            size="sm"
+            @click="retryLogin"
+            :loading="loading"
+          >
+            Retry Login
+          </BaseButton>
+        </div>
+
         <!-- Submit button -->
         <BaseButton
           type="submit"
           variant="primary"
           block
           :loading="loading"
-          :loading-text="showTwoFactorForm ? 'Verifying...' : 'Signing in...'"
+          :loading-text="getLoadingText()"
         >
           {{ showTwoFactorForm ? 'Verify' : 'Sign In' }}
         </BaseButton>
@@ -174,9 +186,17 @@ export default {
     const githubLoading = ref(false);
     const message = ref('');
     const successful = ref(false);
+    const isWakingService = ref(false);
+    const lastLoginError = ref(null);
 
     // Computed properties
     const loggedIn = computed(() => store.getters['auth/isLoggedIn']);
+    const showRetryButton = computed(() => {
+      return lastLoginError.value && (
+        lastLoginError.value.code === 'ECONNABORTED' || 
+        lastLoginError.value.message?.includes('timeout')
+      );
+    });
 
     // Check login status on creation
     if (loggedIn.value) {
@@ -208,11 +228,18 @@ export default {
         loading.value = true;
         message.value = '';
 
+        // Check if the first login might need service wake-up
+        if (message.value.includes('service') || message.value.includes('timeout')) {
+          isWakingService.value = true;
+        }
+
         const userData = await store.dispatch('auth/login', {
           username: username.value,
           password: password.value,
           remember: remember.value
         });
+
+        isWakingService.value = false;
 
         // Check if 2FA is required
         if (userData.two_factor_enabled) {
@@ -224,6 +251,7 @@ export default {
           loginSuccess(userData);
         }
       } catch (error) {
+        isWakingService.value = false;
         handleLoginError(error);
       }
     };
@@ -275,8 +303,26 @@ export default {
     const handleLoginError = (error) => {
       loading.value = false;
       successful.value = false;
+      lastLoginError.value = error;
       console.error('Login error:', error);
 
+      // Handle timeout errors specifically
+      if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
+        message.value = 'Login request timed out. The service may be starting up. Please wait a moment and try again.';
+        return;
+      }
+
+      // Handle network errors
+      if (!error.response) {
+        if (error.message?.includes('Network Error')) {
+          message.value = 'Unable to connect to the login service. Please check your internet connection and try again.';
+        } else {
+          message.value = error.message || 'Failed to login. Please check your credentials.';
+        }
+        return;
+      }
+
+      // Handle server response errors
       if (error.response?.data) {
         if (error.response.data.detail) {
           message.value = error.response.data.detail;
@@ -336,6 +382,12 @@ export default {
       }
     };
 
+    const retryLogin = async () => {
+      lastLoginError.value = null;
+      message.value = '';
+      await handleLogin();
+    };
+
     return {
       // Form state
       username,
@@ -351,13 +403,23 @@ export default {
       githubLoading,
       message,
       successful,
+      showRetryButton,
 
       // Methods
       handleLogin,
       verifyTwoFactor,
       cancelTwoFactor,
+      retryLogin,
       loginWithGoogle,
-      loginWithGitHub
+      loginWithGitHub,
+
+      // Helper methods
+      getLoadingText() {
+        if (isWakingService.value) {
+          return 'Starting service...';
+        }
+        return showTwoFactorForm.value ? 'Verifying...' : 'Signing in...';
+      }
     };
   }
 };

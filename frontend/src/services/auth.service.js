@@ -1,5 +1,6 @@
 // src/services/auth.service.js
-import axios from 'axios';
+import apiClient from './http.service';
+import { wakeUpService, checkServiceHealth } from '../utils/serviceWakeup';
 
 export const API_URL = (
   process.env.VUE_APP_API_URL ||
@@ -91,7 +92,16 @@ class AuthService {
    */
   async login(username, password, remember = false) {
     try {
-      const response = await axios.post(API_URL + 'token/', { username, password });
+      // First check if service is healthy and wake it if needed
+      const health = await checkServiceHealth();
+      if (!health.isHealthy && health.isHibernating) {
+        console.log('Service appears to be hibernating, attempting to wake up...');
+        await wakeUpService();
+        // Wait a moment for the service to fully initialize
+        await new Promise(resolve => setTimeout(resolve, 3000));
+      }
+
+      const response = await apiClient.post('token/', { username, password });
       const userData = response.data;
 
       // If 2FA is not required, store user data
@@ -102,6 +112,15 @@ class AuthService {
       return userData;
     } catch (error) {
       console.error('Login error:', error);
+      
+      // If the error is a timeout or connection issue, provide helpful context
+      if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
+        const enhancedError = new Error('Login request timed out. The service may be starting up. Please wait a moment and try again.');
+        enhancedError.code = error.code;
+        enhancedError.originalError = error;
+        throw enhancedError;
+      }
+      
       throw error;
     }
   }
@@ -119,7 +138,7 @@ class AuthService {
         return Promise.reject(new Error('Missing required 2FA verification data'));
       }
 
-      const response = await axios.post(API_URL + 'token/2fa-verify/', {
+      const response = await apiClient.post('token/2fa-verify/', {
         token: tempAuthData.access,
         code: code
       });
@@ -160,7 +179,7 @@ class AuthService {
    * @returns {Promise} Promise resolving to registration response
    */
   register(username, email, password, password2) {
-    return axios.post(API_URL + 'register/', {
+    return apiClient.post('register/', {
       username,
       email,
       password,
@@ -180,7 +199,7 @@ class AuthService {
     }
 
     try {
-      const response = await axios.post(API_URL + 'token/refresh/', {
+      const response = await apiClient.post('token/refresh/', {
         refresh: user.refresh
       });
 
