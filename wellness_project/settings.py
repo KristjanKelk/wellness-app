@@ -144,9 +144,8 @@ ACCOUNT_EMAIL_VERIFICATION = 'none'
 ACCOUNT_LOGIN_METHODS = {'username', 'email'}
 ACCOUNT_SIGNUP_FIELDS = ['username*','email*','password1*','password2*']
 
-# CORS settings
-# Temporarily allow all origins for debugging hibernation issues
-# TODO: Set to False and use specific origins for production
+# CORS settings - Enhanced for hibernation handling and better error recovery
+# Allow all origins temporarily for debugging hibernation issues
 CORS_ALLOW_ALL_ORIGINS = True  # Temporarily True to debug service hibernation
 
 CORS_ALLOWED_ORIGINS = [
@@ -157,6 +156,8 @@ CORS_ALLOWED_ORIGINS = [
     'http://127.0.0.1:8080',
     'http://localhost:3000',
     'http://127.0.0.1:3000',
+    'http://localhost:5173',  # Vite dev server
+    'http://127.0.0.1:5173',  # Vite dev server
 ]
 
 # Allow specific origins for API endpoints with regex patterns
@@ -164,12 +165,14 @@ CORS_ALLOWED_ORIGIN_REGEXES = [
     r"^https://.*\.onrender\.com$",
     r"^http://localhost:\d+$",
     r"^http://127\.0\.0\.1:\d+$",
+    r"^https://.*\.netlify\.app$",  # Additional hosting platforms
+    r"^https://.*\.vercel\.app$",   # Additional hosting platforms
 ]
 
 CORS_ALLOW_CREDENTIALS = True
 CORS_PREFLIGHT_MAX_AGE = 86400  # 24 hours
 
-# Enhanced CORS settings for better compatibility
+# Enhanced CORS settings for better compatibility with hibernation recovery
 CORS_EXPOSE_HEADERS = [
     'content-type',
     'authorization',
@@ -178,17 +181,22 @@ CORS_EXPOSE_HEADERS = [
     'expires',
     'etag',
     'last-modified',
+    'x-hibernation-status',  # Custom header for hibernation info
+    'x-wake-up-time',       # Custom header for wake-up timing
+    'retry-after',          # Standard retry header
 ]
 
 # Note: CORS_REPLACE_HTTPS_REFERER has been removed in django-cors-headers 4.0+
 # Use CSRF_TRUSTED_ORIGINS instead (configured above)
 
+# Enhanced session/CSRF settings for better cross-origin handling
 SESSION_COOKIE_SAMESITE = 'None'
 CSRF_COOKIE_SAMESITE    = 'None'
 SESSION_COOKIE_SECURE   = True
 CSRF_COOKIE_SECURE      = True
+CSRF_COOKIE_HTTPONLY    = False  # Allow JS access for SPA
 
-# Specify which headers can be included in requests
+# Specify which headers can be included in requests - Enhanced for hibernation handling
 CORS_ALLOW_HEADERS = [
     'accept',
     'accept-encoding',
@@ -203,6 +211,10 @@ CORS_ALLOW_HEADERS = [
     'pragma',
     'x-forwarded-for',
     'x-real-ip',
+    'x-wake-up',           # Custom header for wake-up requests
+    'x-hibernation-retry', # Custom header for hibernation retries
+    'if-none-match',       # For caching
+    'if-modified-since',   # For caching
 ]
 
 CORS_ALLOW_METHODS = [
@@ -212,6 +224,7 @@ CORS_ALLOW_METHODS = [
     'PATCH',
     'POST',
     'PUT',
+    'HEAD',  # Add HEAD for health checks
 ]
 
 
