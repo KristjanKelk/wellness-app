@@ -16,6 +16,10 @@ import os
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+# Ensure logs directory exists for file-based logging handlers
+LOG_DIR = BASE_DIR / 'logs'
+LOG_DIR.mkdir(exist_ok=True)
+
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/4.2/howto/deployment/checklist/
@@ -637,13 +641,13 @@ LOGGING = {
         'file': {
             'level': 'INFO',
             'class': 'logging.FileHandler',
-            'filename': 'logs/nutrition.log',
+            'filename': str(LOG_DIR / 'nutrition.log'),
             'formatter': 'verbose',
         },
         'spoonacular': {
             'level': 'DEBUG',
             'class': 'logging.FileHandler',
-            'filename': 'logs/spoonacular_api.log',
+            'filename': str(LOG_DIR / 'spoonacular_api.log'),
             'formatter': 'verbose',
         },
     },
