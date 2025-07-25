@@ -1,4 +1,3 @@
-# analytics/services.py - Fixed with proper imports
 from decimal import Decimal
 from django.utils import timezone
 from datetime import timedelta
