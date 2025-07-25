@@ -16,7 +16,7 @@ const apiClient = axios.create({
     headers: {
         'Content-Type': 'application/json',
     },
-    timeout: 30000,  // Increased timeout for service wake-up
+    timeout: 60000,  // Increased timeout to 60 seconds for service wake-up and login
     withCredentials: true,   // if you need cookies/CORS creds
 });
 
@@ -130,6 +130,24 @@ apiClient.interceptors.response.use(
             return apiClient(originalRequest);
         }
 
+        // Handle timeout errors specifically for authentication requests
+        if (error.code === 'ECONNABORTED' && !originalRequest._timeout_retry) {
+            const isAuthRequest = originalRequest.url?.includes('token/') || originalRequest.url?.includes('register/');
+            
+            if (isAuthRequest) {
+                originalRequest._timeout_retry = true;
+                console.log('Authentication request timed out, retrying with longer timeout...');
+                
+                // Retry with extended timeout
+                const retryConfig = {
+                    ...originalRequest,
+                    timeout: 120000, // 2 minutes for auth requests
+                };
+                
+                return apiClient(retryConfig);
+            }
+        }
+
         // Handle authentication errors
         if (error.response?.status === 401 && !originalRequest._retry) {
             originalRequest._retry = true;
@@ -157,7 +175,7 @@ apiClient.interceptors.response.use(
             }
         }
 
-        // Enhanced error logging
+        // Enhanced error logging and user-friendly messages
         if (error.response) {
             const errorInfo = {
                 status: error.response.status,
@@ -177,8 +195,18 @@ apiClient.interceptors.response.use(
             }
         } else if (error.code === 'ECONNABORTED') {
             console.error('API Request timeout:', error.message);
+            
+            // Add user-friendly timeout message for login requests
+            if (error.config?.url?.includes('token/')) {
+                console.warn('Login request timed out - service may be hibernating');
+            }
         } else {
             console.error('API Network error:', error.message);
+            
+            // Network error handling for login requests
+            if (error.config?.url?.includes('token/')) {
+                console.warn('Network error during login request');
+            }
         }
 
         return Promise.reject(error);
