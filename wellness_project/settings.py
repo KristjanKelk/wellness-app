@@ -15,6 +15,8 @@ from decouple import config
 import os
 
 BASE_DIR = Path(__file__).resolve().parent.parent
+# Ensure the logs directory exists to prevent FileNotFoundError when configuring file handlers
+(BASE_DIR / 'logs').mkdir(exist_ok=True)
 
 
 # Quick-start development settings - unsuitable for production
@@ -637,13 +639,13 @@ LOGGING = {
         'file': {
             'level': 'INFO',
             'class': 'logging.FileHandler',
-            'filename': 'logs/nutrition.log',
+            'filename': str(BASE_DIR / 'logs' / 'nutrition.log'),
             'formatter': 'verbose',
         },
         'spoonacular': {
             'level': 'DEBUG',
             'class': 'logging.FileHandler',
-            'filename': 'logs/spoonacular_api.log',
+            'filename': str(BASE_DIR / 'logs' / 'spoonacular_api.log'),
             'formatter': 'verbose',
         },
     },
