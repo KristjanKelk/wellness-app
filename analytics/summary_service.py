@@ -1,5 +1,3 @@
-# Replace your analytics/summary_service.py with this safe version
-
 from django.utils import timezone
 from datetime import timedelta
 from django.conf import settings
