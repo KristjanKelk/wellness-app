@@ -39,18 +39,19 @@ class SpoonacularService:
         self.last_request_key = 'spoonacular_last_request'
 
     def _check_rate_limit(self) -> bool:
-        """Check if we're within rate limits"""
+        """Check if we're within rate limits - OPTIMIZED"""
         # Check daily limit
         requests_today = cache.get(self.requests_today_key, 0)
         if requests_today >= self.rate_limit['requests_per_day']:
             logger.warning(f"Daily rate limit exceeded: {requests_today}/{self.rate_limit['requests_per_day']}")
             raise RateLimitExceeded("Daily API rate limit exceeded")
 
-        # Check per-minute limit
+        # OPTIMIZED: Only minimal delay instead of strict rate limiting
         last_request = cache.get(self.last_request_key)
         if last_request:
             time_since_last = time.time() - last_request
-            min_interval = 60 / self.rate_limit['requests_per_minute']
+            # Reduced minimum interval to 3 seconds instead of 60
+            min_interval = 3.0  # Changed from 60 / self.rate_limit['requests_per_minute']
             if time_since_last < min_interval:
                 sleep_time = min_interval - time_since_last
                 logger.info(f"Rate limiting: sleeping for {sleep_time:.2f} seconds")
@@ -95,7 +96,9 @@ class SpoonacularService:
 
         try:
             logger.info(f"Making request to Spoonacular: {endpoint}")
-            response = requests.get(url, params=params, timeout=30)
+            # Use shorter timeout to prevent long waits
+            timeout = getattr(settings, 'REQUEST_TIMEOUT_SETTINGS', {}).get('spoonacular', 15)
+            response = requests.get(url, params=params, timeout=timeout)
             response.raise_for_status()
 
             # Update rate limit counters
@@ -109,6 +112,9 @@ class SpoonacularService:
 
             return data
 
+        except requests.exceptions.Timeout as e:
+            logger.error(f"Spoonacular API timeout after {timeout}s: {e}")
+            raise SpoonacularAPIError(f"API request timeout: {e}")
         except requests.exceptions.RequestException as e:
             logger.error(f"Spoonacular API request failed: {e}")
             raise SpoonacularAPIError(f"API request failed: {e}")

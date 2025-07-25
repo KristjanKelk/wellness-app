@@ -2,7 +2,6 @@
 from django.db import models
 from django.contrib.auth import get_user_model
 from django.core.validators import MinValueValidator, MaxValueValidator
-from django.contrib.postgres.fields import ArrayField
 import uuid
 
 User = get_user_model()
@@ -65,21 +64,21 @@ class NutritionProfile(models.Model):
     ]
 
     # Nutrition preferences
-    dietary_preferences = ArrayField(
-        models.CharField(max_length=50, choices=DIETARY_PREFERENCES),
-        default=list, blank=True
+    dietary_preferences = models.JSONField(
+        default=list, blank=True,
+        help_text="List of dietary preferences (e.g., ['vegetarian', 'vegan', 'pescatarian'])"
     )
-    allergies_intolerances = ArrayField(
-        models.CharField(max_length=50, choices=ALLERGIES_INTOLERANCES),
-        default=list, blank=True
+    allergies_intolerances = models.JSONField(
+        default=list, blank=True,
+        help_text="List of allergies and intolerances (e.g., ['nuts', 'peanuts', 'dairy'])"
     )
-    cuisine_preferences = ArrayField(
-        models.CharField(max_length=50, choices=CUISINE_PREFERENCES),
-        default=list, blank=True
+    cuisine_preferences = models.JSONField(
+        default=list, blank=True,
+        help_text="List of cuisine preferences (e.g., ['italian', 'mexican'])"
     )
-    disliked_ingredients = ArrayField(
-        models.CharField(max_length=100),
-        default=list, blank=True
+    disliked_ingredients = models.JSONField(
+        default=list, blank=True,
+        help_text="List of disliked ingredients (e.g., ['garlic', 'onions'])"
     )
 
     # Nutritional targets (auto-calculated from health profile, but user can override)
@@ -218,16 +217,15 @@ class Ingredient(models.Model):
     category = models.CharField(max_length=50, choices=FOOD_CATEGORIES, default='other')
 
     # Dietary tags for filtering
-    dietary_tags = ArrayField(
-        models.CharField(max_length=50),
+    dietary_tags = models.JSONField(
         default=list, blank=True,
-        help_text="vegetarian, vegan, gluten-free, etc."
+        help_text="List of dietary tags (e.g., ['vegetarian', 'vegan', 'gluten-free'])"
     )
 
     # Common allergens
-    allergens = ArrayField(
-        models.CharField(max_length=50),
-        default=list, blank=True
+    allergens = models.JSONField(
+        default=list, blank=True,
+        help_text="List of common allergens (e.g., ['nuts', 'peanuts'])"
     )
 
     # Future-ready: Enhanced nutritional data (bonus feature)
@@ -269,9 +267,9 @@ class Recipe(models.Model):
 
     # Recipe metadata
     servings = models.PositiveSmallIntegerField(default=4)
-    prep_time_minutes = models.PositiveIntegerField()
-    cook_time_minutes = models.PositiveIntegerField(default=0)
-    total_time_minutes = models.PositiveIntegerField()
+    prep_time_minutes = models.PositiveIntegerField(default=15)  # Added default value
+    cook_time_minutes = models.PositiveIntegerField(default=20)  # Changed from 0 to 20 for consistency
+    total_time_minutes = models.PositiveIntegerField(default=35)  # Added default value
 
     DIFFICULTY_LEVELS = [
         ('easy', 'Easy'),
@@ -295,13 +293,13 @@ class Recipe(models.Model):
     fiber_per_serving = models.FloatField(default=0)
 
     # Dietary and allergen information
-    dietary_tags = ArrayField(
-        models.CharField(max_length=50),
-        default=list, blank=True
+    dietary_tags = models.JSONField(
+        default=list, blank=True,
+        help_text="List of dietary tags (e.g., ['vegetarian', 'vegan', 'gluten-free'])"
     )
-    allergens = ArrayField(
-        models.CharField(max_length=50),
-        default=list, blank=True
+    allergens = models.JSONField(
+        default=list, blank=True,
+        help_text="List of common allergens (e.g., ['nuts', 'peanuts'])"
     )
 
     # Image and source
@@ -318,10 +316,9 @@ class Recipe(models.Model):
     source_type = models.CharField(max_length=50, choices=SOURCE_TYPES)
 
     # Vector embeddings for RAG (future implementation)
-    embedding_vector = ArrayField(
-        models.FloatField(),
-        size=1536,  # OpenAI embedding dimension
-        null=True, blank=True
+    embedding_vector = models.JSONField(
+        default=list, blank=True,
+        help_text="OpenAI embedding vector (1536 floats)"
     )
 
     # User engagement (for community-driven RAG bonus)

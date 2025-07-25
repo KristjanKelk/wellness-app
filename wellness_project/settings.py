@@ -34,7 +34,7 @@ SPOONACULAR_API_KEY = config('SPOONACULAR_API_KEY')
 SPOONACULAR_BASE_URL = 'https://api.spoonacular.com'
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = False
+DEBUG = config('DEBUG', default=False, cast=bool)
 
 ALLOWED_HOSTS = [
     'wellness-app-tx2c.onrender.com',
@@ -351,16 +351,26 @@ WSGI_APPLICATION = 'wellness_project.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/4.2/ref/settings/#databases
 
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.postgresql',
-        'NAME':     config('PGDATABASE'),
-        'USER':     config('PGUSER'),
-        'PASSWORD': config('PGPASSWORD'),
-        'HOST':     config('PGHOST'),
-        'PORT':     config('PGPORT', default='5432'),
+if DEBUG:
+    # Use SQLite for development
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
+        }
     }
-}
+else:
+    # Use PostgreSQL for production
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.postgresql',
+            'NAME':     config('PGDATABASE'),
+            'USER':     config('PGUSER'),
+            'PASSWORD': config('PGPASSWORD'),
+            'HOST':     config('PGHOST'),
+            'PORT':     config('PGPORT', default='5432'),
+        }
+    }
 
 # Password validation
 # https://docs.djangoproject.com/en/4.2/ref/settings/#auth-password-validators
@@ -422,27 +432,20 @@ SPOONACULAR_ENDPOINTS = {
     'shopping_list': '/mealplanner/{username}/shopping-list',
 }
 
-# Spoonacular API rate limiting (free tier: 150 requests/day)
-SPOONACULAR_RATE_LIMIT = {
-    'requests_per_day': 150,
-    'requests_per_minute': 10,
-    'cache_duration': 3600,  # Cache responses for 1 hour
-}
-
 # OpenAI Model Configuration for different nutrition tasks
 OPENAI_MODEL_CONFIG = {
     'meal_planning': {
-        'model': 'gpt-4-turbo-preview',
+        'model': 'gpt-3.5-turbo',  # Changed from gpt-4-turbo-preview
         'temperature': 0.7,
         'max_tokens': 2000,
     },
     'recipe_generation': {
-        'model': 'gpt-4-turbo-preview',
+        'model': 'gpt-3.5-turbo',  # Changed from gpt-4-turbo-preview
         'temperature': 0.8,
         'max_tokens': 1500,
     },
     'nutrition_analysis': {
-        'model': 'gpt-4-turbo-preview',
+        'model': 'gpt-3.5-turbo',  # Changed from gpt-4-turbo-preview
         'temperature': 0.3,
         'max_tokens': 1000,
     },
@@ -450,6 +453,24 @@ OPENAI_MODEL_CONFIG = {
         'model': 'text-embedding-3-small',
         'dimensions': 1536,
     }
+}
+
+# OpenAI Default Model (fallback)
+OPENAI_MODEL = 'gpt-3.5-turbo'
+
+# Request timeout settings
+REQUEST_TIMEOUT_SETTINGS = {
+    'default': 30,
+    'openai': 30,
+    'spoonacular': 15,
+    'database_query': 10,
+}
+
+# Spoonacular API rate limiting (free tier: 150 requests/day) - OPTIMIZED
+SPOONACULAR_RATE_LIMIT = {
+    'requests_per_day': 150,
+    'requests_per_minute': 1,  # Reduced from 10 to 1 to avoid rate limiting
+    'cache_duration': 86400,  # Cache responses for 24 hours (increased from 1 hour)
 }
 
 # Nutrition calculation constants

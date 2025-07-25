@@ -23,7 +23,11 @@ class AIMealPlanningService:
     def __init__(self):
         # Set up OpenAI client
         self.client = openai.OpenAI(api_key=getattr(settings, 'OPENAI_API_KEY', ''))
-        self.model = getattr(settings, 'OPENAI_MODEL', 'gpt-4')
+        # Use GPT-3.5-turbo instead of GPT-4
+        self.model = getattr(settings, 'OPENAI_MODEL', 'gpt-3.5-turbo')
+        
+        # Timeout settings
+        self.request_timeout = getattr(settings, 'REQUEST_TIMEOUT_SETTINGS', {}).get('openai', 30)
 
         # Function definitions for OpenAI function calling
         self.functions = [
@@ -90,7 +94,7 @@ class AIMealPlanningService:
     def generate_meal_plan(self, user: User, plan_type: str = 'daily',
                            start_date: date = None, target_calories: int = None) -> MealPlan:
         """
-        Generate AI-powered meal plan using sequential prompting
+        Generate AI-powered meal plan using optimized sequential prompting
 
         Args:
             user: User instance
@@ -102,6 +106,8 @@ class AIMealPlanningService:
             Generated MealPlan instance
         """
         try:
+            from django.core.cache import cache
+            
             # Get user's nutrition and health profile
             nutrition_profile = self._get_nutrition_profile(user)
             health_profile = self._get_health_profile(user)
@@ -119,28 +125,76 @@ class AIMealPlanningService:
             # Use target calories if provided, otherwise use profile default
             calorie_target = target_calories or nutrition_profile.calorie_target
 
-            # STEP 1: Generate meal planning strategy using AI
-            strategy = self._generate_meal_strategy(
-                user, nutrition_profile, health_profile, calorie_target, plan_type
-            )
+            # Try cache first for similar plans
+            cache_key = f"meal_plan_{user.id}_{plan_type}_{start_date}_{calorie_target}"
+            cached_plan = cache.get(cache_key)
+            
+            if cached_plan:
+                logger.info(f"Using cached meal plan for user {user.id}")
+                # Create new instance based on cached data
+                meal_plan = MealPlan.objects.create(
+                    user=user,
+                    plan_type=plan_type,
+                    start_date=start_date,
+                    end_date=end_date,
+                    meal_plan_data=cached_plan['meal_plan_data'],
+                    total_calories=cached_plan['total_calories'],
+                    avg_daily_calories=cached_plan['avg_daily_calories'],
+                    total_protein=cached_plan.get('total_protein', 0),
+                    total_carbs=cached_plan.get('total_carbs', 0),
+                    total_fat=cached_plan.get('total_fat', 0),
+                    nutritional_balance_score=cached_plan.get('balance_score', 8.5),
+                    variety_score=cached_plan.get('variety_score', 7.8),
+                    preference_match_score=cached_plan.get('preference_score', 8.2),
+                    ai_model_used='cached',
+                    generation_version='2.0'
+                )
+                return meal_plan
 
-            # STEP 2: Create detailed meal structure using AI
-            meal_plan_data = self._generate_meal_structure(
-                nutrition_profile, strategy, start_date, end_date, calorie_target
-            )
+            # STEP 1: Try to generate with AI, fallback to mock if it fails
+            try:
+                # Generate meal planning strategy using AI
+                strategy = self._generate_meal_strategy_optimized(
+                    user, nutrition_profile, health_profile, calorie_target, plan_type
+                )
 
-            # STEP 3: Generate specific recipes for each meal using AI
-            meal_plan_data = self._generate_meal_recipes(
-                meal_plan_data, nutrition_profile, strategy
-            )
+                # Create detailed meal structure using AI
+                meal_plan_data = self._generate_meal_structure_optimized(
+                    nutrition_profile, strategy, start_date, end_date, calorie_target
+                )
 
-            # STEP 4: Validate and refine nutritional balance
-            meal_plan_data = self._refine_nutritional_balance(
-                meal_plan_data, nutrition_profile, calorie_target
-            )
+                # Use basic recipes instead of AI-generated ones to save time
+                meal_plan_data = self._populate_with_database_recipes(
+                    meal_plan_data, nutrition_profile
+                )
+                
+                ai_model_used = self.model
+
+            except Exception as ai_error:
+                logger.warning(f"AI generation failed, using fallback: {ai_error}")
+                # Use mock meal plan as fallback
+                strategy = self._get_basic_strategy(nutrition_profile, calorie_target)
+                meal_plan_data = self._generate_basic_meal_structure(
+                    nutrition_profile, start_date, end_date, calorie_target, strategy
+                )
+                ai_model_used = 'fallback'
 
             # Calculate nutritional totals
             nutrition_totals = self._calculate_plan_nutrition(meal_plan_data, plan_type)
+
+            # Cache the result for 2 hours
+            cache_data = {
+                'meal_plan_data': meal_plan_data,
+                'total_calories': nutrition_totals['total_calories'],
+                'avg_daily_calories': nutrition_totals['avg_daily_calories'],
+                'total_protein': nutrition_totals.get('total_protein', 0),
+                'total_carbs': nutrition_totals.get('total_carbs', 0),
+                'total_fat': nutrition_totals.get('total_fat', 0),
+                'balance_score': nutrition_totals.get('balance_score', 8.5),
+                'variety_score': nutrition_totals.get('variety_score', 7.8),
+                'preference_score': nutrition_totals.get('preference_score', 8.2),
+            }
+            cache.set(cache_key, cache_data, 7200)  # 2 hours
 
             # Create MealPlan instance
             meal_plan = MealPlan.objects.create(
@@ -157,16 +211,17 @@ class AIMealPlanningService:
                 nutritional_balance_score=nutrition_totals.get('balance_score', 8.5),
                 variety_score=nutrition_totals.get('variety_score', 7.8),
                 preference_match_score=nutrition_totals.get('preference_score', 8.2),
-                ai_model_used=self.model,
+                ai_model_used=ai_model_used,
                 generation_version='2.0'
             )
 
-            logger.info(f"Generated {plan_type} meal plan for user {user.id} using AI")
+            logger.info(f"Generated {plan_type} meal plan for user {user.id} using {ai_model_used}")
             return meal_plan
 
         except Exception as e:
             logger.error(f"Failed to generate meal plan: {e}")
-            raise
+            # Last resort: create a very basic meal plan
+            return self._create_emergency_meal_plan(user, plan_type, start_date, end_date, calorie_target or 2000)
 
     def _generate_meal_strategy(self, user: User, nutrition_profile: NutritionProfile,
                                 health_profile, calorie_target: int, plan_type: str) -> Dict:
@@ -246,26 +301,49 @@ class AIMealPlanningService:
         except Exception as e:
             logger.error(f"Failed to generate meal strategy: {e}")
             # Return a basic fallback strategy
-            return {
-                "meal_timing": {
-                    "breakfast": {"time": "08:00", "calories": calorie_target * 0.25,
-                                  "protein": nutrition_profile.protein_target * 0.25,
-                                  "carbs": nutrition_profile.carb_target * 0.25,
-                                  "fat": nutrition_profile.fat_target * 0.25},
-                    "lunch": {"time": "12:30", "calories": calorie_target * 0.35,
-                              "protein": nutrition_profile.protein_target * 0.35,
-                              "carbs": nutrition_profile.carb_target * 0.35,
-                              "fat": nutrition_profile.fat_target * 0.35},
-                    "dinner": {"time": "19:00", "calories": calorie_target * 0.40,
-                               "protein": nutrition_profile.protein_target * 0.40,
-                               "carbs": nutrition_profile.carb_target * 0.40,
-                               "fat": nutrition_profile.fat_target * 0.40}
-                },
+            return self._get_basic_strategy(nutrition_profile, calorie_target)
+
+    def _generate_meal_strategy_optimized(self, user: User, nutrition_profile: NutritionProfile,
+                                health_profile, calorie_target: int, plan_type: str) -> Dict:
+        """STEP 1: Generate meal planning strategy using AI with timeout and optimization"""
+        try:
+            # Use a simpler, faster prompt
+            strategy_prompt = f"""
+            Create a meal planning strategy for a user with these requirements:
+            - Target: {calorie_target} calories
+            - Dietary preferences: {nutrition_profile.dietary_preferences}
+            - Allergies: {nutrition_profile.allergies_intolerances}
+            - Goal: {getattr(health_profile, 'fitness_goal', 'maintain')}
+            
+            Respond with JSON only:
+            {{
+                "meal_timing": {{
+                    "breakfast": {{"calories": {int(calorie_target * 0.25)}, "protein": {int(nutrition_profile.protein_target * 0.25)}}},
+                    "lunch": {{"calories": {int(calorie_target * 0.35)}, "protein": {int(nutrition_profile.protein_target * 0.35)}}},
+                    "dinner": {{"calories": {int(calorie_target * 0.40)}, "protein": {int(nutrition_profile.protein_target * 0.40)}}}
+                }},
                 "focus_areas": ["balanced_nutrition"],
                 "cooking_methods": ["grilling", "steaming"],
-                "meal_variety": ["Mediterranean", "American"],
-                "special_considerations": nutrition_profile.dietary_preferences + nutrition_profile.allergies_intolerances
-            }
+                "meal_variety": ["Mediterranean", "American"]
+            }}
+            """
+
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=[{"role": "user", "content": strategy_prompt}],
+                temperature=0.5,
+                max_tokens=500,
+                timeout=self.request_timeout
+            )
+
+            strategy_text = response.choices[0].message.content
+            strategy = json.loads(strategy_text)
+            logger.info(f"Generated optimized meal strategy for user {user.id}")
+            return strategy
+
+        except Exception as e:
+            logger.error(f"Failed to generate optimized meal strategy: {e}")
+            return self._get_basic_strategy(nutrition_profile, calorie_target)
 
     def _generate_meal_structure(self, nutrition_profile: NutritionProfile,
                                  strategy: Dict, start_date: date, end_date: date,
@@ -340,6 +418,49 @@ class AIMealPlanningService:
             # Return basic structure as fallback
             return self._generate_basic_meal_structure(nutrition_profile, start_date, end_date, calorie_target,
                                                        strategy)
+
+    def _generate_meal_structure_optimized(self, nutrition_profile: NutritionProfile,
+                                 strategy: Dict, start_date: date, end_date: date,
+                                 calorie_target: int) -> Dict:
+        """STEP 2: Create detailed meal structure using AI with optimization"""
+        try:
+            days = (end_date - start_date).days + 1
+            
+            # Use a much simpler prompt for faster generation
+            structure_prompt = f"""
+            Create a {days}-day meal structure with these meals per day: breakfast, lunch, dinner.
+            Target: {calorie_target} calories total daily.
+            Dietary preferences: {nutrition_profile.dietary_preferences}
+            
+            Respond with JSON only:
+            {{
+                "meals": {{
+                    "{start_date}": [
+                        {{"meal_type": "breakfast", "suggested_name": "Healthy Breakfast", "target_calories": {int(calorie_target * 0.25)}}},
+                        {{"meal_type": "lunch", "suggested_name": "Balanced Lunch", "target_calories": {int(calorie_target * 0.35)}}},
+                        {{"meal_type": "dinner", "suggested_name": "Nutritious Dinner", "target_calories": {int(calorie_target * 0.40)}}}
+                    ]
+                }}
+            }}
+            """
+
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=[{"role": "user", "content": structure_prompt}],
+                temperature=0.7,
+                max_tokens=800,
+                timeout=self.request_timeout
+            )
+
+            structure_text = response.choices[0].message.content
+            meal_structure = json.loads(structure_text)
+            logger.info(f"Generated optimized meal structure for {days} days")
+            return meal_structure
+
+        except Exception as e:
+            logger.error(f"Failed to generate optimized meal structure: {e}")
+            # Return basic structure as fallback
+            return self._generate_basic_meal_structure(nutrition_profile, start_date, end_date, calorie_target, strategy)
 
     def _generate_meal_recipes(self, meal_plan_data: Dict,
                                nutrition_profile: NutritionProfile, strategy: Dict) -> Dict:
@@ -832,6 +953,145 @@ class AIMealPlanningService:
         }
 
         return basic_recipes.get(meal_type, basic_recipes['lunch'])
+
+    def _get_basic_strategy(self, nutrition_profile: NutritionProfile, calorie_target: int) -> Dict:
+        """Generate basic fallback strategy"""
+        return {
+            "meal_timing": {
+                "breakfast": {"time": "08:00", "calories": calorie_target * 0.25,
+                              "protein": nutrition_profile.protein_target * 0.25,
+                              "carbs": nutrition_profile.carb_target * 0.25,
+                              "fat": nutrition_profile.fat_target * 0.25},
+                "lunch": {"time": "12:30", "calories": calorie_target * 0.35,
+                          "protein": nutrition_profile.protein_target * 0.35,
+                          "carbs": nutrition_profile.carb_target * 0.35,
+                          "fat": nutrition_profile.fat_target * 0.35},
+                "dinner": {"time": "19:00", "calories": calorie_target * 0.40,
+                           "protein": nutrition_profile.protein_target * 0.40,
+                           "carbs": nutrition_profile.carb_target * 0.40,
+                           "fat": nutrition_profile.fat_target * 0.40}
+            },
+            "focus_areas": ["balanced_nutrition"],
+            "cooking_methods": ["grilling", "steaming"],
+            "meal_variety": ["Mediterranean", "American"],
+            "special_considerations": nutrition_profile.dietary_preferences + nutrition_profile.allergies_intolerances
+        }
+
+    def _populate_with_database_recipes(self, meal_plan_data: Dict, nutrition_profile: NutritionProfile) -> Dict:
+        """Populate meal plan with existing database recipes instead of generating new ones"""
+        from meal_planning.models import Recipe
+        
+        try:
+            for date_str, daily_meals in meal_plan_data.get("meals", {}).items():
+                for i, meal_info in enumerate(daily_meals):
+                    meal_type = meal_info.get('meal_type', 'lunch')
+                    target_calories = meal_info.get('target_calories', 400)
+                    
+                    # Try to find a suitable recipe from database
+                    recipes = Recipe.objects.filter(meal_type=meal_type)
+                    
+                    # Filter by dietary preferences
+                    for pref in nutrition_profile.dietary_preferences:
+                        recipes = recipes.filter(dietary_tags__contains=[pref])
+                    
+                    # Filter by allergies
+                    for allergen in nutrition_profile.allergies_intolerances:
+                        recipes = recipes.exclude(allergens__contains=[allergen])
+                    
+                    # Filter by calorie range (±100 calories)
+                    recipes = recipes.filter(
+                        calories_per_serving__gte=target_calories - 100,
+                        calories_per_serving__lte=target_calories + 100
+                    )
+                    
+                    recipe = recipes.order_by('?').first()
+                    
+                    if recipe:
+                        daily_meals[i]["recipe"] = {
+                            "title": recipe.title,
+                            "cuisine": recipe.cuisine,
+                            "ingredients": recipe.ingredients_data,
+                            "instructions": recipe.instructions,
+                            "prep_time": recipe.prep_time_minutes or 15,
+                            "cook_time": recipe.cook_time_minutes or 20,
+                            "total_time": recipe.total_time_minutes or 35,
+                            "servings": recipe.servings,
+                            "estimated_nutrition": {
+                                "calories": recipe.calories_per_serving,
+                                "protein": recipe.protein_per_serving,
+                                "carbs": recipe.carbs_per_serving,
+                                "fat": recipe.fat_per_serving
+                            }
+                        }
+                    else:
+                        # Use basic recipe if no database recipe found
+                        daily_meals[i]["recipe"] = self._generate_basic_recipe(meal_info)
+            
+            return meal_plan_data
+            
+        except Exception as e:
+            logger.error(f"Failed to populate with database recipes: {e}")
+            return meal_plan_data
+
+    def _create_emergency_meal_plan(self, user: User, plan_type: str, start_date: date, end_date: date, calorie_target: int) -> MealPlan:
+        """Create a very basic meal plan as last resort"""
+        try:
+            # Create minimal meal plan data
+            meal_plan_data = {
+                "meals": {
+                    start_date.isoformat(): [
+                        {
+                            "meal_type": "breakfast",
+                            "time": "08:00",
+                            "recipe": {
+                                "title": "Simple Breakfast",
+                                "estimated_nutrition": {"calories": int(calorie_target * 0.25), "protein": 20, "carbs": 30, "fat": 10}
+                            }
+                        },
+                        {
+                            "meal_type": "lunch", 
+                            "time": "12:30",
+                            "recipe": {
+                                "title": "Balanced Lunch",
+                                "estimated_nutrition": {"calories": int(calorie_target * 0.35), "protein": 30, "carbs": 40, "fat": 15}
+                            }
+                        },
+                        {
+                            "meal_type": "dinner",
+                            "time": "19:00", 
+                            "recipe": {
+                                "title": "Nutritious Dinner",
+                                "estimated_nutrition": {"calories": int(calorie_target * 0.40), "protein": 35, "carbs": 45, "fat": 20}
+                            }
+                        }
+                    ]
+                }
+            }
+            
+            meal_plan = MealPlan.objects.create(
+                user=user,
+                plan_type=plan_type,
+                start_date=start_date,
+                end_date=end_date,
+                meal_plan_data=meal_plan_data,
+                total_calories=calorie_target,
+                avg_daily_calories=calorie_target,
+                total_protein=85,
+                total_carbs=115,
+                total_fat=45,
+                nutritional_balance_score=7.0,
+                variety_score=6.0,
+                preference_match_score=7.0,
+                ai_model_used='emergency',
+                generation_version='2.0'
+            )
+            
+            logger.info(f"Created emergency meal plan for user {user.id}")
+            return meal_plan
+            
+        except Exception as e:
+            logger.error(f"Failed to create emergency meal plan: {e}")
+            raise
 
     def _calculate_plan_nutrition(self, meal_plan_data: Dict, plan_type: str) -> Dict:
         """Calculate nutritional totals for the meal plan"""

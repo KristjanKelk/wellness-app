@@ -1,58 +1,91 @@
 # health_profiles/views.py
-from rest_framework import viewsets, permissions, status, serializers
-from rest_framework.decorators import action
+from rest_framework import generics, status, viewsets, permissions
+from rest_framework.decorators import api_view, permission_classes, action
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
+from django.contrib.auth.decorators import login_required
+from django.http import JsonResponse
+from django.views.decorators.http import require_http_methods
+from django.views.decorators.cache import cache_page
+from django.utils.decorators import method_decorator
+from django.core.cache import cache
 from django.utils import timezone
 from datetime import datetime, timedelta
-from .models import HealthProfile, WeightHistory, Activity
-from .serializers import HealthProfileSerializer, WeightHistorySerializer, ActivitySerializer
 from django.db.models import Avg, Count, Sum
 from django.db.models.functions import TruncDay, TruncWeek, TruncMonth
 import logging
-logger = logging.getLogger("django")
+import time
 
-class HealthProfileViewSet(viewsets.ModelViewSet):
-    """
-    ViewSet for managing health profiles
-    """
+from .models import HealthProfile, WeightHistory, Activity
+from .serializers import HealthProfileSerializer, WeightHistorySerializer, ActivitySerializer
+from utils.timeouts import with_performance_monitoring, cache_manager, response_optimizer
+
+logger = logging.getLogger(__name__)
+
+
+@method_decorator(cache_page(60 * 5), name='get')  # Cache for 5 minutes
+class HealthProfileRetrieveUpdateView(generics.RetrieveUpdateAPIView):
+    """Optimized health profile view with caching and timeout management"""
     serializer_class = HealthProfileSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [IsAuthenticated]
 
-    def get_queryset(self):
-        return HealthProfile.objects.filter(user=self.request.user)
+    def get_object(self):
+        # Use caching for frequently accessed user profiles
+        cache_key = f"health_profile_{self.request.user.id}"
+        
+        def get_profile():
+            profile, created = HealthProfile.objects.get_or_create(user=self.request.user)
+            if created:
+                logger.info(f"Created new health profile for user {self.request.user.id}")
+            return profile
+        
+        return cache_manager.get_or_set_with_timeout(cache_key, get_profile, timeout=300)
 
-    def perform_create(self, serializer):
-        serializer.save(user=self.request.user)
-
-    @action(detail=False, methods=['get', 'put', 'patch'])
-    def my_profile(self, request):
-        logger.info("my_profile called for user %s", request.user)
-        """
-        Get or update the current user's health profile
-        """
+    @with_performance_monitoring('view_response')
+    def get(self, request, *args, **kwargs):
+        """Get health profile with performance monitoring"""
         try:
-            profile = HealthProfile.objects.get(user=request.user)
-            logger.info("HealthProfile fetched for user %s", request.user)
+            instance = self.get_object()
+            serializer = self.get_serializer(instance)
+            return response_optimizer.create_optimized_response(
+                serializer.data, 
+                "Health profile retrieved successfully"
+            )
+        except Exception as e:
+            logger.error(f"Error retrieving health profile: {e}")
+            return response_optimizer.create_error_response(
+                "Failed to retrieve health profile"
+            )
 
-            if request.method in ['PUT', 'PATCH']:
-                serializer = self.get_serializer(profile, data=request.data, partial=request.method == 'PATCH')
-                if serializer.is_valid():
-                    serializer.save()
-                    return Response(serializer.data)
-                return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-            serializer = self.get_serializer(profile)
-            return Response(serializer.data)
-
-        except HealthProfile.DoesNotExist:
-            if request.method == 'GET':
-                return Response({'detail': 'Health profile not found'}, status=status.HTTP_404_NOT_FOUND)
-
-            serializer = self.get_serializer(data=request.data)
+    @with_performance_monitoring('view_response')
+    def put(self, request, *args, **kwargs):
+        """Update health profile with cache invalidation"""
+        try:
+            instance = self.get_object()
+            serializer = self.get_serializer(instance, data=request.data)
+            
             if serializer.is_valid():
-                serializer.save(user=request.user)
-                return Response(serializer.data, status=status.HTTP_201_CREATED)
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+                serializer.save()
+                
+                # Invalidate cache after update
+                cache_key = f"health_profile_{request.user.id}"
+                cache.delete(cache_key)
+                logger.info(f"Updated health profile for user {request.user.id}")
+                
+                return response_optimizer.create_optimized_response(
+                    serializer.data,
+                    "Health profile updated successfully"
+                )
+            else:
+                return response_optimizer.create_error_response(
+                    f"Validation error: {serializer.errors}"
+                )
+                
+        except Exception as e:
+            logger.error(f"Error updating health profile: {e}")
+            return response_optimizer.create_error_response(
+                "Failed to update health profile"
+            )
 
 
 class WeightHistoryViewSet(viewsets.ModelViewSet):

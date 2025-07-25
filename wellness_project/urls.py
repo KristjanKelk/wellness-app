@@ -5,7 +5,7 @@ from django.http import HttpResponse
 from rest_framework.routers import DefaultRouter
 from rest_framework_simplejwt.views import TokenRefreshView, TokenVerifyView
 
-from health_profiles.views import HealthProfileViewSet, WeightHistoryViewSet, ActivityViewSet
+from health_profiles.views import HealthProfileRetrieveUpdateView, WeightHistoryViewSet, ActivityViewSet
 from analytics.views import AIInsightViewSet, WellnessScoreViewSet, MilestoneViewSet, HealthSummaryViewSet
 from users.views import (
     RegisterView, UserProfileView, VerifyEmailView, ResendVerificationEmailView,
@@ -19,7 +19,6 @@ from users.oauth import GoogleOAuthAPI, GitHubOAuthAPI
 
 router = DefaultRouter()
 
-router.register(r'health-profiles', HealthProfileViewSet, basename='health-profile')
 router.register(r'weight-history', WeightHistoryViewSet, basename='weight-history')
 router.register(r'analytics/aiinsight', AIInsightViewSet, basename='aiinsight')
 router.register(r'analytics/wellness-score', WellnessScoreViewSet, basename='wellnessscore')
@@ -34,6 +33,10 @@ urlpatterns = [
     path('', lambda request: HttpResponse('OK')),
 
     path('admin/', admin.site.urls),
+    
+    # Optimized health profile endpoint
+    path('api/health-profiles/my_profile/', HealthProfileRetrieveUpdateView.as_view(), name='my-health-profile'),
+    
     path('api/', include(router.urls)),
     path('api-auth/', include('rest_framework.urls')),
 
