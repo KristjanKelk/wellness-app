@@ -1,11 +1,15 @@
 // src/services/auth.service.js
-import apiClient from './http.service';
+import axios from 'axios';
 import { wakeUpService, checkServiceHealth } from '../utils/serviceWakeup';
 
+// Compute the base URL once. This mirrors the logic in http.service but keeps
+// the module free from a direct dependency on that file to avoid circular
+// references.
 export const API_URL = (
   process.env.VUE_APP_API_URL ||
   'https://wellness-app-tx2c.onrender.com/api'
-).replace(/\/+$/, '') + '/';
+)
+  .replace(/\/+$/, '') + '/';
 
 const TOKEN_KEY = 'user';
 
@@ -101,7 +105,7 @@ class AuthService {
         await new Promise(resolve => setTimeout(resolve, 3000));
       }
 
-      const response = await apiClient.post('token/', { username, password });
+      const response = await axios.post(`${API_URL}token/`, { username, password });
       const userData = response.data;
 
       // If 2FA is not required, store user data
@@ -138,7 +142,7 @@ class AuthService {
         return Promise.reject(new Error('Missing required 2FA verification data'));
       }
 
-      const response = await apiClient.post('token/2fa-verify/', {
+      const response = await axios.post(`${API_URL}token/2fa-verify/`, {
         token: tempAuthData.access,
         code: code
       });
@@ -179,7 +183,7 @@ class AuthService {
    * @returns {Promise} Promise resolving to registration response
    */
   register(username, email, password, password2) {
-    return apiClient.post('register/', {
+    return axios.post(`${API_URL}register/`, {
       username,
       email,
       password,
@@ -199,7 +203,7 @@ class AuthService {
     }
 
     try {
-      const response = await apiClient.post('token/refresh/', {
+      const response = await axios.post(`${API_URL}token/refresh/`, {
         refresh: user.refresh
       });
 
