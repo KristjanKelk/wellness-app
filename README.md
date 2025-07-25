@@ -181,6 +181,21 @@ POST /api/meal-plans/generate/            # Generate meal plan with AI
 Recipe list and search endpoints support pagination. Clients may specify
 `page_size` to control results per page (default is 20).
 
+## 🥄 Spoonacular Integration
+
+The platform integrates with the [Spoonacular](https://spoonacular.com/food-api) Food API to fetch high-quality recipe data. To enable live recipe search you **must** supply your own API key.
+
+1. Sign up for a free Spoonacular account and grab your key.
+2. Create a local `.env` file in the project root (next to `manage.py`) if it doesn’t exist yet.
+3. Add the following line:
+
+```
+SPOONACULAR_API_KEY=your_api_key_here
+```
+4. Restart the backend server so Django can pick up the new environment variable.
+
+Without a valid key, the application will fall back to local recipes only and external searches will return an empty list.
+
 ## 🏗 Key Features Implementation
 
 ### Wellness Score Calculation

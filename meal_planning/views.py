@@ -277,26 +277,41 @@ class RecipeViewSet(viewsets.ReadOnlyModelViewSet):
 
     @action(detail=False, methods=['post'])
     def search(self, request):
-        """Advanced recipe search with nutritional filters"""
+        """Advanced recipe search with nutritional filters. Falls back to Spoonacular API if no local matches."""
         data = request.data
-        queryset = Recipe.objects.all()
 
-        # Apply filters from search data
-        if data.get('dietary_preferences'):
-            for pref in data['dietary_preferences']:
-                queryset = queryset.filter(dietary_tags__contains=[pref])
+        # Helper to apply filters consistently
+        def _apply_filters(qs):
+            """Apply search filters to a queryset and return the filtered queryset"""
+            # Dietary preferences (include)
+            if data.get('dietary_preferences'):
+                for pref in data['dietary_preferences']:
+                    qs = qs.filter(dietary_tags__contains=[pref])
 
-        if data.get('allergies_to_avoid'):
-            # Filter out recipes containing allergens
-            for allergen in data['allergies_to_avoid']:
-                queryset = queryset.exclude(allergens__contains=[allergen])
+            # Allergies/intolerances (exclude)
+            if data.get('allergies_to_avoid'):
+                for allergen in data['allergies_to_avoid']:
+                    qs = qs.exclude(allergens__contains=[allergen])
 
-        if data.get('max_prep_time'):
-            queryset = queryset.filter(prep_time_minutes__lte=data['max_prep_time'])
+            if data.get('max_prep_time'):
+                qs = qs.filter(prep_time_minutes__lte=data['max_prep_time'])
 
-        if data.get('cuisine_preferences'):
-            queryset = queryset.filter(cuisine__in=data['cuisine_preferences'])
+            if data.get('cuisine_preferences'):
+                qs = qs.filter(cuisine__in=data['cuisine_preferences'])
 
+            return qs
+
+        # Start with all recipes and apply filters
+        queryset = _apply_filters(Recipe.objects.all())
+
+        # If nothing found locally, import from Spoonacular and try again
+        if not queryset.exists():
+            imported = self._import_from_spoonacular(data)
+            if imported:
+                # Re-run the filters on the newly imported records
+                queryset = _apply_filters(Recipe.objects.all())
+
+        # Pagination + serialization
         page = self.paginate_queryset(queryset)
         if page is not None:
             serializer = self.get_serializer(page, many=True)
@@ -304,6 +319,74 @@ class RecipeViewSet(viewsets.ReadOnlyModelViewSet):
 
         serializer = self.get_serializer(queryset, many=True)
         return Response(serializer.data)
+
+    # ------------------------------------------------------------------
+    # Internal helpers
+    # ------------------------------------------------------------------
+    def _import_from_spoonacular(self, search_payload):
+        """Query Spoonacular based on the incoming search payload and persist results.
+
+        Args:
+            search_payload (dict): The body of the search request. Expected keys:
+                - dietary_preferences (list[str])
+                - allergies_to_avoid (list[str])
+                - cuisine_preferences (list[str])
+
+        Returns:
+            list[Recipe]: List of Recipe instances that were imported (may be empty).
+        """
+        from .services.spoonacular_service import search_recipes_by_dietary_preferences
+
+        preferences = {
+            'dietary_preferences': search_payload.get('dietary_preferences', []),
+            'allergies_intolerances': search_payload.get('allergies_to_avoid', []),
+            'cuisine_preferences': search_payload.get('cuisine_preferences', []),
+        }
+
+        normalized_recipes = search_recipes_by_dietary_preferences(preferences)
+        imported_recipes = []
+
+        for data in normalized_recipes:
+            try:
+                # Skip if we already have this recipe
+                recipe = Recipe.objects.filter(spoonacular_id=data.get('spoonacular_id')).first()
+                if not recipe:
+                    # Ensure meal_type is valid; default to 'dinner' if unknown
+                    meal_type = data.get('meal_type', 'dinner')
+                    if meal_type not in dict(Recipe.MEAL_TYPES):
+                        meal_type = 'dinner'
+
+                    recipe = Recipe.objects.create(
+                        title=data['title'],
+                        summary=data.get('summary', ''),
+                        cuisine=data.get('cuisine', ''),
+                        meal_type=meal_type,
+                        servings=data.get('servings', 1),
+                        prep_time_minutes=data.get('prep_time_minutes', 0),
+                        cook_time_minutes=data.get('cook_time_minutes', 0),
+                        total_time_minutes=data.get('total_time_minutes', 0),
+                        difficulty_level=data.get('difficulty_level', 'medium'),
+                        spoonacular_id=data.get('spoonacular_id'),
+                        ingredients_data=data.get('ingredients_data', []),
+                        instructions=data.get('instructions', []),
+                        calories_per_serving=data.get('calories_per_serving', 0),
+                        protein_per_serving=data.get('protein_per_serving', 0),
+                        carbs_per_serving=data.get('carbs_per_serving', 0),
+                        fat_per_serving=data.get('fat_per_serving', 0),
+                        fiber_per_serving=data.get('fiber_per_serving', 0),
+                        dietary_tags=data.get('dietary_tags', []),
+                        allergens=data.get('allergens', []),
+                        image_url=data.get('image_url', ''),
+                        source_url=data.get('source_url', ''),
+                        source_type=data.get('source_type', 'spoonacular'),
+                        is_verified=True,
+                    )
+                imported_recipes.append(recipe)
+            except Exception as e:
+                logger.warning(f"Failed to import Spoonacular recipe '{data.get('title')}' : {e}")
+                continue
+
+        return imported_recipes
 
     @action(detail=True, methods=['post'])
     def rate(self, request, pk=None):
