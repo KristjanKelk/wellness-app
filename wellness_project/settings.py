@@ -176,6 +176,8 @@ CORS_EXPOSE_HEADERS = [
     'expires',
     'etag',
     'last-modified',
+    'access-control-allow-origin',
+    'access-control-allow-credentials',
 ]
 
 # Note: CORS_REPLACE_HTTPS_REFERER has been removed in django-cors-headers 4.0+
