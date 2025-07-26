@@ -28,7 +28,7 @@ OPENAI_API_KEY = config('OPENAI_API_KEY')
 AI_INSIGHT_DAILY_LIMIT = 3
 
 # Spoonacular API Configuration (ADD THIS TO YOUR .env FILE)
-SPOONACULAR_API_KEY = config('SPOONACULAR_API_KEY')
+SPOONACULAR_API_KEY = config('SPOONACULAR_API_KEY', default='')
 SPOONACULAR_BASE_URL = 'https://api.spoonacular.com'
 
 # SECURITY WARNING: don't run with debug turned on in production!
@@ -221,15 +221,13 @@ if REDIS_URL:
     CACHE_BACKEND = "django.core.cache.backends.redis.RedisCache"
     CACHE_LOCATION = REDIS_URL.rsplit("/", 1)[0] + "/1"
     
-    # Redis connection options with better timeout handling
+    # Fixed Redis connection options - removed connection_pool_kwargs
     REDIS_CONNECTION_OPTIONS = {
-        "connection_pool_kwargs": {
-            "socket_connect_timeout": 5,
-            "socket_timeout": 5,
-            "retry_on_timeout": True,
-            "health_check_interval": 30,
-            "max_connections": 10,
-        }
+        "socket_connect_timeout": 5,
+        "socket_timeout": 5,
+        "retry_on_timeout": True,
+        "health_check_interval": 30,
+        "max_connections": 10,
     }
 else:
     CELERY_BROKER_URL = None
