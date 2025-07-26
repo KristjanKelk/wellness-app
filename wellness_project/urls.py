@@ -73,6 +73,6 @@ urlpatterns = [
     path('api/oauth/google/', GoogleOAuthAPI.as_view(), name='google-oauth'),
     path('api/oauth/github/', GitHubOAuthAPI.as_view(), name='github-oauth'),
 
-    #Meal planning
-    path('meal-planning/', include('meal_planning.urls')),
+    # Meal planning API (included under /api/ for consistency)
+    path('api/meal-planning/', include('meal_planning.urls')),
 ]

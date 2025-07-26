@@ -1,11 +1,12 @@
 # meal_planning/views.py
 from rest_framework import viewsets, status
-from rest_framework.decorators import action
+from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, AllowAny
 from django.shortcuts import get_object_or_404
 from django.db import transaction
 from django.db import models
+from django.conf import settings
 from .models import NutritionProfile, Recipe, Ingredient, MealPlan, UserRecipeRating, NutritionLog
 from .services.ai_meal_planning_service import AIMealPlanningService
 from .serializers import (
@@ -13,8 +14,37 @@ from .serializers import (
     MealPlanSerializer, UserRecipeRatingSerializer, NutritionLogSerializer
 )
 import logging
+from datetime import datetime, date, timedelta
+from django.utils import timezone
+from django.core.cache import cache
 
 logger = logging.getLogger(__name__)
+
+
+def handle_api_error(error, default_message="API service temporarily unavailable"):
+    """Helper function to handle API errors gracefully"""
+    logger.error(f"API Error: {str(error)}")
+    
+    # Check if it's a configuration issue
+    if not getattr(settings, 'SPOONACULAR_API_KEY', None):
+        return Response(
+            {
+                'error': 'Meal planning service not configured',
+                'message': 'Please contact administrator to configure the nutrition API service',
+                'details': 'Missing API configuration'
+            },
+            status=status.HTTP_503_SERVICE_UNAVAILABLE
+        )
+    
+    # General API error response
+    return Response(
+        {
+            'error': default_message,
+            'message': 'The meal planning service is temporarily unavailable. Please try again later.',
+            'details': str(error)
+        },
+        status=status.HTTP_503_SERVICE_UNAVAILABLE
+    )
 
 
 class NutritionProfileViewSet(viewsets.ModelViewSet):
@@ -374,7 +404,24 @@ class MealPlanViewSet(viewsets.ModelViewSet):
         """Generate a new meal plan using the AI meal planning service"""
         try:
             # Get user's nutrition profile
-            nutrition_profile = get_object_or_404(NutritionProfile, user=request.user)
+            try:
+                nutrition_profile = NutritionProfile.objects.get(user=request.user)
+            except NutritionProfile.DoesNotExist:
+                # Create a default profile if none exists
+                nutrition_profile = NutritionProfile.objects.create(
+                    user=request.user,
+                    calorie_target=2000,
+                    protein_target=100.0,
+                    carb_target=250.0,
+                    fat_target=67.0,
+                    dietary_preferences=[],
+                    allergies_intolerances=[],
+                    cuisine_preferences=[],
+                    disliked_ingredients=[],
+                    meals_per_day=3,
+                    snacks_per_day=1,
+                    timezone='UTC'
+                )
 
             # Get generation parameters
             plan_data = request.data
@@ -387,30 +434,34 @@ class MealPlanViewSet(viewsets.ModelViewSet):
                     status=status.HTTP_400_BAD_REQUEST
                 )
 
-            from datetime import datetime
-
             if isinstance(start_date, str):
                 start_date_obj = datetime.strptime(start_date, '%Y-%m-%d').date()
             else:
                 start_date_obj = start_date
 
-            # Use the AI meal planning service to generate a full meal plan
-            ai_service = AIMealPlanningService()
-            meal_plan = ai_service.generate_meal_plan(
-                user=request.user,
-                plan_type=plan_type,
-                start_date=start_date_obj,
-            )
+            # Check if API is configured
+            if not getattr(settings, 'SPOONACULAR_API_KEY', None):
+                logger.warning("Spoonacular API key not configured, using fallback meal plan generation")
+                meal_plan = self._generate_simple_meal_plan(nutrition_profile, start_date_obj, plan_type)
+            else:
+                try:
+                    # Use the AI meal planning service to generate a full meal plan
+                    ai_service = AIMealPlanningService()
+                    meal_plan = ai_service.generate_meal_plan(
+                        user=request.user,
+                        plan_type=plan_type,
+                        start_date=start_date_obj,
+                    )
+                except Exception as ai_error:
+                    logger.warning(f"AI meal planning service failed: {str(ai_error)}, using fallback")
+                    meal_plan = self._generate_simple_meal_plan(nutrition_profile, start_date_obj, plan_type)
 
             serializer = self.get_serializer(meal_plan)
             return Response(serializer.data, status=status.HTTP_201_CREATED)
 
         except Exception as e:
             logger.error(f"Error generating meal plan: {str(e)}")
-            return Response(
-                {'error': 'Failed to generate meal plan', 'details': str(e)},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
+            return handle_api_error(e, "Failed to generate meal plan")
 
     def _generate_mock_meal_plan(self, profile, start_date=None, plan_type='daily'):
         """Generate a simple meal plan using available recipes.
@@ -518,6 +569,11 @@ class MealPlanViewSet(viewsets.ModelViewSet):
                 date_str: daily_meals,
             },
         }
+
+    def _generate_simple_meal_plan(self, profile, start_date, plan_type):
+        """Fallback meal plan generation when AI service is not available."""
+        logger.info(f"Using fallback meal plan generation for user {profile.user.username} on {start_date}")
+        return self._generate_mock_meal_plan(profile, start_date, plan_type)
 
     @action(detail=True, methods=['post'])
     def regenerate_meal(self, request, pk=None):
@@ -666,9 +722,6 @@ class NutritionLogViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['get'])
     def dashboard_data(self, request):
         """Get nutrition dashboard data"""
-        from django.utils import timezone
-        from datetime import timedelta
-
         days = int(request.query_params.get('days', 7))
         today = timezone.now().date()
         start_date = today - timedelta(days=days - 1)
@@ -709,3 +762,59 @@ class NutritionLogViewSet(viewsets.ModelViewSet):
         }
 
         return Response(data)
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def meal_planning_health_check(request):
+    """Health check endpoint for meal planning API"""
+    health_data = {
+        'status': 'healthy',
+        'timestamp': timezone.now().isoformat(),
+        'services': {
+            'spoonacular_api': {
+                'configured': bool(getattr(settings, 'SPOONACULAR_API_KEY', None)),
+                'key_length': len(getattr(settings, 'SPOONACULAR_API_KEY', '')) if getattr(settings, 'SPOONACULAR_API_KEY', None) else 0
+            },
+            'openai_api': {
+                'configured': bool(getattr(settings, 'OPENAI_API_KEY', None)),
+                'key_length': len(getattr(settings, 'OPENAI_API_KEY', '')) if getattr(settings, 'OPENAI_API_KEY', None) else 0
+            },
+            'redis_cache': {
+                'available': bool(getattr(settings, 'REDIS_URL', None)),
+                'backend': getattr(settings, 'CACHES', {}).get('default', {}).get('BACKEND', 'unknown')
+            }
+        },
+        'endpoints': {
+            'nutrition_profile': '/api/meal-planning/nutrition-profile/',
+            'recipes': '/api/meal-planning/recipes/',
+            'meal_plans': '/api/meal-planning/meal-plans/',
+            'generate_meal_plan': '/api/meal-planning/meal-plans/generate/'
+        }
+    }
+    
+    # Test database connectivity
+    try:
+        from .models import NutritionProfile
+        profile_count = NutritionProfile.objects.count()
+        health_data['database'] = {
+            'connected': True,
+            'nutrition_profiles': profile_count
+        }
+    except Exception as e:
+        health_data['database'] = {
+            'connected': False,
+            'error': str(e)
+        }
+        health_data['status'] = 'degraded'
+    
+    # Test cache connectivity
+    try:
+        cache.set('health_check', 'test', 60)
+        cache_test = cache.get('health_check')
+        health_data['services']['redis_cache']['test_passed'] = (cache_test == 'test')
+    except Exception as e:
+        health_data['services']['redis_cache']['test_passed'] = False
+        health_data['services']['redis_cache']['error'] = str(e)
+    
+    return Response(health_data)

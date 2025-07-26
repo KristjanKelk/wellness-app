@@ -14,5 +14,6 @@ router.register(r'recipe-ratings', views.UserRecipeRatingViewSet, basename='reci
 app_name = 'meal_planning'
 
 urlpatterns = [
-    path('api/', include(router.urls)),
+    path('', include(router.urls)),
+    path('health/', views.meal_planning_health_check, name='meal-planning-health'),
 ]
