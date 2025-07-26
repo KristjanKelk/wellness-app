@@ -3,15 +3,21 @@ import axios from 'axios';
 import AuthService from './auth.service';
 import store from '../store';
 
-const API_BASE_URL = 'http://localhost:8000/meal-planning/api';
+// Use environment variable with fallback to production URL  
+const API_BASE_URL = (
+  process.env.VUE_APP_API_URL ||
+  'https://wellness-app-tx2c.onrender.com/api'
+)
+  .replace(/\/+$/, '') + '/meal-planning';
 
 // Create axios instance with base configuration - MATCHING your http.service.js pattern
 const api = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 10000,
+  timeout: 30000, // Increased timeout for service wake-up
   headers: {
     'Content-Type': 'application/json',
-  }
+  },
+  withCredentials: true, // Enable CORS credentials
 });
 
 // Add request interceptor for authentication - SAME as your http.service.js
@@ -29,11 +35,59 @@ api.interceptors.request.use(
   }
 );
 
+// Function to handle service hibernation (503 errors on Render.com)
+async function handleServiceHibernation(originalRequest) {
+  console.log('Meal Planning service appears to be hibernating. Attempting to wake up...');
+  
+  // Show user-friendly message
+  if (store?.commit) {
+    store.commit('ui/setLoading', {
+      isLoading: true,
+      message: 'Waking up meal planning service... This may take a minute.'
+    });
+  }
+
+  // Wait and retry
+  await new Promise(resolve => setTimeout(resolve, 5000));
+  
+  try {
+    // Try to wake up the main API first
+    const baseUrl = API_BASE_URL.replace('/meal-planning', '');
+    await axios.get(baseUrl, { timeout: 60000 });
+    await new Promise(resolve => setTimeout(resolve, 3000));
+    return api(originalRequest);
+  } catch (wakeupError) {
+    return api(originalRequest);
+  }
+}
+
 // Add response interceptor for error handling - SAME as your http.service.js
 api.interceptors.response.use(
   response => response,
   async error => {
     const originalRequest = error.config;
+    
+    // Handle service hibernation (503 errors)
+    if (error.response?.status === 503 && !originalRequest._hibernation_retry) {
+      originalRequest._hibernation_retry = true;
+      return handleServiceHibernation(originalRequest);
+    }
+
+    // Handle 502 errors (bad gateway)
+    if (error.response?.status === 502 && !originalRequest._gateway_retry) {
+      originalRequest._gateway_retry = true;
+      await new Promise(resolve => setTimeout(resolve, 5000));
+      return api(originalRequest);
+    }
+
+    // Handle CORS/Network errors
+    if (error.code === 'ERR_NETWORK' && !originalRequest._network_retry) {
+      originalRequest._network_retry = true;
+      console.log('Network error detected, attempting to wake up service...');
+      return handleServiceHibernation(originalRequest);
+    }
+
+    // Handle authentication errors
     if (error.response?.status === 401 && !originalRequest._retry) {
       originalRequest._retry = true;
 
@@ -45,7 +99,7 @@ api.interceptors.response.use(
           if (store?.state?.auth?.status?.loggedIn) {
             await store.dispatch('auth/refreshToken', response.access);
           }
-          return axios(originalRequest);
+          return api(originalRequest);
         }
       } catch (refreshError) {
         AuthService.logout();
@@ -59,6 +113,7 @@ api.interceptors.response.use(
         return Promise.reject(refreshError);
       }
     }
+    
     if (error.response) {
       console.error(
         `Meal Planning API Error: ${error.response.status} ${error.response.statusText}`,
