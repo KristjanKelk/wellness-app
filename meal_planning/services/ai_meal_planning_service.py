@@ -24,8 +24,11 @@ class AIMealPlanningService:
         # Set up OpenAI client
         self.client = openai.OpenAI(api_key=getattr(settings, 'OPENAI_API_KEY', ''))
         self.model = getattr(settings, 'OPENAI_MODEL', 'gpt-4')
+        # Default timeout (seconds) applied to every OpenAI request – configurable via env
+        self.request_timeout = getattr(settings, 'OPENAI_REQUEST_TIMEOUT', 25)
 
         # Function definitions for OpenAI function calling
+
         self.functions = [
             {
                 "type": "function",
@@ -86,6 +89,19 @@ class AIMealPlanningService:
                 }
             }
         ]
+
+    def _chat_completion(self, messages, **kwargs):
+        """Centralised wrapper to call OpenAI chat completions with sane defaults & timeout."""
+        try:
+            return self.client.chat.completions.create(
+                model=self.model,
+                messages=messages,
+                timeout=self.request_timeout,
+                **kwargs
+            )
+        except Exception as e:
+            logger.error(f"OpenAI chat completion failed: {e}")
+            raise
 
     def generate_meal_plan(self, user: User, plan_type: str = 'daily',
                            start_date: date = None, target_calories: int = None) -> MealPlan:
@@ -230,8 +246,7 @@ class AIMealPlanningService:
             }}
             """
 
-            response = self.client.chat.completions.create(
-                model=self.model,
+            response = self._chat_completion(
                 messages=[{"role": "user", "content": strategy_prompt}],
                 temperature=0.7,
                 max_tokens=1000
@@ -322,8 +337,7 @@ class AIMealPlanningService:
             }}
             """
 
-            response = self.client.chat.completions.create(
-                model=self.model,
+            response = self._chat_completion(
                 messages=[{"role": "user", "content": structure_prompt}],
                 temperature=0.8,
                 max_tokens=2000
@@ -415,8 +429,7 @@ class AIMealPlanningService:
             }}
             """
 
-            response = self.client.chat.completions.create(
-                model=self.model,
+            response = self._chat_completion(
                 messages=[{"role": "user", "content": recipe_prompt}],
                 functions=self.functions,
                 function_call="auto",
@@ -435,8 +448,7 @@ class AIMealPlanningService:
                 Now provide the final recipe with the accurate nutritional information.
                 """
 
-                final_response = self.client.chat.completions.create(
-                    model=self.model,
+                final_response = self._chat_completion(
                     messages=[
                         {"role": "user", "content": recipe_prompt},
                         {"role": "assistant", "content": message.content, "function_call": message.function_call},
@@ -456,8 +468,16 @@ class AIMealPlanningService:
 
         except Exception as e:
             logger.error(f"Failed to generate recipe: {e}")
-            # Return a basic recipe as fallback
-            return self._generate_basic_recipe(meal_info)
+            # Return placeholder recipe – avoids hard-coded fallback meals while keeping structure intact
+            logger.warning("Returning placeholder recipe after generation failure")
+            return {
+                "title": meal_info.get("suggested_name", "Untitled Meal"),
+                "cuisine": meal_info.get("cuisine", "Unknown"),
+                "ingredients": [],
+                "instructions": [],
+                "servings": 1,
+                "estimated_nutrition": {"calories": 0, "protein": 0, "carbs": 0, "fat": 0}
+            }
 
     def _refine_nutritional_balance(self, meal_plan_data: Dict,
                                     nutrition_profile: NutritionProfile,
@@ -503,8 +523,7 @@ class AIMealPlanningService:
             }}
             """
 
-            response = self.client.chat.completions.create(
-                model=self.model,
+            response = self._chat_completion(
                 messages=[{"role": "user", "content": refinement_prompt}],
                 temperature=0.5,
                 max_tokens=800
@@ -741,97 +760,17 @@ class AIMealPlanningService:
 
         return meal_structure
 
+    # Removed previously hard-coded fallback recipes – provide minimal placeholder instead
     def _generate_basic_recipe(self, meal_info: Dict) -> Dict:
-        """Generate basic recipe as fallback"""
-        meal_type = meal_info.get('meal_type', 'meal')
-        target_calories = meal_info.get('target_calories', 400)
-
-        basic_recipes = {
-            'breakfast': {
-                "title": "Protein Breakfast Bowl",
-                "cuisine": "International",
-                "ingredients": [
-                    {"name": "oats", "quantity": 50, "unit": "g"},
-                    {"name": "protein powder", "quantity": 25, "unit": "g"},
-                    {"name": "banana", "quantity": 1, "unit": "medium"},
-                    {"name": "berries", "quantity": 100, "unit": "g"},
-                    {"name": "almond milk", "quantity": 200, "unit": "ml"}
-                ],
-                "instructions": [
-                    "Cook oats with almond milk according to package instructions",
-                    "Stir in protein powder once cooked",
-                    "Top with sliced banana and berries",
-                    "Serve immediately while warm"
-                ],
-                "prep_time": 5,
-                "cook_time": 10,
-                "total_time": 15,
-                "servings": 1,
-                "estimated_nutrition": {
-                    "calories": 380,
-                    "protein": 28,
-                    "carbs": 52,
-                    "fat": 8
-                }
-            },
-            'lunch': {
-                "title": "Balanced Power Bowl",
-                "cuisine": "Mediterranean",
-                "ingredients": [
-                    {"name": "quinoa", "quantity": 80, "unit": "g"},
-                    {"name": "chicken breast", "quantity": 120, "unit": "g"},
-                    {"name": "mixed vegetables", "quantity": 150, "unit": "g"},
-                    {"name": "olive oil", "quantity": 15, "unit": "ml"},
-                    {"name": "lemon juice", "quantity": 10, "unit": "ml"}
-                ],
-                "instructions": [
-                    "Cook quinoa according to package instructions",
-                    "Grill or bake chicken breast until cooked through",
-                    "Steam or roast mixed vegetables",
-                    "Combine all ingredients in a bowl",
-                    "Drizzle with olive oil and lemon juice"
-                ],
-                "prep_time": 10,
-                "cook_time": 25,
-                "total_time": 35,
-                "servings": 1,
-                "estimated_nutrition": {
-                    "calories": 485,
-                    "protein": 35,
-                    "carbs": 45,
-                    "fat": 18
-                }
-            },
-            'dinner': {
-                "title": "Balanced Dinner Plate",
-                "cuisine": "International",
-                "ingredients": [
-                    {"name": "salmon fillet", "quantity": 150, "unit": "g"},
-                    {"name": "sweet potato", "quantity": 200, "unit": "g"},
-                    {"name": "green vegetables", "quantity": 150, "unit": "g"},
-                    {"name": "olive oil", "quantity": 10, "unit": "ml"}
-                ],
-                "instructions": [
-                    "Preheat oven to 400°F (200°C)",
-                    "Season salmon and bake for 12-15 minutes",
-                    "Roast sweet potato cubes until tender",
-                    "Steam green vegetables until crisp-tender",
-                    "Serve all components together with a drizzle of olive oil"
-                ],
-                "prep_time": 15,
-                "cook_time": 30,
-                "total_time": 45,
-                "servings": 1,
-                "estimated_nutrition": {
-                    "calories": 520,
-                    "protein": 35,
-                    "carbs": 42,
-                    "fat": 22
-                }
-            }
+        logger.warning("_generate_basic_recipe invoked – returning empty placeholder recipe")
+        return {
+            "title": meal_info.get("suggested_name", "Untitled Meal"),
+            "cuisine": meal_info.get("cuisine", "Unknown"),
+            "ingredients": [],
+            "instructions": [],
+            "servings": 1,
+            "estimated_nutrition": {"calories": 0, "protein": 0, "carbs": 0, "fat": 0}
         }
-
-        return basic_recipes.get(meal_type, basic_recipes['lunch'])
 
     def _calculate_plan_nutrition(self, meal_plan_data: Dict, plan_type: str) -> Dict:
         """Calculate nutritional totals for the meal plan"""
@@ -1073,8 +1012,7 @@ class AIMealPlanningService:
             }}
             """
 
-            response = self.client.chat.completions.create(
-                model=self.model,
+            response = self._chat_completion(
                 messages=[{"role": "user", "content": analysis_prompt}],
                 temperature=0.3,
                 max_tokens=1500

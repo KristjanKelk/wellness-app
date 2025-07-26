@@ -106,12 +106,14 @@ except Exception as e:
     echo "================================================"
     
     # Start the application with optimized settings
+    WORKERS=${WEB_CONCURRENCY:-4}
+
     exec gunicorn wellness_project.wsgi:application \
         --bind 0.0.0.0:10000 \
-        --workers 2 \
-        --worker-class sync \
-        --worker-connections 1000 \
-        --timeout 120 \
+        --workers "${WORKERS}" \
+        --threads 2 \
+        --worker-class gthread \
+        --timeout 180 \
         --keep-alive 2 \
         --max-requests 1000 \
         --max-requests-jitter 50 \
