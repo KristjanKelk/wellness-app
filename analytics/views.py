@@ -11,7 +11,7 @@ import re
 import openai
 
 
-openai.api_key = settings.OPENAI_API_KEY
+# OpenAI client will be initialized in the service classes
 
 from .models import AIInsight, WellnessScore, Milestone, HealthSummary, SummaryMetric
 from .serializers import AIInsightSerializer, WellnessScoreSerializer, MilestoneSerializer,HealthSummarySerializer, HealthSummaryCreateSerializer, HealthSummaryListSerializer, SummaryStatsSerializer,SummaryInsightSerializer, SummaryMetricSerializer

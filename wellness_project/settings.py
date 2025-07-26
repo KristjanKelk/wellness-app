@@ -142,10 +142,8 @@ ACCOUNT_EMAIL_VERIFICATION = 'none'
 ACCOUNT_LOGIN_METHODS = {'username', 'email'}
 ACCOUNT_SIGNUP_FIELDS = ['username*','email*','password1*','password2*']
 
-# CORS settings
-# Temporarily allow all origins for debugging hibernation issues
-# TODO: Set to False and use specific origins for production
-CORS_ALLOW_ALL_ORIGINS = True  # Temporarily True to debug service hibernation
+# CORS settings - Optimized for production
+CORS_ALLOW_ALL_ORIGINS = False  # More secure, use specific origins
 
 CORS_ALLOWED_ORIGINS = [
    'https://wellness-app-fronend.onrender.com',  # Keep the typo version for compatibility
@@ -180,9 +178,7 @@ CORS_EXPOSE_HEADERS = [
     'access-control-allow-credentials',
 ]
 
-# Note: CORS_REPLACE_HTTPS_REFERER has been removed in django-cors-headers 4.0+
-# Use CSRF_TRUSTED_ORIGINS instead (configured above)
-
+# Cookie settings for secure cross-origin requests
 SESSION_COOKIE_SAMESITE = 'None'
 CSRF_COOKIE_SAMESITE    = 'None'
 SESSION_COOKIE_SECURE   = True
@@ -223,13 +219,17 @@ if REDIS_URL:
     CACHE_BACKEND = "django.core.cache.backends.redis.RedisCache"
     CACHE_LOCATION = REDIS_URL.rsplit("/", 1)[0] + "/1"
     
-    # Fixed Redis connection options - removed connection_pool_kwargs
+    # Optimized Redis connection options for better performance
     REDIS_CONNECTION_OPTIONS = {
-        "socket_connect_timeout": 5,
-        "socket_timeout": 5,
+        "socket_connect_timeout": 3,  # Reduced from 5
+        "socket_timeout": 3,          # Reduced from 5
         "retry_on_timeout": True,
-        "health_check_interval": 30,
-        "max_connections": 10,
+        "health_check_interval": 60,  # Increased from 30
+        "max_connections": 5,         # Reduced from 10 to prevent connection overload
+        "connection_pool_class_kwargs": {
+            "max_connections": 5,
+            "retry_on_timeout": True,
+        },
     }
 else:
     CELERY_BROKER_URL = None
@@ -242,9 +242,10 @@ CACHES = {
     "default": {
         "BACKEND": CACHE_BACKEND,
         "LOCATION": CACHE_LOCATION,
-        "TIMEOUT": 3600,
+        "TIMEOUT": 1800,  # Reduced from 3600 to 30 minutes
         "KEY_PREFIX": "wellness_nutrition",
         "OPTIONS": REDIS_CONNECTION_OPTIONS,
+        "VERSION": 1,
     }
 }
 
@@ -284,8 +285,8 @@ REST_FRAMEWORK = {
         'utils.throttling.ResilientAnonRateThrottle',
     ],
     'DEFAULT_THROTTLE_RATES': {
-        'user': '1000/minute',  # Increased for production
-        'anon': '100/minute',   # Increased for production
+        'user': '500/minute',   # Balanced for performance
+        'anon': '50/minute',    # Balanced for performance
     },
     'DEFAULT_PAGINATION_CLASS': 'utils.pagination.StandardResultsSetPagination',
     'DEFAULT_FILTER_BACKENDS': [

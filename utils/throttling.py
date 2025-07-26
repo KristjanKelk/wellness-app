@@ -45,7 +45,7 @@ class ResilientThrottleMixin:
     
     def allow_request(self, request, view):
         """
-        Implement rate limiting with Redis fallback
+        Implement rate limiting with Redis fallback and circuit breaker
         """
         if self.rate is None:
             return True
@@ -54,8 +54,17 @@ class ResilientThrottleMixin:
         if self.key is None:
             return True
 
+        # Check circuit breaker for Redis
+        if hasattr(self, '_redis_circuit_open') and self._redis_circuit_open:
+            if time.time() - getattr(self, '_redis_circuit_opened_at', 0) < 60:  # 1 minute circuit
+                return self._fallback_allow_request(request, view)
+            else:
+                # Reset circuit breaker
+                self._redis_circuit_open = False
+
         try:
-            # Try to use Redis cache first
+            # Try to use Redis cache first with timeout
+            self.cache = self.get_cache()
             self.history = self.cache.get(self.key, [])
             self.now = self.timer()
 
@@ -66,10 +75,16 @@ class ResilientThrottleMixin:
             if len(self.history) >= self.num_requests:
                 return self.throttle_failure()
 
+            # Record this request
+            self.history.insert(0, self.now)
+            self.cache.set(self.key, self.history, self.duration)
             return self.throttle_success()
             
         except (redis.exceptions.TimeoutError, redis.exceptions.ConnectionError) as e:
             logger.warning(f"Redis throttling failed, using fallback: {e}")
+            # Open circuit breaker
+            self._redis_circuit_open = True
+            self._redis_circuit_opened_at = time.time()
             return self._fallback_allow_request(request, view)
         except Exception as e:
             logger.error(f"Throttling error: {e}")

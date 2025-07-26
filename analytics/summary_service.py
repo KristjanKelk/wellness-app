@@ -191,7 +191,7 @@ class HealthSummaryService:
         try:
             prompt = cls._build_safe_prompt(data, summary_type)
 
-            response = client.chat.completions.create(
+            response = client.ChatCompletion.create(
                 model="gpt-3.5-turbo",
                 messages=[
                     {
