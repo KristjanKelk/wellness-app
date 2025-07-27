@@ -91,7 +91,37 @@ export const mealPlanningApi = {
 
   // Recipe endpoints
   getRecipes(params = {}) {
-    return api.get('/recipes/', { params })
+    // Clean up parameters and add debugging
+    const cleanParams = {}
+    
+    // Basic pagination
+    if (params.page) cleanParams.page = params.page
+    if (params.page_size) cleanParams.page_size = params.page_size
+    
+    // Search parameters
+    if (params.search && params.search.trim()) {
+      cleanParams.search = params.search.trim()
+    }
+    
+    // Filter parameters
+    if (params.cuisine && params.cuisine.trim()) {
+      cleanParams.cuisine = params.cuisine.trim()
+    }
+    
+    if (params.meal_type && params.meal_type.trim()) {
+      cleanParams.meal_type = params.meal_type.trim()
+    }
+    
+    if (params.dietary_preferences && params.dietary_preferences.trim()) {
+      cleanParams.dietary_preferences = params.dietary_preferences.trim()
+    }
+    
+    if (params.max_calories && params.max_calories.trim()) {
+      cleanParams.max_calories = parseInt(params.max_calories.trim())
+    }
+    
+    console.log('Making API request to /recipes/ with params:', cleanParams)
+    return api.get('/recipes/', { params: cleanParams })
   },
 
   getRecipe(id) {

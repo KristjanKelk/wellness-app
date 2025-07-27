@@ -334,6 +334,8 @@ class Recipe(models.Model):
 
     # Metadata
     is_verified = models.BooleanField(default=False)
+    is_public = models.BooleanField(default=True)  # Public recipes can be seen by all users
+    created_by = models.ForeignKey(User, on_delete=models.CASCADE, null=True, blank=True, related_name='created_recipes')  # User who saved/created this recipe
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
