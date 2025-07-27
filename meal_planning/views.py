@@ -286,6 +286,14 @@ class NutritionProfileViewSet(viewsets.ModelViewSet):
             )
         except Exception as e:
             logger.error(f"Unexpected error connecting to Spoonacular: {str(e)}")
+            
+            # Check if it's a Redis connection issue
+            if "connection_pool_kwargs" in str(e) or "AbstractConnection" in str(e):
+                return Response(
+                    {'error': 'Service temporarily unavailable', 'details': 'Cache service unavailable, please try again'},
+                    status=status.HTTP_503_SERVICE_UNAVAILABLE
+                )
+            
             return Response(
                 {'error': 'Unexpected error occurred', 'details': str(e)},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR

@@ -40,32 +40,40 @@ class SpoonacularService:
 
     def _check_rate_limit(self) -> bool:
         """Check if we're within rate limits"""
-        # Check daily limit
-        requests_today = cache.get(self.requests_today_key, 0)
-        if requests_today >= self.rate_limit['requests_per_day']:
-            logger.warning(f"Daily rate limit exceeded: {requests_today}/{self.rate_limit['requests_per_day']}")
-            raise RateLimitExceeded("Daily API rate limit exceeded")
+        try:
+            # Check daily limit
+            requests_today = cache.get(self.requests_today_key, 0)
+            if requests_today >= self.rate_limit['requests_per_day']:
+                logger.warning(f"Daily rate limit exceeded: {requests_today}/{self.rate_limit['requests_per_day']}")
+                raise RateLimitExceeded("Daily API rate limit exceeded")
 
-        # Check per-minute limit
-        last_request = cache.get(self.last_request_key)
-        if last_request:
-            time_since_last = time.time() - last_request
-            min_interval = 60 / self.rate_limit['requests_per_minute']
-            if time_since_last < min_interval:
-                sleep_time = min_interval - time_since_last
-                logger.info(f"Rate limiting: sleeping for {sleep_time:.2f} seconds")
-                time.sleep(sleep_time)
+            # Check per-minute limit
+            last_request = cache.get(self.last_request_key)
+            if last_request:
+                time_since_last = time.time() - last_request
+                min_interval = 60 / self.rate_limit['requests_per_minute']
+                if time_since_last < min_interval:
+                    sleep_time = min_interval - time_since_last
+                    logger.info(f"Rate limiting: sleeping for {sleep_time:.2f} seconds")
+                    time.sleep(sleep_time)
+        except Exception as e:
+            logger.warning(f"Cache unavailable for rate limiting, proceeding without cache: {e}")
+            # Continue without rate limiting if cache is unavailable
 
         return True
 
     def _update_rate_limit_counters(self):
         """Update rate limiting counters after successful request"""
-        # Update daily counter
-        requests_today = cache.get(self.requests_today_key, 0)
-        cache.set(self.requests_today_key, requests_today + 1, 86400)  # 24 hours
+        try:
+            # Update daily counter
+            requests_today = cache.get(self.requests_today_key, 0)
+            cache.set(self.requests_today_key, requests_today + 1, 86400)  # 24 hours
 
-        # Update last request timestamp
-        cache.set(self.last_request_key, time.time(), 3600)  # 1 hour
+            # Update last request timestamp
+            cache.set(self.last_request_key, time.time(), 3600)  # 1 hour
+        except Exception as e:
+            logger.warning(f"Cache unavailable for updating rate limit counters: {e}")
+            # Continue without updating counters if cache is unavailable
 
     def _make_request(self, endpoint: str, params: Dict = None, use_cache: bool = True) -> Dict:
         """
@@ -82,10 +90,14 @@ class SpoonacularService:
 
         # Try to get from cache first
         if use_cache:
-            cached_result = cache.get(cache_key)
-            if cached_result:
-                logger.debug(f"Cache hit for endpoint: {endpoint}")
-                return cached_result
+            try:
+                cached_result = cache.get(cache_key)
+                if cached_result:
+                    logger.debug(f"Cache hit for endpoint: {endpoint}")
+                    return cached_result
+            except Exception as e:
+                logger.warning(f"Cache unavailable for reading, proceeding without cache: {e}")
+                use_cache = False  # Disable caching for this request
 
         # Check rate limits
         self._check_rate_limit()
@@ -105,7 +117,10 @@ class SpoonacularService:
 
             # Cache the response
             if use_cache:
-                cache.set(cache_key, data, self.rate_limit['cache_duration'])
+                try:
+                    cache.set(cache_key, data, self.rate_limit['cache_duration'])
+                except Exception as e:
+                    logger.warning(f"Cache unavailable for writing, continuing without caching: {e}")
 
             return data
 
