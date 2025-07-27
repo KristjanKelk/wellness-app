@@ -155,6 +155,8 @@ CORS_ALLOWED_ORIGINS = [
     'http://127.0.0.1:8080',
     'http://localhost:3000',
     'http://127.0.0.1:3000',
+    'http://localhost:8000',  # Add backend URL for development
+    'http://127.0.0.1:8000',
 ]
 
 # Allow specific origins for API endpoints with regex patterns
