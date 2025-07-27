@@ -25,7 +25,10 @@
           <recipe-browser
             :recipes="recipes"
             :loading="recipesLoading"
+            :has-more="recipesHasMore"
             @recipe-selected="selectRecipe"
+            @search="searchRecipes"
+            @load-more="loadMoreRecipes"
           />
         </div>
 
@@ -94,7 +97,11 @@ export default {
       profileLoading: false,
       mealPlansLoading: false,
       showRecipeModal: false,
-      selectedRecipe: null
+      selectedRecipe: null,
+      // Pagination state
+      recipesPage: 1,
+      recipesHasMore: true,
+      lastSearchQuery: ''
     }
   },
   computed: {
@@ -120,13 +127,79 @@ export default {
     async loadRecipes() {
       this.recipesLoading = true
       try {
-        const response = await mealPlanningApi.getRecipes()
+        // Reset recipes if this is a new search
+        this.recipes = []
+        
+        const response = await mealPlanningApi.getRecipes({
+          page_size: 10,
+          page: 1
+        })
+        
         this.recipes = response.data.results || response.data || []
+        this.recipesHasMore = !!response.data.next
+        this.recipesPage = 1
       } catch (error) {
         console.error('Failed to load recipes:', error)
         // Show user-friendly error
         this.$toast?.error?.('Failed to load recipes') ||
         alert('Failed to load recipes')
+      } finally {
+        this.recipesLoading = false
+      }
+    },
+
+    async searchRecipes(query) {
+      this.recipesLoading = true
+      try {
+        this.recipes = []
+        
+        const params = {
+          page_size: 10,
+          page: 1
+        }
+        
+        if (query && query.trim()) {
+          params.search = query.trim()
+        }
+        
+        const response = await mealPlanningApi.getRecipes(params)
+        this.recipes = response.data.results || response.data || []
+        this.recipesHasMore = !!response.data.next
+        this.recipesPage = 1
+        this.lastSearchQuery = query
+      } catch (error) {
+        console.error('Failed to search recipes:', error)
+        this.$toast?.error?.('Failed to search recipes') ||
+        alert('Failed to search recipes')
+      } finally {
+        this.recipesLoading = false
+      }
+    },
+
+    async loadMoreRecipes() {
+      if (this.recipesLoading || !this.recipesHasMore) return
+      
+      this.recipesLoading = true
+      try {
+        const params = {
+          page_size: 10,
+          page: this.recipesPage + 1
+        }
+        
+        if (this.lastSearchQuery) {
+          params.search = this.lastSearchQuery
+        }
+        
+        const response = await mealPlanningApi.getRecipes(params)
+        const newRecipes = response.data.results || response.data || []
+        
+        this.recipes = [...this.recipes, ...newRecipes]
+        this.recipesHasMore = !!response.data.next
+        this.recipesPage = this.recipesPage + 1
+      } catch (error) {
+        console.error('Failed to load more recipes:', error)
+        this.$toast?.error?.('Failed to load more recipes') ||
+        alert('Failed to load more recipes')
       } finally {
         this.recipesLoading = false
       }

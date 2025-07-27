@@ -243,6 +243,7 @@ class RecipeViewSet(viewsets.ReadOnlyModelViewSet):
     """Browse and search recipes"""
     serializer_class = RecipeSerializer
     permission_classes = [IsAuthenticated]
+    pagination_class = None  # We'll handle pagination manually for better control
 
     def get_queryset(self):
         queryset = Recipe.objects.all()
@@ -274,6 +275,243 @@ class RecipeViewSet(viewsets.ReadOnlyModelViewSet):
             queryset = queryset.filter(title__icontains=search)
 
         return queryset.order_by('-rating_avg', '-created_at')
+
+    def list(self, request, *args, **kwargs):
+        """
+        List recipes with intelligent search based on user's nutrition profile
+        and Spoonacular integration when needed
+        """
+        from .services.spoonacular_service import search_recipes_by_dietary_preferences
+        from .models import NutritionProfile
+        
+        search_query = request.query_params.get('search', '').strip()
+        page_size = int(request.query_params.get('page_size', 10))
+        page = int(request.query_params.get('page', 1))
+        offset = (page - 1) * page_size
+        
+        try:
+            # Get user's nutrition profile
+            nutrition_profile = None
+            try:
+                nutrition_profile = NutritionProfile.objects.get(user=request.user)
+            except NutritionProfile.DoesNotExist:
+                pass
+            
+            if search_query:
+                # Specific search query provided
+                queryset = self.get_queryset()
+                local_recipes = list(queryset[offset:offset + page_size])
+                
+                # If we have enough local recipes, return them
+                if len(local_recipes) >= 3:
+                    total_count = queryset.count()
+                    return Response({
+                        'count': total_count,
+                        'next': f"?page={page + 1}&page_size={page_size}&search={search_query}" if offset + page_size < total_count else None,
+                        'previous': f"?page={page - 1}&page_size={page_size}&search={search_query}" if page > 1 else None,
+                        'results': RecipeSerializer(local_recipes, many=True).data
+                    })
+                
+                # Not enough local recipes, search Spoonacular
+                spoonacular_recipes = self._search_spoonacular_recipes(
+                    query=search_query,
+                    nutrition_profile=nutrition_profile,
+                    number=max(page_size, 10)
+                )
+                
+                # Combine local and Spoonacular recipes
+                all_recipes = local_recipes + spoonacular_recipes
+                return Response({
+                    'count': len(all_recipes),
+                    'next': None,  # For now, no pagination for Spoonacular results
+                    'previous': None,
+                    'results': all_recipes[:page_size]
+                })
+            
+            else:
+                # No specific search - use nutrition profile for intelligent recommendations
+                if nutrition_profile:
+                    # Try to get recipes based on user preferences
+                    queryset = self._apply_nutrition_profile_filters(self.get_queryset(), nutrition_profile)
+                    local_recipes = list(queryset[offset:offset + page_size])
+                    
+                    # If we have enough recipes matching preferences, return them
+                    if len(local_recipes) >= page_size:
+                        total_count = queryset.count()
+                        return Response({
+                            'count': total_count,
+                            'next': f"?page={page + 1}&page_size={page_size}" if offset + page_size < total_count else None,
+                            'previous': f"?page={page - 1}&page_size={page_size}" if page > 1 else None,
+                            'results': RecipeSerializer(local_recipes, many=True).data
+                        })
+                    
+                    # Not enough local recipes, get from Spoonacular based on preferences
+                    preferences = {
+                        'dietary_preferences': nutrition_profile.dietary_preferences,
+                        'allergies_intolerances': nutrition_profile.allergies_intolerances,
+                        'cuisine_preferences': nutrition_profile.cuisine_preferences,
+                    }
+                    spoonacular_recipes = search_recipes_by_dietary_preferences(preferences)
+                    
+                    # Save new recipes to database for future use
+                    for recipe_data in spoonacular_recipes[:10]:  # Limit to save API quota
+                        self._save_spoonacular_recipe(recipe_data)
+                    
+                    # Combine and return
+                    all_recipes = list(RecipeSerializer(local_recipes, many=True).data) + spoonacular_recipes
+                    return Response({
+                        'count': len(all_recipes),
+                        'next': None,
+                        'previous': None,
+                        'results': all_recipes[:page_size]
+                    })
+                
+                else:
+                    # No nutrition profile - return random recipes or get popular ones from Spoonacular
+                    queryset = self.get_queryset()
+                    local_recipes = list(queryset[offset:offset + page_size])
+                    
+                    if len(local_recipes) >= page_size:
+                        total_count = queryset.count()
+                        return Response({
+                            'count': total_count,
+                            'next': f"?page={page + 1}&page_size={page_size}" if offset + page_size < total_count else None,
+                            'previous': f"?page={page - 1}&page_size={page_size}" if page > 1 else None,
+                            'results': RecipeSerializer(local_recipes, many=True).data
+                        })
+                    
+                    # Get popular recipes from Spoonacular
+                    spoonacular_recipes = self._search_spoonacular_recipes(
+                        query="",  # No specific query - get popular
+                        number=page_size
+                    )
+                    
+                    # Save new recipes to database
+                    for recipe_data in spoonacular_recipes[:10]:
+                        self._save_spoonacular_recipe(recipe_data)
+                    
+                    all_recipes = list(RecipeSerializer(local_recipes, many=True).data) + spoonacular_recipes
+                    return Response({
+                        'count': len(all_recipes),
+                        'next': None,
+                        'previous': None,
+                        'results': all_recipes[:page_size]
+                    })
+                    
+        except Exception as e:
+            logger.error(f"Error in recipe list view: {str(e)}")
+            # Fallback to basic queryset
+            queryset = self.get_queryset()
+            page = self.paginate_queryset(queryset)
+            if page is not None:
+                serializer = self.get_serializer(page, many=True)
+                return self.get_paginated_response(serializer.data)
+            
+            serializer = self.get_serializer(queryset, many=True)
+            return Response(serializer.data)
+
+    def _apply_nutrition_profile_filters(self, queryset, nutrition_profile):
+        """Apply filters based on nutrition profile"""
+        # Filter by dietary preferences
+        for pref in nutrition_profile.dietary_preferences:
+            queryset = queryset.filter(dietary_tags__contains=[pref])
+        
+        # Exclude allergens
+        for allergen in nutrition_profile.allergies_intolerances:
+            queryset = queryset.exclude(allergens__contains=[allergen])
+        
+        # Filter by cuisine preferences (if any)
+        if nutrition_profile.cuisine_preferences:
+            queryset = queryset.filter(cuisine__in=nutrition_profile.cuisine_preferences)
+        
+        # Exclude disliked ingredients
+        for ingredient in nutrition_profile.disliked_ingredients:
+            queryset = queryset.exclude(ingredients_data__icontains=ingredient.lower())
+        
+        return queryset
+
+    def _search_spoonacular_recipes(self, query="", nutrition_profile=None, number=10):
+        """Search recipes from Spoonacular API"""
+        from .services.spoonacular_service import get_spoonacular_service
+        
+        try:
+            service = get_spoonacular_service()
+            
+            # Build search parameters
+            params = {
+                'query': query,
+                'number': number,
+            }
+            
+            if nutrition_profile:
+                if nutrition_profile.dietary_preferences:
+                    params['diet'] = ','.join(nutrition_profile.dietary_preferences[:3])  # Limit to 3
+                if nutrition_profile.allergies_intolerances:
+                    params['intolerances'] = ','.join(nutrition_profile.allergies_intolerances)
+                if nutrition_profile.cuisine_preferences:
+                    params['cuisine'] = ','.join(nutrition_profile.cuisine_preferences[:2])  # Limit to 2
+            
+            # Make the API call
+            results = service.search_recipes(**params)
+            
+            # Normalize the results
+            normalized_recipes = []
+            for recipe in results.get('results', []):
+                try:
+                    normalized = service.normalize_recipe_data(recipe)
+                    normalized_recipes.append(normalized)
+                except Exception as e:
+                    logger.warning(f"Failed to normalize recipe {recipe.get('id')}: {e}")
+                    continue
+            
+            return normalized_recipes
+            
+        except Exception as e:
+            logger.error(f"Error searching Spoonacular recipes: {e}")
+            return []
+
+    def _save_spoonacular_recipe(self, recipe_data):
+        """Save a Spoonacular recipe to the database if it doesn't exist"""
+        try:
+            spoonacular_id = recipe_data.get('spoonacular_id')
+            if not spoonacular_id:
+                return None
+                
+            # Check if recipe already exists
+            if Recipe.objects.filter(spoonacular_id=spoonacular_id).exists():
+                return None
+            
+            # Create new recipe
+            recipe = Recipe.objects.create(
+                title=recipe_data.get('title', 'Unknown Recipe'),
+                summary=recipe_data.get('summary', ''),
+                cuisine=recipe_data.get('cuisine', ''),
+                meal_type=recipe_data.get('meal_type', 'dinner'),
+                servings=recipe_data.get('servings', 1),
+                prep_time_minutes=recipe_data.get('prep_time_minutes', 0),
+                cook_time_minutes=recipe_data.get('cook_time_minutes', 0),
+                total_time_minutes=recipe_data.get('total_time_minutes', 0),
+                difficulty_level=recipe_data.get('difficulty_level', 'medium'),
+                spoonacular_id=spoonacular_id,
+                ingredients_data=recipe_data.get('ingredients_data', []),
+                instructions=recipe_data.get('instructions', []),
+                calories_per_serving=recipe_data.get('calories_per_serving', 0),
+                protein_per_serving=recipe_data.get('protein_per_serving', 0),
+                carbs_per_serving=recipe_data.get('carbs_per_serving', 0),
+                fat_per_serving=recipe_data.get('fat_per_serving', 0),
+                fiber_per_serving=recipe_data.get('fiber_per_serving', 0),
+                dietary_tags=recipe_data.get('dietary_tags', []),
+                allergens=recipe_data.get('allergens', []),
+                image_url=recipe_data.get('image_url', ''),
+                source_url=recipe_data.get('source_url', ''),
+                source_type='spoonacular',
+                is_verified=True,
+            )
+            return recipe
+            
+        except Exception as e:
+            logger.error(f"Error saving Spoonacular recipe: {e}")
+            return None
 
     @action(detail=False, methods=['post'])
     def search(self, request):
