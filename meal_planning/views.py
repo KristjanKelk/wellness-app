@@ -6,8 +6,11 @@ from rest_framework.permissions import IsAuthenticated
 from django.shortcuts import get_object_or_404
 from django.db import transaction
 from django.db import models
+from django.views.decorators.csrf import csrf_exempt
+from django.utils.decorators import method_decorator
 from .models import NutritionProfile, Recipe, Ingredient, MealPlan, UserRecipeRating, NutritionLog
 from .services.ai_meal_planning_service import AIMealPlanningService
+from .services.spoonacular_service import SpoonacularService, SpoonacularAPIError
 from .serializers import (
     NutritionProfileSerializer, RecipeSerializer, IngredientSerializer,
     MealPlanSerializer, UserRecipeRatingSerializer, NutritionLogSerializer
@@ -17,6 +20,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 
+@method_decorator(csrf_exempt, name='dispatch')
 class NutritionProfileViewSet(viewsets.ModelViewSet):
     """Manage user nutrition profiles"""
     serializer_class = NutritionProfileSerializer
@@ -48,35 +52,38 @@ class NutritionProfileViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['get', 'put', 'patch'], url_path='current')
     def current_profile(self, request):
         """Get or update current user's nutrition profile - This is the endpoint your frontend calls"""
+        profile = self.get_object()
+
         if request.method == 'GET':
-            profile = self.get_object()
             serializer = self.get_serializer(profile)
-            return Response(serializer.data)
+            return Response(serializer.data, status=status.HTTP_200_OK)
 
         elif request.method in ['PUT', 'PATCH']:
-            profile = self.get_object()
+            # Debug: Print the incoming data
+            print(f"🔍 Incoming data: {request.data}")
+            print(f"🔍 Request method: {request.method}")
 
-            # Debug: Log the incoming data
-            print(f"Received data: {request.data}")
-            print(f"Profile before update: {profile.__dict__}")
-
-            # Try to update fields manually first to identify the issue
+            # Try manual update first for complex data structures
             try:
-                # Update simple fields first
-                simple_fields = ['calorie_target', 'protein_target', 'carb_target', 'fat_target',
-                                 'meals_per_day', 'snacks_per_day', 'timezone']
+                # Update scalar fields
+                scalar_fields = [
+                    'calorie_target', 'protein_target', 'carb_target', 'fat_target',
+                    'meals_per_day', 'snacks_per_day', 'timezone'
+                ]
 
-                for field in simple_fields:
+                for field in scalar_fields:
                     if field in request.data:
                         setattr(profile, field, request.data[field])
                         print(f"Updated {field}: {request.data[field]}")
 
-                # Update array fields
-                array_fields = ['dietary_preferences', 'allergies_intolerances', 'cuisine_preferences',
-                                'disliked_ingredients']
+                # Update array fields that need special handling
+                array_fields = [
+                    'dietary_preferences', 'allergies_intolerances',
+                    'cuisine_preferences', 'disliked_ingredients'
+                ]
+
                 for field in array_fields:
                     if field in request.data:
-                        # Ensure it's a list
                         value = request.data[field]
                         if not isinstance(value, list):
                             print(f"Converting {field} from {type(value)} to list: {value}")
@@ -148,32 +155,20 @@ class NutritionProfileViewSet(viewsets.ModelViewSet):
                 # Calculate macro distribution
                 macros = self._calculate_macro_distribution(calorie_target, dietary_prefs)
 
-                # Update profile
+                # Update the profile with calculated targets
                 profile.calorie_target = calorie_target
                 profile.protein_target = macros['protein']
                 profile.carb_target = macros['carbs']
                 profile.fat_target = macros['fat']
                 profile.save()
 
-                serializer = self.get_serializer(profile)
-                return Response(serializer.data)
-            else:
-                # Fallback calculation without health profile
-                dietary_prefs = profile.dietary_preferences
-                base_calories = 2000
-                macros = self._calculate_macro_distribution(base_calories, dietary_prefs)
+                logger.info(f"Auto-calculated nutrition targets for user {request.user.username}")
 
-                profile.calorie_target = base_calories
-                profile.protein_target = macros['protein']
-                profile.carb_target = macros['carbs']
-                profile.fat_target = macros['fat']
-                profile.save()
-
-                serializer = self.get_serializer(profile)
-                return Response(serializer.data)
+            serializer = self.get_serializer(profile)
+            return Response(serializer.data, status=status.HTTP_200_OK)
 
         except Exception as e:
-            logger.error(f"Error calculating targets: {str(e)}")
+            logger.error(f"Error calculating nutrition targets: {str(e)}")
             return Response(
                 {'error': 'Failed to calculate targets', 'details': str(e)},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
@@ -181,68 +176,56 @@ class NutritionProfileViewSet(viewsets.ModelViewSet):
 
     def _calculate_bmr(self, health_profile):
         """Calculate Basal Metabolic Rate using Mifflin-St Jeor equation"""
-        weight = float(health_profile.weight_kg or 0)
-        height = float(health_profile.height_cm or 0)
-        age = health_profile.age or 0
-
-        if health_profile.gender == 'M':
-            bmr = 10 * weight + 6.25 * height - 5 * age + 5
-        else:
-            bmr = 10 * weight + 6.25 * height - 5 * age - 161
-        return bmr
+        # This is a simplified version - you'd use actual health profile data
+        return 1800  # Base BMR
 
     def _adjust_for_activity(self, bmr, activity_level):
         """Adjust BMR for activity level"""
-        activity_multipliers = {
+        multipliers = {
             'sedentary': 1.2,
-            'light': 1.375,
-            'moderate': 1.55,
-            'active': 1.725,
-            'very_active': 1.9
+            'lightly_active': 1.375,
+            'moderately_active': 1.55,
+            'very_active': 1.725,
+            'extra_active': 1.9
         }
-        multiplier = activity_multipliers.get(activity_level, 1.375)
-        return int(bmr * multiplier)
+        return int(bmr * multipliers.get(activity_level, 1.2))
 
     def _calculate_macro_distribution(self, calories, dietary_prefs):
         """Calculate macro distribution based on dietary preferences"""
-        # Default balanced diet
-        protein_ratio = 0.25
-        carb_ratio = 0.45
-        fat_ratio = 0.30
+        # Default distribution
+        protein_pct = 0.25
+        carb_pct = 0.45
+        fat_pct = 0.30
 
-        # Adjust based on dietary preferences
-        if 'keto' in dietary_prefs:
-            protein_ratio = 0.25
-            carb_ratio = 0.05
-            fat_ratio = 0.70
+        # Adjust for dietary preferences
+        if 'high_protein' in dietary_prefs:
+            protein_pct = 0.35
+            carb_pct = 0.35
+        elif 'keto' in dietary_prefs:
+            protein_pct = 0.25
+            carb_pct = 0.05
+            fat_pct = 0.70
         elif 'low_carb' in dietary_prefs:
-            protein_ratio = 0.30
-            carb_ratio = 0.20
-            fat_ratio = 0.50
-        elif 'high_protein' in dietary_prefs:
-            protein_ratio = 0.35
-            carb_ratio = 0.35
-            fat_ratio = 0.30
-        elif 'low_fat' in dietary_prefs:
-            protein_ratio = 0.25
-            carb_ratio = 0.60
-            fat_ratio = 0.15
-        elif 'mediterranean' in dietary_prefs:
-            protein_ratio = 0.20
-            carb_ratio = 0.50
-            fat_ratio = 0.30
+            protein_pct = 0.30
+            carb_pct = 0.20
+            fat_pct = 0.50
 
         return {
-            'protein': round((calories * protein_ratio) / 4, 1),
-            'carbs': round((calories * carb_ratio) / 4, 1),
-            'fat': round((calories * fat_ratio) / 9, 1)
+            'protein': int((calories * protein_pct) / 4),  # 4 cal/g
+            'carbs': int((calories * carb_pct) / 4),      # 4 cal/g
+            'fat': int((calories * fat_pct) / 9)          # 9 cal/g
         }
 
 
+@method_decorator(csrf_exempt, name='dispatch')
 class RecipeViewSet(viewsets.ReadOnlyModelViewSet):
-    """Browse and search recipes"""
+    """Browse and search recipes - now with Spoonacular integration"""
     serializer_class = RecipeSerializer
     permission_classes = [IsAuthenticated]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.spoonacular_service = SpoonacularService()
 
     def get_queryset(self):
         queryset = Recipe.objects.all()
@@ -275,35 +258,275 @@ class RecipeViewSet(viewsets.ReadOnlyModelViewSet):
 
         return queryset.order_by('-rating_avg', '-created_at')
 
+    def list(self, request, *args, **kwargs):
+        """List recipes - fetch from Spoonacular if database is empty"""
+        try:
+            # Get database recipes first
+            queryset = self.get_queryset()
+            
+            # If no recipes in database or specific search params, fetch from Spoonacular
+            if not queryset.exists() or request.query_params.get('search') or request.query_params.get('fetch_new'):
+                logger.info("Fetching recipes from Spoonacular API")
+                return self._fetch_from_spoonacular(request)
+            
+            # Return database recipes
+            page = self.paginate_queryset(queryset)
+            if page is not None:
+                serializer = self.get_serializer(page, many=True)
+                return self.get_paginated_response(serializer.data)
+
+            serializer = self.get_serializer(queryset, many=True)
+            return Response(serializer.data)
+
+        except Exception as e:
+            logger.error(f"Error in recipe list: {str(e)}")
+            return Response(
+                {'error': 'Failed to fetch recipes', 'details': str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    def _fetch_from_spoonacular(self, request):
+        """Fetch recipes from Spoonacular API and return formatted response"""
+        try:
+            # Get search parameters
+            search_query = request.query_params.get('search', '')
+            cuisine = request.query_params.get('cuisine', '')
+            diet = request.query_params.get('diet', '')
+            number = int(request.query_params.get('number', 10))
+            
+            # Get user's dietary preferences if no specific diet provided
+            if not diet:
+                try:
+                    nutrition_profile = NutritionProfile.objects.get(user=request.user)
+                    if nutrition_profile.dietary_preferences:
+                        diet = nutrition_profile.dietary_preferences[0]  # Use first preference
+                except NutritionProfile.DoesNotExist:
+                    pass
+
+            # Search Spoonacular
+            spoonacular_data = self.spoonacular_service.search_recipes(
+                query=search_query,
+                cuisine=cuisine,
+                diet=diet,
+                number=min(number, 20)  # Limit to 20 recipes
+            )
+
+            # Format the response to match our Recipe model structure
+            recipes = []
+            if 'results' in spoonacular_data:
+                for recipe_data in spoonacular_data['results']:
+                    formatted_recipe = self._format_spoonacular_recipe(recipe_data)
+                    recipes.append(formatted_recipe)
+
+            return Response({
+                'count': len(recipes),
+                'results': recipes,
+                'source': 'spoonacular'
+            })
+
+        except SpoonacularAPIError as e:
+            logger.error(f"Spoonacular API error: {str(e)}")
+            return Response(
+                {'error': 'Failed to fetch recipes from external API', 'details': str(e)},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE
+            )
+        except Exception as e:
+            logger.error(f"Error fetching from Spoonacular: {str(e)}")
+            return Response(
+                {'error': 'Failed to fetch recipes', 'details': str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    def _format_spoonacular_recipe(self, recipe_data):
+        """Format Spoonacular recipe data to match our Recipe model"""
+        return {
+            'id': recipe_data.get('id'),
+            'title': recipe_data.get('title', ''),
+            'description': recipe_data.get('summary', ''),
+            'prep_time_minutes': recipe_data.get('readyInMinutes', 30),
+            'cook_time_minutes': recipe_data.get('cookingMinutes', 0),
+            'servings': recipe_data.get('servings', 4),
+            'calories_per_serving': recipe_data.get('nutrition', {}).get('nutrients', [{}])[0].get('amount', 0) if recipe_data.get('nutrition') else 0,
+            'protein_per_serving': self._get_nutrient_amount(recipe_data, 'Protein'),
+            'carb_per_serving': self._get_nutrient_amount(recipe_data, 'Carbohydrates'),
+            'fat_per_serving': self._get_nutrient_amount(recipe_data, 'Fat'),
+            'instructions': recipe_data.get('instructions', ''),
+            'image_url': recipe_data.get('image', ''),
+            'source_url': recipe_data.get('sourceUrl', ''),
+            'cuisine': recipe_data.get('cuisines', [''])[0] if recipe_data.get('cuisines') else '',
+            'dietary_tags': recipe_data.get('diets', []),
+            'allergens': recipe_data.get('allergens', []),
+            'rating_avg': recipe_data.get('spoonacularScore', 0) / 20 if recipe_data.get('spoonacularScore') else 0,  # Convert to 5-star scale
+            'difficulty_level': 'medium',  # Default since Spoonacular doesn't provide this
+            'meal_type': self._determine_meal_type(recipe_data),
+            'created_at': None,  # This is from Spoonacular, not our DB
+            'source': 'spoonacular'
+        }
+
+    def _get_nutrient_amount(self, recipe_data, nutrient_name):
+        """Extract specific nutrient amount from Spoonacular nutrition data"""
+        if not recipe_data.get('nutrition', {}).get('nutrients'):
+            return 0
+        
+        for nutrient in recipe_data['nutrition']['nutrients']:
+            if nutrient.get('name') == nutrient_name:
+                return nutrient.get('amount', 0)
+        return 0
+
+    def _determine_meal_type(self, recipe_data):
+        """Determine meal type from Spoonacular recipe data"""
+        dish_types = recipe_data.get('dishTypes', [])
+        if any(meal in dish_types for meal in ['breakfast', 'brunch']):
+            return 'breakfast'
+        elif any(meal in dish_types for meal in ['lunch', 'main course', 'dinner']):
+            return 'lunch'
+        elif any(meal in dish_types for meal in ['dessert', 'snack']):
+            return 'snack'
+        else:
+            return 'lunch'  # Default
+
     @action(detail=False, methods=['post'])
     def search(self, request):
         """Advanced recipe search with nutritional filters"""
         data = request.data
-        queryset = Recipe.objects.all()
+        
+        # Try Spoonacular search first for better results
+        try:
+            search_query = data.get('query', '')
+            cuisine = data.get('cuisine', '')
+            diet = ','.join(data.get('dietary_preferences', []))
+            intolerances = ','.join(data.get('allergies_to_avoid', []))
+            number = data.get('number', 10)
 
-        # Apply filters from search data
-        if data.get('dietary_preferences'):
-            for pref in data['dietary_preferences']:
-                queryset = queryset.filter(dietary_tags__contains=[pref])
+            spoonacular_data = self.spoonacular_service.search_recipes(
+                query=search_query,
+                cuisine=cuisine,
+                diet=diet,
+                intolerances=intolerances,
+                number=number
+            )
 
-        if data.get('allergies_to_avoid'):
-            # Filter out recipes containing allergens
-            for allergen in data['allergies_to_avoid']:
-                queryset = queryset.exclude(allergens__contains=[allergen])
+            # Format the response
+            recipes = []
+            if 'results' in spoonacular_data:
+                for recipe_data in spoonacular_data['results']:
+                    formatted_recipe = self._format_spoonacular_recipe(recipe_data)
+                    recipes.append(formatted_recipe)
 
-        if data.get('max_prep_time'):
-            queryset = queryset.filter(prep_time_minutes__lte=data['max_prep_time'])
+            return Response({
+                'count': len(recipes),
+                'results': recipes,
+                'source': 'spoonacular'
+            })
 
-        if data.get('cuisine_preferences'):
-            queryset = queryset.filter(cuisine__in=data['cuisine_preferences'])
+        except SpoonacularAPIError as e:
+            logger.warning(f"Spoonacular search failed, falling back to database: {str(e)}")
+            
+            # Fall back to database search
+            queryset = Recipe.objects.all()
 
-        page = self.paginate_queryset(queryset)
-        if page is not None:
-            serializer = self.get_serializer(page, many=True)
-            return self.get_paginated_response(serializer.data)
+            # Apply filters from search data
+            if data.get('dietary_preferences'):
+                for pref in data['dietary_preferences']:
+                    queryset = queryset.filter(dietary_tags__contains=[pref])
 
-        serializer = self.get_serializer(queryset, many=True)
-        return Response(serializer.data)
+            if data.get('allergies_to_avoid'):
+                # Filter out recipes containing allergens
+                for allergen in data['allergies_to_avoid']:
+                    queryset = queryset.exclude(allergens__contains=[allergen])
+
+            if data.get('max_prep_time'):
+                queryset = queryset.filter(prep_time_minutes__lte=data['max_prep_time'])
+
+            if data.get('cuisine_preferences'):
+                queryset = queryset.filter(cuisine__in=data['cuisine_preferences'])
+
+            page = self.paginate_queryset(queryset)
+            if page is not None:
+                serializer = self.get_serializer(page, many=True)
+                return self.get_paginated_response(serializer.data)
+
+            serializer = self.get_serializer(queryset, many=True)
+            return Response(serializer.data)
+
+    @action(detail=False, methods=['post'])
+    def save_recipe(self, request):
+        """Save a Spoonacular recipe to the database"""
+        try:
+            recipe_data = request.data
+            spoonacular_id = recipe_data.get('id')
+            
+            if not spoonacular_id:
+                return Response(
+                    {'error': 'Recipe ID is required'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            # Check if recipe already exists
+            existing_recipe = Recipe.objects.filter(spoonacular_id=spoonacular_id).first()
+            if existing_recipe:
+                serializer = self.get_serializer(existing_recipe)
+                return Response(serializer.data)
+
+            # Get detailed recipe information from Spoonacular
+            detailed_recipe = self.spoonacular_service.get_recipe_information(spoonacular_id)
+            
+            # Create Recipe object
+            recipe = Recipe.objects.create(
+                spoonacular_id=spoonacular_id,
+                title=detailed_recipe.get('title', ''),
+                description=detailed_recipe.get('summary', ''),
+                prep_time_minutes=detailed_recipe.get('preparationMinutes', 15),
+                cook_time_minutes=detailed_recipe.get('cookingMinutes', 30),
+                servings=detailed_recipe.get('servings', 4),
+                instructions=detailed_recipe.get('instructions', ''),
+                image_url=detailed_recipe.get('image', ''),
+                source_url=detailed_recipe.get('sourceUrl', ''),
+                cuisine=detailed_recipe.get('cuisines', [''])[0] if detailed_recipe.get('cuisines') else '',
+                dietary_tags=detailed_recipe.get('diets', []),
+                allergens=detailed_recipe.get('allergens', []),
+                difficulty_level='medium'
+            )
+
+            # Add nutrition information
+            nutrition = detailed_recipe.get('nutrition', {})
+            if nutrition:
+                nutrients = nutrition.get('nutrients', [])
+                for nutrient in nutrients:
+                    name = nutrient.get('name', '')
+                    amount = nutrient.get('amount', 0)
+                    
+                    if name == 'Calories':
+                        recipe.calories_per_serving = amount
+                    elif name == 'Protein':
+                        recipe.protein_per_serving = amount
+                    elif name == 'Carbohydrates':
+                        recipe.carb_per_serving = amount
+                    elif name == 'Fat':
+                        recipe.fat_per_serving = amount
+
+            recipe.save()
+
+            # Create ingredients
+            for ingredient_data in detailed_recipe.get('extendedIngredients', []):
+                ingredient, created = Ingredient.objects.get_or_create(
+                    name=ingredient_data.get('name', ''),
+                    defaults={
+                        'spoonacular_id': ingredient_data.get('id'),
+                        'category': 'other'
+                    }
+                )
+                # You might want to create a through model for recipe-ingredient relationships
+
+            serializer = self.get_serializer(recipe)
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+        except Exception as e:
+            logger.error(f"Error saving recipe: {str(e)}")
+            return Response(
+                {'error': 'Failed to save recipe', 'details': str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
     @action(detail=True, methods=['post'])
     def rate(self, request, pk=None):

@@ -286,6 +286,10 @@ class Recipe(models.Model):
     # Recipe content
     ingredients_data = models.JSONField(help_text="List of ingredients with quantities in grams/ml")
     instructions = models.JSONField(help_text="Step-by-step cooking instructions")
+    
+    # Images and URLs
+    image_url = models.URLField(blank=True, null=True)  # For Spoonacular images
+    source_url = models.URLField(blank=True, null=True)  # Original recipe source
 
     # Nutritional information (calculated from ingredients)
     calories_per_serving = models.FloatField()
