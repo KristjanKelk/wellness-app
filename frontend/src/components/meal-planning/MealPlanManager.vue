@@ -346,6 +346,9 @@ export default {
         this.updateGenerationStep('strategy', true)
 
         const response = await mealPlanningApi.generateMealPlan(planData)
+        
+        // Update status to show recipe saving
+        this.updateGenerationStep('recipes', true)
 
         // Mark all steps as completed
         this.generationStatus.steps.forEach(step => {
@@ -358,7 +361,7 @@ export default {
           type: 'success',
           icon: 'fas fa-check-circle',
           title: 'Meal Plan Generated Successfully!',
-          message: 'Your personalized AI meal plan is ready to view.'
+          message: 'Your personalized AI meal plan is ready to view. All recipes have been saved to your recipe library.'
         }
 
         // Add to meal plans list
@@ -463,10 +466,11 @@ export default {
           type: 'success',
           icon: 'fas fa-check-circle',
           title: 'New Meal Plan Generated!',
-          message: 'Your fresh AI meal plan is ready.'
+          message: 'Your fresh AI meal plan is ready. New recipes have been added to your library.'
         }
 
         this.showSuccess('New AI meal plan generated!')
+        this.$emit('meal-plan-generated', response.data)
 
         setTimeout(() => {
           this.generationStatus = null

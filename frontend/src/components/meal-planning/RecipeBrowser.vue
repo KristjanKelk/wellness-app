@@ -3,6 +3,14 @@
   <div class="recipe-browser">
     <!-- Search and Filters -->
     <div class="search-section">
+      <div class="search-header">
+        <h3>Recipe Library</h3>
+        <button @click="$emit('refresh-recipes')" class="refresh-btn" :disabled="loading">
+          <i :class="loading ? 'fas fa-spinner fa-spin' : 'fas fa-sync-alt'"></i>
+          Refresh
+        </button>
+      </div>
+      
       <div class="search-bar">
         <i class="fas fa-search search-icon"></i>
         <input
@@ -39,9 +47,14 @@
     </div>
 
     <div v-else-if="filteredRecipes.length === 0" class="empty-state">
-      <i class="fas fa-search"></i>
+      <i class="fas fa-utensils"></i>
       <h3>No recipes found</h3>
-      <p>Try adjusting your search or filters</p>
+      <p v-if="recipes.length === 0">
+        Generate your first meal plan to populate your recipe library with personalized recipes!
+        <br><br>
+        <strong>💡 Tip:</strong> Go to the "Meal Plans" tab to create an AI-powered meal plan.
+      </p>
+      <p v-else>Try adjusting your search or filters</p>
     </div>
 
     <div v-else class="recipe-grid">
@@ -129,7 +142,7 @@ export default {
       default: false
     }
   },
-  emits: ['recipe-selected'],
+  emits: ['recipe-selected', 'refresh-recipes'],
   data() {
     return {
       searchQuery: '',
@@ -211,6 +224,49 @@ export default {
 
 .search-section {
   margin-bottom: $spacing-6;
+}
+
+.search-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: $spacing-4;
+
+  h3 {
+    margin: 0;
+    color: $primary-dark;
+    font-size: 1.5rem;
+    font-weight: 600;
+  }
+}
+
+.refresh-btn {
+  display: flex;
+  align-items: center;
+  gap: $spacing-2;
+  padding: 8px 16px;
+  background: $primary;
+  color: $white;
+  border: none;
+  border-radius: $border-radius;
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+
+  &:hover:not(:disabled) {
+    background: $primary-dark;
+    transform: translateY(-1px);
+  }
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+
+  i {
+    font-size: 0.85rem;
+  }
 }
 
 .search-bar {

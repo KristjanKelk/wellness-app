@@ -42,10 +42,10 @@ class AIEnhancedMealService:
                 nutrition_profile, days
             )
             
-            # Step 2: Normalize the data
+            # Step 2: Normalize the data and save recipes to database
             time_frame = "week" if days > 1 else "day"
             normalized_plan = self.spoonacular_service.normalize_meal_plan_data(
-                spoonacular_meal_plan, time_frame
+                spoonacular_meal_plan, time_frame, nutrition_profile.user
             )
             
             # Step 3: Enhance with AI analysis

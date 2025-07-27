@@ -26,6 +26,7 @@
             :recipes="recipes"
             :loading="recipesLoading"
             @recipe-selected="selectRecipe"
+            @refresh-recipes="loadRecipes"
           />
         </div>
 
@@ -127,8 +128,14 @@ export default {
     async loadRecipes() {
       this.recipesLoading = true
       try {
-        const response = await mealPlanningApi.getRecipes()
+        // Add cache busting parameter to ensure fresh data
+        const params = {
+          _t: Date.now(),
+          page_size: 50  // Load more recipes by default
+        }
+        const response = await mealPlanningApi.getRecipes(params)
         this.recipes = response.data.results || response.data || []
+        console.log(`Loaded ${this.recipes.length} recipes`)
       } catch (error) {
         console.error('Failed to load recipes:', error)
         // Show user-friendly error
@@ -189,11 +196,23 @@ export default {
       this.selectedRecipe = null
     },
 
-    onMealPlanGenerated(mealPlan) {
+    async onMealPlanGenerated(mealPlan) {
       console.log('New meal plan generated:', mealPlan)
-      // Handle the new meal plan - could show success message, refresh data, etc.
-      this.$toast?.success?.('Meal plan generated successfully!') ||
-      alert('Meal plan generated successfully!')
+      
+      // Show success message
+      this.$toast?.success?.('Meal plan generated successfully! New recipes have been added to your library.') ||
+      alert('Meal plan generated successfully! New recipes have been added to your library.')
+      
+      // Reload recipes since new recipes might have been saved from the meal plan
+      await this.loadRecipes()
+      
+      // If we're on the recipes tab, highlight that new recipes were added
+      if (this.activeTab === 'recipes') {
+        // Add a temporary highlight or show a notification
+        this.$nextTick(() => {
+          console.log('Recipes refreshed after meal plan generation')
+        })
+      }
     }
   }
 }
