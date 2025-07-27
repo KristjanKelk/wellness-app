@@ -41,7 +41,15 @@
     <div v-else-if="filteredRecipes.length === 0" class="empty-state">
       <i class="fas fa-search"></i>
       <h3>No recipes found</h3>
-      <p>Try adjusting your search or filters</p>
+      <p>We'll find personalized recipes based on your nutrition profile</p>
+      <button 
+        @click="refreshRecommendations" 
+        class="btn btn-primary"
+        :disabled="refreshing"
+      >
+        <i :class="refreshing ? 'fas fa-spinner fa-spin' : 'fas fa-magic'"></i>
+        {{ refreshing ? 'Finding Recipes...' : 'Get Personalized Recipes' }}
+      </button>
     </div>
 
     <div v-else class="recipe-grid">
@@ -129,13 +137,14 @@ export default {
       default: false
     }
   },
-  emits: ['recipe-selected'],
+  emits: ['recipe-selected', 'refresh-recipes'],
   data() {
     return {
       searchQuery: '',
       selectedCuisine: '',
       selectedMealType: '',
-      filteredRecipes: []
+      filteredRecipes: [],
+      refreshing: false
     }
   },
   computed: {
@@ -196,6 +205,38 @@ export default {
 
     handleImageError(event) {
       event.target.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzAwIiBoZWlnaHQ9IjIwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KICA8cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjZjBmMGYwIi8+CiAgPHRleHQgeD0iNTAlIiB5PSI1MCUiIGZvbnQtZmFtaWx5PSJBcmlhbCwgc2Fucy1zZXJpZiIgZm9udC1zaXplPSIxOCIgZmlsbD0iIzk5OTk5OSIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZHk9Ii4zZW0iPkZvb2QgUmVjaXBlPC90ZXh0Pgo8L3N2Zz4K'
+    },
+
+    async refreshRecommendations() {
+      if (this.refreshing) return
+      
+      this.refreshing = true
+      try {
+        const { mealPlanningApi } = await import('@/services/mealPlanningApi')
+        await mealPlanningApi.refreshRecipeRecommendations()
+        
+        // Emit event to parent to reload recipes
+        this.$emit('refresh-recipes')
+        
+        // Show success message
+        if (this.$toast?.success) {
+          this.$toast.success('Found personalized recipes for you!')
+        } else {
+          alert('Found personalized recipes for you!')
+        }
+        
+      } catch (error) {
+        console.error('Failed to refresh recommendations:', error)
+        
+        // Show error message
+        if (this.$toast?.error) {
+          this.$toast.error('Failed to load recipes. Please try again.')
+        } else {
+          alert('Failed to load recipes. Please try again.')
+        }
+      } finally {
+        this.refreshing = false
+      }
     }
   }
 }

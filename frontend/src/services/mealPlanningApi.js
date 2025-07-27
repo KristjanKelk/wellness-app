@@ -110,6 +110,10 @@ export const mealPlanningApi = {
     return api.post(`/recipes/${recipeId}/rate/`, { rating, review })
   },
 
+  refreshRecipeRecommendations() {
+    return api.post('/recipes/refresh_recommendations/')
+  },
+
   // Enhanced recipe methods for AI features (with fallbacks)
   async generateRecipe(recipeParams) {
     try {

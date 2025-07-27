@@ -26,6 +26,7 @@
             :recipes="recipes"
             :loading="recipesLoading"
             @recipe-selected="selectRecipe"
+            @refresh-recipes="loadRecipes"
           />
         </div>
 

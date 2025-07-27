@@ -275,6 +275,107 @@ class RecipeViewSet(viewsets.ReadOnlyModelViewSet):
 
         return queryset.order_by('-rating_avg', '-created_at')
 
+    def list(self, request, *args, **kwargs):
+        """Enhanced list method that populates recipes from Spoonacular if needed"""
+        queryset = self.filter_queryset(self.get_queryset())
+        
+        # If we have very few recipes (less than 10), populate from Spoonacular
+        if queryset.count() < 10:
+            try:
+                self._populate_recipes_from_spoonacular()
+                # Re-fetch the queryset after population
+                queryset = self.filter_queryset(self.get_queryset())
+            except Exception as e:
+                logger.warning(f"Failed to populate recipes from Spoonacular: {e}")
+
+        page = self.paginate_queryset(queryset)
+        if page is not None:
+            serializer = self.get_serializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+
+        serializer = self.get_serializer(queryset, many=True)
+        return Response(serializer.data)
+
+    def _populate_recipes_from_spoonacular(self):
+        """Populate recipe database with recipes from Spoonacular based on user preferences"""
+        try:
+            # Get user's nutrition profile for preferences
+            nutrition_profile = None
+            try:
+                nutrition_profile = NutritionProfile.objects.get(user=self.request.user)
+            except NutritionProfile.DoesNotExist:
+                pass
+
+            # Build search preferences
+            preferences = {
+                'dietary_preferences': nutrition_profile.dietary_preferences if nutrition_profile else [],
+                'allergies_intolerances': nutrition_profile.allergies_intolerances if nutrition_profile else [],
+                'cuisine_preferences': nutrition_profile.cuisine_preferences if nutrition_profile else [],
+            }
+
+            # Import recipes from Spoonacular
+            from .services.spoonacular_service import search_recipes_by_dietary_preferences
+            
+            logger.info(f"Populating recipes for user {self.request.user.username} with preferences: {preferences}")
+            
+            # If user has no specific preferences, get a variety of popular recipes
+            if not any(preferences.values()):
+                recipes_data = self._get_default_recipe_variety()
+            else:
+                recipes_data = search_recipes_by_dietary_preferences(preferences)
+
+            # Create Recipe objects
+            created_count = 0
+            for recipe_data in recipes_data:
+                if recipe_data.get('spoonacular_id'):
+                    # Check if recipe already exists
+                    if not Recipe.objects.filter(spoonacular_id=recipe_data['spoonacular_id']).exists():
+                        try:
+                            Recipe.objects.create(**recipe_data)
+                            created_count += 1
+                        except Exception as e:
+                            logger.warning(f"Failed to create recipe {recipe_data.get('title')}: {e}")
+
+            logger.info(f"Created {created_count} new recipes from Spoonacular")
+
+        except Exception as e:
+            logger.error(f"Failed to populate recipes: {e}")
+
+    def _get_default_recipe_variety(self):
+        """Get a variety of popular recipes when user has no preferences"""
+        from .services.spoonacular_service import get_spoonacular_service
+        
+        service = get_spoonacular_service()
+        all_recipes = []
+        
+        try:
+            # Get popular recipes from different categories
+            categories = [
+                {'cuisine': 'italian', 'number': 5},
+                {'cuisine': 'mexican', 'number': 5},
+                {'cuisine': 'asian', 'number': 5},
+                {'diet': 'vegetarian', 'number': 5},
+                {'query': 'quick easy', 'number': 5},
+                {'query': 'healthy', 'number': 5},
+            ]
+            
+            for category in categories:
+                try:
+                    results = service.search_recipes(**category)
+                    for recipe in results.get('results', []):
+                        try:
+                            normalized = service.normalize_recipe_data(recipe)
+                            all_recipes.append(normalized)
+                        except Exception as e:
+                            logger.warning(f"Failed to normalize recipe: {e}")
+                except Exception as e:
+                    logger.warning(f"Failed to fetch category {category}: {e}")
+                    
+        except Exception as e:
+            logger.error(f"Failed to get default recipes: {e}")
+            
+        return all_recipes
+
     @action(detail=False, methods=['post'])
     def search(self, request):
         """Advanced recipe search with nutritional filters"""
@@ -304,6 +405,29 @@ class RecipeViewSet(viewsets.ReadOnlyModelViewSet):
 
         serializer = self.get_serializer(queryset, many=True)
         return Response(serializer.data)
+
+    @action(detail=False, methods=['post'])
+    def refresh_recommendations(self, request):
+        """Refresh recipe recommendations based on current nutrition profile"""
+        try:
+            self._populate_recipes_from_spoonacular()
+            
+            # Return fresh recipes
+            queryset = self.filter_queryset(self.get_queryset())[:20]  # Limit to 20 fresh recipes
+            serializer = self.get_serializer(queryset, many=True)
+            
+            return Response({
+                'message': 'Recipe recommendations refreshed successfully',
+                'count': queryset.count(),
+                'recipes': serializer.data
+            })
+            
+        except Exception as e:
+            logger.error(f"Failed to refresh recommendations: {e}")
+            return Response(
+                {'error': 'Failed to refresh recipe recommendations', 'details': str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
     @action(detail=True, methods=['post'])
     def rate(self, request, pk=None):
