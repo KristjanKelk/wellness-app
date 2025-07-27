@@ -68,7 +68,7 @@ class ResilientThrottleMixin:
 
             return self.throttle_success()
             
-        except (redis.exceptions.TimeoutError, redis.exceptions.ConnectionError) as e:
+        except (redis.exceptions.TimeoutError, redis.exceptions.ConnectionError, TypeError) as e:
             logger.warning(f"Redis throttling failed, using fallback: {e}")
             return self._fallback_allow_request(request, view)
         except Exception as e:
