@@ -224,14 +224,12 @@ if REDIS_URL:
     CACHE_LOCATION = REDIS_URL.rsplit("/", 1)[0] + "/1"
     
     # Redis connection options with better timeout handling
+    # Note: Simplified for compatibility with current django-redis version
     REDIS_CONNECTION_OPTIONS = {
-        "connection_pool_kwargs": {
-            "socket_connect_timeout": 5,
-            "socket_timeout": 5,
-            "retry_on_timeout": True,
-            "health_check_interval": 30,
-            "max_connections": 10,
-        }
+        "socket_connect_timeout": 5,
+        "socket_timeout": 5,
+        "retry_on_timeout": True,
+        "health_check_interval": 30,
     }
 else:
     CELERY_BROKER_URL = None
