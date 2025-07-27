@@ -10,6 +10,7 @@ $gray-dark: #4a5568;
 $gray: #718096;
 $gray-light: #a0aec0;
 $gray-lighter: #e2e8f0;
+$gray-lightest: #f7fafc;
 $white: #ffffff;
 $black: #000000;
 $error: #e53e3e;
@@ -28,6 +29,7 @@ $info: #4299e1;
   --gray-color: #{$gray};
   --gray-light-color: #{$gray-light};
   --gray-lighter-color: #{$gray-lighter};
+  --gray-lightest-color: #{$gray-lightest};
   --white-color: #{$white};
   --error-color: #{$error};
   --success-color: #{$success};
@@ -70,9 +72,10 @@ $spacing-20: 5rem;
 // Border radius
 $border-radius-sm: 0.25rem;
 $border-radius: 0.375rem;
-$border-radius-lg: 0.5rem;
-$border-radius-xl: 0.75rem;
-$border-radius-2xl: 1rem;
+$border-radius-md: 0.5rem;
+$border-radius-lg: 0.75rem;
+$border-radius-xl: 1rem;
+$border-radius-2xl: 1.25rem;
 $border-radius-full: 9999px;
 
 // Shadows
