@@ -8,12 +8,22 @@ import logging
 
 # Only import OpenAI if we have the API key
 try:
-    from openai import OpenAI
-
-    client = OpenAI(api_key=getattr(settings, 'OPENAI_API_KEY', ''))
+    import openai
+    # Try new version first
+    try:
+        client = openai.OpenAI(api_key=getattr(settings, 'OPENAI_API_KEY', ''))
+        use_new_client = True
+    except AttributeError:
+        # Fall back to old version
+        openai.api_key = getattr(settings, 'OPENAI_API_KEY', '')
+        client = None
+        use_new_client = False
+    
     HAS_OPENAI = bool(getattr(settings, 'OPENAI_API_KEY', ''))
 except:
     HAS_OPENAI = False
+    use_new_client = False
+    client = None
     client = None
 
 from .models import HealthSummary, SummaryMetric
@@ -191,21 +201,40 @@ class HealthSummaryService:
         try:
             prompt = cls._build_safe_prompt(data, summary_type)
 
-            response = client.chat.completions.create(
-                model="gpt-3.5-turbo",
-                messages=[
-                    {
-                        "role": "system",
-                        "content": "You are a helpful wellness coach. Provide encouraging and actionable health advice."
-                    },
-                    {
-                        "role": "user",
-                        "content": prompt
-                    }
-                ],
-                max_tokens=500,
-                temperature=0.7
-            )
+            # Use compatible OpenAI call based on version
+            if use_new_client and client:
+                response = client.chat.completions.create(
+                    model="gpt-3.5-turbo",
+                    messages=[
+                        {
+                            "role": "system",
+                            "content": "You are a helpful wellness coach. Provide encouraging and actionable health advice."
+                        },
+                        {
+                            "role": "user",
+                            "content": prompt
+                        }
+                    ],
+                    max_tokens=500,
+                    temperature=0.7
+                )
+            else:
+                # Old version
+                response = openai.ChatCompletion.create(
+                    model="gpt-3.5-turbo",
+                    messages=[
+                        {
+                            "role": "system",
+                            "content": "You are a helpful wellness coach. Provide encouraging and actionable health advice."
+                        },
+                        {
+                            "role": "user",
+                            "content": prompt
+                        }
+                    ],
+                    max_tokens=500,
+                    temperature=0.7
+                )
 
             ai_text = response.choices[0].message.content
 

@@ -716,18 +716,30 @@ class MealPlanViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post'])
     def regenerate_meal(self, request, pk=None):
         """Regenerate a specific meal in the plan"""
-        meal_plan = self.get_object()
-        day = request.data.get('day')
-        meal_type = request.data.get('meal_type')
+        try:
+            meal_plan = self.get_object()
+            day = request.data.get('day')
+            meal_type = request.data.get('meal_type')
 
-        if not day or not meal_type:
+            if not day or not meal_type:
+                return Response(
+                    {'error': 'day and meal_type are required'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            # Use AI service to regenerate the meal
+            ai_service = AIMealPlanningService()
+            updated_meal_plan = ai_service.regenerate_meal(meal_plan, day, meal_type)
+
+            serializer = self.get_serializer(updated_meal_plan)
+            return Response(serializer.data)
+
+        except Exception as e:
+            logger.error(f"Error regenerating meal: {str(e)}")
             return Response(
-                {'error': 'day and meal_type are required'},
-                status=status.HTTP_400_BAD_REQUEST
+                {'error': 'Failed to regenerate meal', 'details': str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
-
-        # TODO: Implement AI meal regeneration
-        return Response({'message': 'Meal regenerated successfully'})
 
     @action(detail=True, methods=['get'])
     def analyze(self, request, pk=None):
@@ -772,37 +784,30 @@ class MealPlanViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post'])
     def get_alternatives(self, request, pk=None):
         """Get meal alternatives for a specific meal"""
-        meal_plan = self.get_object()
-        day = request.data.get('day')
-        meal_type = request.data.get('meal_type')
-        count = request.data.get('count', 3)
+        try:
+            meal_plan = self.get_object()
+            day = request.data.get('day')
+            meal_type = request.data.get('meal_type')
+            count = request.data.get('count', 3)
 
-        # Return mock alternatives for now
-        mock_alternatives = [
-            {
-                'name': 'Alternative Grilled Chicken Salad',
-                'calories': 380,
-                'protein': 32,
-                'carbs': 12,
-                'fat': 20
-            },
-            {
-                'name': 'Turkey and Avocado Wrap',
-                'calories': 420,
-                'protein': 28,
-                'carbs': 35,
-                'fat': 18
-            },
-            {
-                'name': 'Quinoa Buddha Bowl',
-                'calories': 395,
-                'protein': 25,
-                'carbs': 45,
-                'fat': 15
-            }
-        ]
+            if not day or not meal_type:
+                return Response(
+                    {'error': 'day and meal_type are required'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
 
-        return Response(mock_alternatives[:count])
+            # Use AI service to get alternatives
+            ai_service = AIMealPlanningService()
+            alternatives = ai_service.generate_recipe_alternatives(meal_plan, day, meal_type, count)
+
+            return Response(alternatives)
+
+        except Exception as e:
+            logger.error(f"Error getting meal alternatives: {str(e)}")
+            return Response(
+                {'error': 'Failed to get alternatives', 'details': str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
     @action(detail=True, methods=['post'])
     def generate_shopping_list(self, request, pk=None):
