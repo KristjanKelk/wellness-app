@@ -8,6 +8,7 @@ from django.db import transaction
 from django.db import models
 from .models import NutritionProfile, Recipe, Ingredient, MealPlan, UserRecipeRating, NutritionLog
 from .services.ai_meal_planning_service import AIMealPlanningService
+from .services.spoonacular_service import SpoonacularService, SpoonacularAPIError
 from .serializers import (
     NutritionProfileSerializer, RecipeSerializer, IngredientSerializer,
     MealPlanSerializer, UserRecipeRatingSerializer, NutritionLogSerializer
@@ -237,6 +238,199 @@ class NutritionProfileViewSet(viewsets.ModelViewSet):
             'carbs': round((calories * carb_ratio) / 4, 1),
             'fat': round((calories * fat_ratio) / 9, 1)
         }
+
+    @action(detail=False, methods=['post'])
+    def connect_spoonacular(self, request):
+        """Connect user to Spoonacular for personalized meal planning"""
+        try:
+            profile = self.get_object()
+            user = request.user
+            
+            # Check if user is already connected
+            if profile.spoonacular_username and profile.spoonacular_user_hash:
+                return Response({
+                    'message': 'User already connected to Spoonacular',
+                    'spoonacular_username': profile.spoonacular_username,
+                    'connected': True
+                })
+
+            # Connect to Spoonacular
+            spoonacular_service = SpoonacularService()
+            
+            connection_data = spoonacular_service.connect_user(
+                username=user.username,
+                first_name=user.first_name,
+                last_name=user.last_name,
+                email=user.email
+            )
+            
+            # Save Spoonacular credentials to profile
+            profile.spoonacular_username = connection_data.get('username')
+            profile.spoonacular_user_hash = connection_data.get('hash')
+            profile.save()
+            
+            logger.info(f"Successfully connected user {user.username} to Spoonacular")
+            
+            return Response({
+                'message': 'Successfully connected to Spoonacular',
+                'spoonacular_username': profile.spoonacular_username,
+                'connected': True,
+                'spoonacular_password': connection_data.get('spoonacularPassword')  # For user reference
+            })
+            
+        except SpoonacularAPIError as e:
+            logger.error(f"Spoonacular connection failed for user {request.user.username}: {str(e)}")
+            return Response(
+                {'error': 'Failed to connect to Spoonacular', 'details': str(e)},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        except Exception as e:
+            logger.error(f"Unexpected error connecting to Spoonacular: {str(e)}")
+            return Response(
+                {'error': 'Unexpected error occurred', 'details': str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    @action(detail=False, methods=['get'])
+    def spoonacular_status(self, request):
+        """Check if user is connected to Spoonacular"""
+        try:
+            profile = self.get_object()
+            connected = bool(profile.spoonacular_username and profile.spoonacular_user_hash)
+            
+            return Response({
+                'connected': connected,
+                'spoonacular_username': profile.spoonacular_username if connected else None
+            })
+            
+        except Exception as e:
+            logger.error(f"Error checking Spoonacular status: {str(e)}")
+            return Response(
+                {'error': 'Failed to check connection status'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    @action(detail=False, methods=['get'])
+    def spoonacular_meal_plan(self, request):
+        """Get user's Spoonacular meal plan for a week"""
+        try:
+            profile = self.get_object()
+            
+            if not profile.spoonacular_username or not profile.spoonacular_user_hash:
+                return Response(
+                    {'error': 'User not connected to Spoonacular. Please connect first.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Get start date from query params (default to current week)
+            from datetime import date, timedelta
+            start_date = request.query_params.get('start_date')
+            if not start_date:
+                today = date.today()
+                start_of_week = today - timedelta(days=today.weekday())
+                start_date = start_of_week.strftime('%Y-%m-%d')
+            
+            spoonacular_service = SpoonacularService()
+            meal_plan = spoonacular_service.get_meal_plan_week(
+                spoonacular_username=profile.spoonacular_username,
+                start_date=start_date,
+                user_hash=profile.spoonacular_user_hash
+            )
+            
+            return Response(meal_plan)
+            
+        except SpoonacularAPIError as e:
+            logger.error(f"Failed to get Spoonacular meal plan: {str(e)}")
+            return Response(
+                {'error': 'Failed to get meal plan', 'details': str(e)},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        except Exception as e:
+            logger.error(f"Unexpected error getting meal plan: {str(e)}")
+            return Response(
+                {'error': 'Unexpected error occurred'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    @action(detail=False, methods=['post'])
+    def add_to_spoonacular_meal_plan(self, request):
+        """Add item to user's Spoonacular meal plan"""
+        try:
+            profile = self.get_object()
+            
+            if not profile.spoonacular_username or not profile.spoonacular_user_hash:
+                return Response(
+                    {'error': 'User not connected to Spoonacular'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            data = request.data
+            required_fields = ['date', 'slot', 'position', 'type', 'value']
+            for field in required_fields:
+                if field not in data:
+                    return Response(
+                        {'error': f'Missing required field: {field}'},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+            
+            spoonacular_service = SpoonacularService()
+            result = spoonacular_service.add_to_meal_plan(
+                spoonacular_username=profile.spoonacular_username,
+                user_hash=profile.spoonacular_user_hash,
+                date=data['date'],
+                slot=data['slot'],
+                position=data['position'],
+                item_type=data['type'],
+                value=data['value']
+            )
+            
+            return Response(result)
+            
+        except SpoonacularAPIError as e:
+            logger.error(f"Failed to add to Spoonacular meal plan: {str(e)}")
+            return Response(
+                {'error': 'Failed to add to meal plan', 'details': str(e)},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        except Exception as e:
+            logger.error(f"Unexpected error adding to meal plan: {str(e)}")
+            return Response(
+                {'error': 'Unexpected error occurred'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    @action(detail=False, methods=['get'])
+    def spoonacular_shopping_list(self, request):
+        """Get user's Spoonacular shopping list"""
+        try:
+            profile = self.get_object()
+            
+            if not profile.spoonacular_username or not profile.spoonacular_user_hash:
+                return Response(
+                    {'error': 'User not connected to Spoonacular'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            spoonacular_service = SpoonacularService()
+            shopping_list = spoonacular_service.get_shopping_list(
+                spoonacular_username=profile.spoonacular_username,
+                user_hash=profile.spoonacular_user_hash
+            )
+            
+            return Response(shopping_list)
+            
+        except SpoonacularAPIError as e:
+            logger.error(f"Failed to get Spoonacular shopping list: {str(e)}")
+            return Response(
+                {'error': 'Failed to get shopping list', 'details': str(e)},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        except Exception as e:
+            logger.error(f"Unexpected error getting shopping list: {str(e)}")
+            return Response(
+                {'error': 'Unexpected error occurred'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
 
 class RecipeViewSet(viewsets.ReadOnlyModelViewSet):

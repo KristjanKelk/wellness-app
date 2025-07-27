@@ -123,6 +123,7 @@ class NutritionProfile(models.Model):
                                             help_text="Advanced user preferences in JSON format")
 
     # Spoonacular integration fields
+    spoonacular_username = models.CharField(max_length=100, blank=True, null=True)
     spoonacular_user_hash = models.CharField(max_length=100, blank=True, null=True)
 
     # Metadata
