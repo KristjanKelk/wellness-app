@@ -117,8 +117,8 @@
                       <h5 class="meal-title">
                         {{ getMealTitle(meal) }}
                       </h5>
-                      <span class="meal-type-badge" :class="getMealTypeClass(meal.meal_type)">
-                        {{ formatMealType(meal.meal_type) }}
+                      <span class="meal-type-badge" :class="getMealTypeClass(meal.meal_type || 'meal')">
+                        {{ formatMealType(meal.meal_type || 'Meal') }}
                       </span>
                     </div>
                     <div class="meal-meta">
@@ -237,14 +237,14 @@
 
                   <div class="meal-actions">
                     <button
-                      @click="regenerateMeal(date, meal.meal_type)"
+                      @click="regenerateMeal(date, meal.meal_type || inferMealTypeFromTime(new Date()))"
                       class="btn btn-sm btn-outline"
                     >
                       <i class="fas fa-redo"></i>
                       Regenerate
                     </button>
                     <button
-                      @click="getAlternatives(date, meal.meal_type)"
+                      @click="getAlternatives(date, meal.meal_type || inferMealTypeFromTime(new Date()))"
                       class="btn btn-sm btn-secondary"
                     >
                       <i class="fas fa-exchange-alt"></i>
@@ -413,6 +413,14 @@ export default {
       return mealType
     },
 
+    inferMealTypeFromTime(date) {
+      const hour = date.getHours()
+      if (hour >= 5 && hour < 11) return 'breakfast'
+      if (hour >= 11 && hour < 16) return 'lunch'
+      if (hour >= 16 && hour < 22) return 'dinner'
+      return 'snack'
+    },
+
     getMealTime(meal) {
       console.log('getMealTime called for meal:', meal)
       
@@ -489,16 +497,54 @@ export default {
     },
 
     regenerateMeal(date, mealType) {
+      console.log('=== regenerateMeal called ===')
+      console.log('Date:', date)
+      console.log('MealType (raw):', mealType)
+      console.log('MealType type:', typeof mealType)
+      
+      // Ensure mealType is properly defined
+      if (!mealType || mealType === 'undefined' || mealType === 'null') {
+        console.error('Invalid mealType provided:', mealType)
+        // Try to infer from time or provide a fallback
+        const inferredMealType = this.inferMealTypeFromTime(new Date())
+        console.log('Using inferred meal type:', inferredMealType)
+        mealType = inferredMealType
+      }
+      
+      // Clean up the mealType string
+      const cleanMealType = String(mealType).toLowerCase().trim()
+      
+      console.log('Final cleaned mealType:', cleanMealType)
+      console.log('=============================')
+      
       this.$emit('regenerate-meal', {
         day: date,
-        mealType: mealType
+        mealType: cleanMealType
       })
     },
 
     getAlternatives(date, mealType) {
+      console.log('=== getAlternatives called ===')
+      console.log('Date:', date)
+      console.log('MealType (raw):', mealType)
+      
+      // Ensure mealType is properly defined
+      if (!mealType || mealType === 'undefined' || mealType === 'null') {
+        console.error('Invalid mealType provided for alternatives:', mealType)
+        const inferredMealType = this.inferMealTypeFromTime(new Date())
+        console.log('Using inferred meal type for alternatives:', inferredMealType)
+        mealType = inferredMealType
+      }
+      
+      // Clean up the mealType string
+      const cleanMealType = String(mealType).toLowerCase().trim()
+      
+      console.log('Final cleaned mealType for alternatives:', cleanMealType)
+      console.log('==================================')
+      
       this.$emit('get-alternatives', {
         day: date,
-        mealType: mealType
+        mealType: cleanMealType
       })
     },
 
