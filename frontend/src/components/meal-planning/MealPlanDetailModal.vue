@@ -4,6 +4,13 @@
     <div class="modal-content" @click.stop>
       <div class="modal-header">
         <h2>{{ formatPlanType(mealPlan.plan_type) }} Meal Plan</h2>
+        <div class="ai-generation-info">
+          <span class="ai-badge">
+            <i class="fas fa-brain"></i>
+            AI v{{ mealPlan.generation_version || '1.0' }}
+          </span>
+          <span class="model-badge">{{ mealPlan.ai_model_used || 'AI Model' }}</span>
+        </div>
         <button @click="$emit('close')" class="close-btn">
           <i class="fas fa-times"></i>
         </button>
@@ -17,7 +24,11 @@
               <span class="stat-value">{{ formatDateRange(mealPlan.start_date, mealPlan.end_date) }}</span>
             </div>
             <div class="stat-item">
-              <span class="stat-label">Average Daily Calories:</span>
+              <span class="stat-label">Total Calories:</span>
+              <span class="stat-value">{{ Math.round(mealPlan.total_calories || 0) }}</span>
+            </div>
+            <div class="stat-item">
+              <span class="stat-label">Avg Daily Calories:</span>
               <span class="stat-value">{{ Math.round(mealPlan.avg_daily_calories || 0) }}</span>
             </div>
             <div class="stat-item">
@@ -28,11 +39,66 @@
               <span class="stat-label">Balance Score:</span>
               <span class="stat-value">{{ mealPlan.nutritional_balance_score.toFixed(1) }}/10</span>
             </div>
+            <div class="stat-item" v-if="mealPlan.days_count">
+              <span class="stat-label">Days:</span>
+              <span class="stat-value">{{ mealPlan.days_count }}</span>
+            </div>
+          </div>
+
+          <!-- Daily Nutritional Averages -->
+          <div class="nutrition-overview" v-if="mealPlan.daily_averages">
+            <h4>Daily Nutritional Averages</h4>
+            <div class="nutrition-grid">
+              <div class="nutrition-item">
+                <span class="nutrition-label">Protein:</span>
+                <span class="nutrition-value">{{ Math.round(mealPlan.daily_averages.protein || 0) }}g</span>
+              </div>
+              <div class="nutrition-item">
+                <span class="nutrition-label">Carbohydrates:</span>
+                <span class="nutrition-value">{{ Math.round(mealPlan.daily_averages.carbs || 0) }}g</span>
+              </div>
+              <div class="nutrition-item">
+                <span class="nutrition-label">Fat:</span>
+                <span class="nutrition-value">{{ Math.round(mealPlan.daily_averages.fat || 0) }}g</span>
+              </div>
+              <div class="nutrition-item">
+                <span class="nutrition-label">Calories:</span>
+                <span class="nutrition-value">{{ Math.round(mealPlan.daily_averages.calories || 0) }}</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Quality Scores -->
+          <div class="quality-scores" v-if="mealPlan.variety_score || mealPlan.preference_match_score">
+            <h4>Plan Quality Metrics</h4>
+            <div class="scores-grid">
+              <div class="score-item" v-if="mealPlan.nutritional_balance_score">
+                <span class="score-label">Nutritional Balance:</span>
+                <div class="score-bar">
+                  <div class="score-fill" :style="{ width: (mealPlan.nutritional_balance_score * 10) + '%' }"></div>
+                </div>
+                <span class="score-value">{{ mealPlan.nutritional_balance_score.toFixed(1) }}/10</span>
+              </div>
+              <div class="score-item" v-if="mealPlan.variety_score">
+                <span class="score-label">Variety Score:</span>
+                <div class="score-bar">
+                  <div class="score-fill" :style="{ width: (mealPlan.variety_score * 10) + '%' }"></div>
+                </div>
+                <span class="score-value">{{ mealPlan.variety_score.toFixed(1) }}/10</span>
+              </div>
+              <div class="score-item" v-if="mealPlan.preference_match_score">
+                <span class="score-label">Preference Match:</span>
+                <div class="score-bar">
+                  <div class="score-fill" :style="{ width: (mealPlan.preference_match_score * 10) + '%' }"></div>
+                </div>
+                <span class="score-value">{{ mealPlan.preference_match_score.toFixed(1) }}/10</span>
+              </div>
+            </div>
           </div>
         </div>
 
         <div class="meals-section" v-if="mealPlan.meal_plan_data && mealPlan.meal_plan_data.meals">
-          <h3>Meal Details</h3>
+          <h3>Detailed Meal Plan</h3>
           <div class="meals-grid">
             <div
               v-for="(dayMeals, date) in mealPlan.meal_plan_data.meals"
@@ -47,24 +113,125 @@
                   class="meal-card"
                 >
                   <div class="meal-header">
-                    <h5 class="meal-title">
-                      {{ meal.recipe?.title || `${formatMealType(meal.meal_type)}` }}
-                    </h5>
-                    <span class="meal-time">{{ meal.time || '12:00' }}</span>
+                    <div class="meal-title-section">
+                      <h5 class="meal-title">
+                        {{ meal.recipe?.title || `${formatMealType(meal.meal_type)}` }}
+                      </h5>
+                      <span class="meal-type-badge" :class="meal.meal_type">
+                        {{ formatMealType(meal.meal_type || 'meal') }}
+                      </span>
+                    </div>
+                    <div class="meal-meta">
+                      <span class="meal-time">
+                        <i class="fas fa-clock"></i>
+                        {{ meal.time || '12:00' }}
+                      </span>
+                      <span class="meal-cuisine" v-if="meal.recipe?.cuisine">
+                        <i class="fas fa-globe"></i>
+                        {{ meal.recipe.cuisine }}
+                      </span>
+                    </div>
                   </div>
 
-                  <div class="meal-nutrition" v-if="meal.recipe?.nutrition || meal.recipe?.estimated_nutrition">
-                    <div class="nutrition-item">
-                      <span>Calories: {{ (meal.recipe.nutrition?.calories || meal.recipe.estimated_nutrition?.calories || 0) }}</span>
+                  <!-- Recipe Details -->
+                  <div class="recipe-details" v-if="meal.recipe">
+                    <!-- Cooking Information -->
+                    <div class="cooking-info" v-if="meal.recipe.prep_time || meal.recipe.cook_time || meal.recipe.total_time">
+                      <div class="time-info">
+                        <span v-if="meal.recipe.prep_time" class="time-item">
+                          <i class="fas fa-cut"></i>
+                          Prep: {{ meal.recipe.prep_time }}min
+                        </span>
+                        <span v-if="meal.recipe.cook_time" class="time-item">
+                          <i class="fas fa-fire"></i>
+                          Cook: {{ meal.recipe.cook_time }}min
+                        </span>
+                        <span v-if="meal.recipe.total_time" class="time-item">
+                          <i class="fas fa-hourglass-half"></i>
+                          Total: {{ meal.recipe.total_time }}min
+                        </span>
+                        <span v-if="meal.recipe.servings" class="time-item">
+                          <i class="fas fa-users"></i>
+                          Serves: {{ meal.recipe.servings }}
+                        </span>
+                      </div>
                     </div>
-                    <div class="nutrition-item">
-                      <span>Protein: {{ (meal.recipe.nutrition?.protein || meal.recipe.estimated_nutrition?.protein || 0) }}g</span>
+
+                    <!-- Nutritional Information -->
+                    <div class="meal-nutrition">
+                      <h6>Nutritional Information</h6>
+                      <div class="nutrition-details">
+                        <div class="nutrition-item">
+                          <span class="nutrition-label">Calories:</span>
+                          <span class="nutrition-value">{{ getNutritionValue(meal.recipe, 'calories') }}</span>
+                        </div>
+                        <div class="nutrition-item">
+                          <span class="nutrition-label">Protein:</span>
+                          <span class="nutrition-value">{{ getNutritionValue(meal.recipe, 'protein') }}g</span>
+                        </div>
+                        <div class="nutrition-item">
+                          <span class="nutrition-label">Carbs:</span>
+                          <span class="nutrition-value">{{ getNutritionValue(meal.recipe, 'carbs') }}g</span>
+                        </div>
+                        <div class="nutrition-item">
+                          <span class="nutrition-label">Fat:</span>
+                          <span class="nutrition-value">{{ getNutritionValue(meal.recipe, 'fat') }}g</span>
+                        </div>
+                      </div>
                     </div>
-                    <div class="nutrition-item">
-                      <span>Carbs: {{ (meal.recipe.nutrition?.carbs || meal.recipe.estimated_nutrition?.carbs || 0) }}g</span>
+
+                    <!-- Ingredients -->
+                    <div class="ingredients-section" v-if="meal.recipe.ingredients && meal.recipe.ingredients.length">
+                      <h6>Ingredients</h6>
+                      <div class="ingredients-list">
+                        <div 
+                          v-for="(ingredient, idx) in meal.recipe.ingredients" 
+                          :key="idx"
+                          class="ingredient-item"
+                        >
+                          <span class="ingredient-quantity">{{ ingredient.quantity }}</span>
+                          <span class="ingredient-unit">{{ ingredient.unit }}</span>
+                          <span class="ingredient-name">{{ ingredient.name }}</span>
+                        </div>
+                      </div>
                     </div>
-                    <div class="nutrition-item">
-                      <span>Fat: {{ (meal.recipe.nutrition?.fat || meal.recipe.estimated_nutrition?.fat || 0) }}g</span>
+
+                    <!-- Instructions -->
+                    <div class="instructions-section" v-if="meal.recipe.instructions && meal.recipe.instructions.length">
+                      <h6>Instructions</h6>
+                      <div class="instructions-list">
+                        <div 
+                          v-for="(instruction, idx) in meal.recipe.instructions" 
+                          :key="idx"
+                          class="instruction-item"
+                        >
+                          <span class="instruction-number">{{ idx + 1 }}</span>
+                          <span class="instruction-text">{{ instruction }}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <!-- Target Information -->
+                    <div class="target-info" v-if="meal.target_calories || meal.target_protein || meal.target_carbs || meal.target_fat">
+                      <h6>Meal Targets</h6>
+                      <div class="targets-grid">
+                        <div class="target-item" v-if="meal.target_calories">
+                          <span class="target-label">Target Calories:</span>
+                          <span class="target-value">{{ Math.round(meal.target_calories) }}</span>
+                        </div>
+                        <div class="target-item" v-if="meal.target_protein">
+                          <span class="target-label">Target Protein:</span>
+                          <span class="target-value">{{ Math.round(meal.target_protein) }}g</span>
+                        </div>
+                        <div class="target-item" v-if="meal.target_carbs">
+                          <span class="target-label">Target Carbs:</span>
+                          <span class="target-value">{{ Math.round(meal.target_carbs) }}g</span>
+                        </div>
+                        <div class="target-item" v-if="meal.target_fat">
+                          <span class="target-label">Target Fat:</span>
+                          <span class="target-value">{{ Math.round(meal.target_fat) }}g</span>
+                        </div>
+                      </div>
                     </div>
                   </div>
 
@@ -83,6 +250,13 @@
                       <i class="fas fa-exchange-alt"></i>
                       Alternatives
                     </button>
+                    <button
+                      @click="viewRecipeDetails(meal.recipe)"
+                      class="btn btn-sm btn-info"
+                    >
+                      <i class="fas fa-info-circle"></i>
+                      Recipe Details
+                    </button>
                   </div>
                 </div>
               </div>
@@ -98,9 +272,13 @@
 
       <div class="modal-footer">
         <button @click="$emit('close')" class="btn btn-secondary">Close</button>
-        <button @click="generateShoppingList" class="btn btn-primary">
+        <button @click="generateShoppingList" class="btn btn-success">
           <i class="fas fa-shopping-cart"></i>
           Generate Shopping List
+        </button>
+        <button @click="analyzePlan" class="btn btn-info">
+          <i class="fas fa-chart-line"></i>
+          AI Analysis
         </button>
       </div>
     </div>
@@ -116,13 +294,16 @@ export default {
       required: true
     }
   },
-  emits: ['close', 'regenerate-meal', 'get-alternatives'],
+  emits: ['close', 'regenerate-meal', 'get-alternatives', 'analyze-plan'],
   methods: {
     formatPlanType(type) {
+      if (!type) return 'Unknown'
       return type.charAt(0).toUpperCase() + type.slice(1)
     },
 
     formatDateRange(startDate, endDate) {
+      if (!startDate || !endDate) return 'Date unknown'
+      
       const start = new Date(startDate).toLocaleDateString()
       const end = new Date(endDate).toLocaleDateString()
 
@@ -133,14 +314,19 @@ export default {
     },
 
     formatDate(dateStr) {
-      return new Date(dateStr).toLocaleDateString('en-US', {
-        weekday: 'long',
-        month: 'short',
-        day: 'numeric'
-      })
+      try {
+        return new Date(dateStr).toLocaleDateString('en-US', {
+          weekday: 'long',
+          month: 'short',
+          day: 'numeric'
+        })
+      } catch (error) {
+        return dateStr
+      }
     },
 
     formatMealType(type) {
+      if (!type) return 'Meal'
       return type.charAt(0).toUpperCase() + type.slice(1)
     },
 
@@ -149,9 +335,44 @@ export default {
 
       let total = 0
       Object.values(this.mealPlan.meal_plan_data.meals).forEach(dayMeals => {
-        total += dayMeals.length
+        if (Array.isArray(dayMeals)) {
+          total += dayMeals.length
+        }
       })
       return total
+    },
+
+    // Helper method to get nutrition values from different possible structures
+    getNutritionValue(recipe, nutrient) {
+      if (!recipe) return 0
+      
+      // Try estimated_nutrition first (from your API response)
+      if (recipe.estimated_nutrition && recipe.estimated_nutrition[nutrient] !== undefined) {
+        return Math.round(recipe.estimated_nutrition[nutrient])
+      }
+      
+      // Fallback to nutrition object
+      if (recipe.nutrition && recipe.nutrition[nutrient] !== undefined) {
+        return Math.round(recipe.nutrition[nutrient])
+      }
+
+      // Try other common naming patterns
+      const nutrientMappings = {
+        'calories': ['calories_per_serving', 'kcal'],
+        'protein': ['protein_per_serving'],
+        'carbs': ['carbs_per_serving', 'carbohydrates'],
+        'fat': ['fat_per_serving', 'fats']
+      }
+
+      if (nutrientMappings[nutrient]) {
+        for (const mapping of nutrientMappings[nutrient]) {
+          if (recipe[mapping] !== undefined) {
+            return Math.round(recipe[mapping])
+          }
+        }
+      }
+      
+      return 0
     },
 
     regenerateMeal(date, mealType) {
@@ -168,9 +389,21 @@ export default {
       })
     },
 
+    viewRecipeDetails(recipe) {
+      // For now, just show an alert. In a full implementation, 
+      // this could open another modal or navigate to a recipe detail page
+      if (recipe) {
+        alert(`Recipe: ${recipe.title}\n\nThis feature will show full recipe details in a future update.`)
+      }
+    },
+
     generateShoppingList() {
       // TODO: Implement shopping list generation
       alert('Shopping list generation coming soon!')
+    },
+
+    analyzePlan() {
+      this.$emit('analyze-plan', this.mealPlan)
     }
   }
 }
@@ -207,7 +440,7 @@ $gray-lighter: #e9ecef;
 .modal-content {
   background: $white;
   border-radius: 16px;
-  max-width: 900px;
+  max-width: 1000px;
   width: 100%;
   max-height: 90vh;
   overflow-y: auto;
@@ -221,11 +454,43 @@ $gray-lighter: #e9ecef;
   padding: 24px 32px;
   border-bottom: 1px solid $gray-lighter;
   background: linear-gradient(135deg, rgba($primary, 0.05), rgba($primary, 0.02));
+  position: relative;
 
   h2 {
     margin: 0;
     font-size: 1.6rem;
     color: #333;
+  }
+
+  .ai-generation-info {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+
+    .ai-badge {
+      background: linear-gradient(135deg, #6f42c1, #8b5cf6);
+      color: white;
+      padding: 4px 8px;
+      border-radius: 6px;
+      font-size: 0.75rem;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      font-weight: 500;
+
+      i {
+        font-size: 0.7rem;
+      }
+    }
+
+    .model-badge {
+      background: linear-gradient(135deg, #17a2b8, #20c997);
+      color: white;
+      padding: 4px 8px;
+      border-radius: 6px;
+      font-size: 0.75rem;
+      font-weight: 500;
+    }
   }
 
   .close-btn {
@@ -258,8 +523,9 @@ $gray-lighter: #e9ecef;
 
 .overview-stats {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: 16px;
+  margin-bottom: 24px;
 }
 
 .stat-item {
@@ -281,6 +547,93 @@ $gray-lighter: #e9ecef;
     font-weight: 600;
     color: $dark;
     font-size: 1rem;
+  }
+}
+
+.nutrition-overview {
+  margin-bottom: 24px;
+
+  h4 {
+    margin: 0 0 16px 0;
+    font-size: 1.1rem;
+    color: $dark;
+    font-weight: 600;
+  }
+
+  .nutrition-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 12px;
+  }
+
+  .nutrition-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 12px;
+    background: rgba($success, 0.1);
+    border-radius: 6px;
+    font-size: 0.9rem;
+
+    .nutrition-label {
+      color: $gray;
+      font-weight: 500;
+    }
+
+    .nutrition-value {
+      color: $dark;
+      font-weight: 600;
+    }
+  }
+}
+
+.quality-scores {
+  h4 {
+    margin: 0 0 16px 0;
+    font-size: 1.1rem;
+    color: $dark;
+    font-weight: 600;
+  }
+
+  .scores-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .score-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+
+    .score-label {
+      font-size: 0.9rem;
+      color: $gray;
+      min-width: 140px;
+      font-weight: 500;
+    }
+
+    .score-bar {
+      flex: 1;
+      height: 8px;
+      background: $gray-lighter;
+      border-radius: 4px;
+      overflow: hidden;
+
+      .score-fill {
+        height: 100%;
+        background: linear-gradient(90deg, #28a745, #20c997);
+        transition: width 0.3s ease;
+      }
+    }
+
+    .score-value {
+      font-size: 0.9rem;
+      font-weight: 600;
+      color: $dark;
+      min-width: 40px;
+      text-align: right;
+    }
   }
 }
 
@@ -328,14 +681,14 @@ $gray-lighter: #e9ecef;
   padding: 16px;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 20px;
 }
 
 .meal-card {
   background: $white;
   border: 1px solid $gray-lighter;
-  border-radius: 8px;
-  padding: 16px;
+  border-radius: 12px;
+  padding: 20px;
   transition: all 0.2s ease;
 
   &:hover {
@@ -345,43 +698,219 @@ $gray-lighter: #e9ecef;
 }
 
 .meal-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 12px;
+  margin-bottom: 16px;
 
-  .meal-title {
-    margin: 0;
-    font-size: 1.1rem;
-    color: $dark;
-    font-weight: 600;
+  .meal-title-section {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+
+    .meal-title {
+      margin: 0;
+      font-size: 1.2rem;
+      color: $dark;
+      font-weight: 600;
+    }
+
+    .meal-type-badge {
+      padding: 4px 8px;
+      border-radius: 12px;
+      font-size: 0.75rem;
+      font-weight: 500;
+      text-transform: uppercase;
+      
+      &.breakfast {
+        background: rgba(#ffc107, 0.2);
+        color: #d39e00;
+      }
+      
+      &.lunch {
+        background: rgba(#28a745, 0.2);
+        color: #1e7e34;
+      }
+      
+      &.dinner {
+        background: rgba(#dc3545, 0.2);
+        color: #bd2130;
+      }
+      
+      &.snack {
+        background: rgba(#6f42c1, 0.2);
+        color: #59359a;
+      }
+    }
   }
 
-  .meal-time {
-    background: $light;
-    padding: 4px 12px;
-    border-radius: 16px;
-    font-size: 0.85rem;
-    color: $gray;
-    font-weight: 500;
+  .meal-meta {
+    display: flex;
+    gap: 16px;
+    align-items: center;
+
+    .meal-time, .meal-cuisine {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 0.85rem;
+      color: $gray;
+
+      i {
+        font-size: 0.8rem;
+      }
+    }
+  }
+}
+
+.recipe-details {
+  .cooking-info {
+    margin-bottom: 16px;
+    padding: 12px;
+    background: rgba($info, 0.05);
+    border-radius: 8px;
+
+    .time-info {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 16px;
+
+      .time-item {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        font-size: 0.85rem;
+        color: $gray;
+
+        i {
+          font-size: 0.8rem;
+          color: $info;
+        }
+      }
+    }
+  }
+
+  h6 {
+    margin: 0 0 8px 0;
+    font-size: 1rem;
+    color: $dark;
+    font-weight: 600;
   }
 }
 
 .meal-nutrition {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-  gap: 8px;
   margin-bottom: 16px;
   padding: 12px;
-  background: rgba($primary, 0.05);
-  border-radius: 6px;
+  background: rgba($success, 0.05);
+  border-radius: 8px;
 
-  .nutrition-item {
-    font-size: 0.85rem;
-    color: $gray;
+  .nutrition-details {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: 8px;
 
-    span {
-      font-weight: 500;
+    .nutrition-item {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.85rem;
+
+      .nutrition-label {
+        color: $gray;
+        font-weight: 500;
+      }
+
+      .nutrition-value {
+        color: $dark;
+        font-weight: 600;
+      }
+    }
+  }
+}
+
+.ingredients-section, .instructions-section {
+  margin-bottom: 16px;
+  padding: 12px;
+  background: rgba($warning, 0.05);
+  border-radius: 8px;
+
+  .ingredients-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 8px;
+
+    .ingredient-item {
+      display: flex;
+      gap: 4px;
+      font-size: 0.85rem;
+      color: $dark;
+
+      .ingredient-quantity {
+        font-weight: 600;
+        color: $primary;
+      }
+
+      .ingredient-unit {
+        color: $gray;
+      }
+
+      .ingredient-name {
+        flex: 1;
+      }
+    }
+  }
+
+  .instructions-list {
+    .instruction-item {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 8px;
+      font-size: 0.9rem;
+      color: $dark;
+
+      .instruction-number {
+        background: $primary;
+        color: white;
+        width: 24px;
+        height: 24px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 600;
+        font-size: 0.8rem;
+        flex-shrink: 0;
+      }
+
+      .instruction-text {
+        line-height: 1.5;
+      }
+    }
+  }
+}
+
+.target-info {
+  margin-bottom: 16px;
+  padding: 12px;
+  background: rgba($secondary, 0.05);
+  border-radius: 8px;
+
+  .targets-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 8px;
+
+    .target-item {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.85rem;
+
+      .target-label {
+        color: $gray;
+        font-weight: 500;
+      }
+
+      .target-value {
+        color: $dark;
+        font-weight: 600;
+      }
     }
   }
 }
@@ -389,6 +918,7 @@ $gray-lighter: #e9ecef;
 .meal-actions {
   display: flex;
   gap: 8px;
+  flex-wrap: wrap;
 }
 
 .btn {
@@ -440,6 +970,24 @@ $gray-lighter: #e9ecef;
       background: darken($primary, 10%);
     }
   }
+
+  &.btn-info {
+    background: $info;
+    color: $white;
+
+    &:hover {
+      background: darken($info, 10%);
+    }
+  }
+
+  &.btn-success {
+    background: $success;
+    color: $white;
+
+    &:hover {
+      background: darken($success, 10%);
+    }
+  }
 }
 
 .no-meals {
@@ -481,9 +1029,22 @@ $gray-lighter: #e9ecef;
 
   .modal-header {
     padding: 20px 24px;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
 
     h2 {
       font-size: 1.4rem;
+    }
+
+    .ai-generation-info {
+      order: -1;
+    }
+
+    .close-btn {
+      position: absolute;
+      top: 16px;
+      right: 16px;
     }
   }
 
@@ -502,13 +1063,25 @@ $gray-lighter: #e9ecef;
   }
 
   .meal-header {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 8px;
+    .meal-title-section {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 8px;
+    }
+
+    .meal-meta {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 8px;
+    }
   }
 
-  .meal-nutrition {
+  .nutrition-details {
     grid-template-columns: 1fr 1fr;
+  }
+
+  .ingredients-list {
+    grid-template-columns: 1fr;
   }
 
   .meal-actions {

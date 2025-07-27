@@ -165,12 +165,30 @@
               <span class="stat-label">Avg Calories</span>
             </div>
             <div class="stat">
-              <span class="stat-value">{{ plan?.meal_count || 'N/A' }}</span>
+              <span class="stat-value">{{ getMealCount(plan) }}</span>
               <span class="stat-label">Meals</span>
             </div>
             <div class="stat">
               <span class="stat-value">{{ plan.nutritional_balance_score?.toFixed(1) || 'N/A' }}</span>
               <span class="stat-label">Balance Score</span>
+            </div>
+          </div>
+
+          <div class="plan-nutrition" v-if="plan.daily_averages">
+            <h4>Daily Nutrition Averages</h4>
+            <div class="nutrition-grid">
+              <div class="nutrition-item">
+                <span class="nutrition-label">Protein:</span>
+                <span class="nutrition-value">{{ Math.round(plan.daily_averages.protein || 0) }}g</span>
+              </div>
+              <div class="nutrition-item">
+                <span class="nutrition-label">Carbs:</span>
+                <span class="nutrition-value">{{ Math.round(plan.daily_averages.carbs || 0) }}g</span>
+              </div>
+              <div class="nutrition-item">
+                <span class="nutrition-label">Fat:</span>
+                <span class="nutrition-value">{{ Math.round(plan.daily_averages.fat || 0) }}g</span>
+              </div>
             </div>
           </div>
 
@@ -216,6 +234,7 @@
       @close="selectedPlan = null"
       @regenerate-meal="regenerateMeal"
       @get-alternatives="getMealAlternatives"
+      @analyze-plan="analyzeMealPlanFromModal"
     />
 
     <!-- Nutritional Analysis Modal -->
@@ -290,6 +309,19 @@ export default {
         this.mealPlans = [] // Set empty array to prevent null errors
         this.showError('Failed to load meal plans')
       }
+    },
+
+    // Helper method to count meals in a plan based on the new structure
+    getMealCount(plan) {
+      if (!plan?.meal_plan_data?.meals) return 'N/A'
+      
+      let totalMeals = 0
+      Object.values(plan.meal_plan_data.meals).forEach(dayMeals => {
+        if (Array.isArray(dayMeals)) {
+          totalMeals += dayMeals.length
+        }
+      })
+      return totalMeals || 'N/A'
     },
 
     async generateMealPlan() {
@@ -531,6 +563,13 @@ export default {
         }
         this.showError('Failed to analyze meal plan')
       }
+    },
+
+    async analyzeMealPlanFromModal(plan) {
+      // Close the detail modal first
+      this.selectedPlan = null
+      // Then trigger the analysis
+      await this.analyzeMealPlan(plan)
     },
 
     closeAnalysisModal() {
@@ -823,7 +862,7 @@ export default {
 // Enhanced meal plan cards
 .meal-plans-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
   gap: $spacing-6;
 }
 
@@ -915,6 +954,44 @@ export default {
     color: $gray;
     text-transform: uppercase;
     letter-spacing: 0.5px;
+  }
+}
+
+// New nutrition display section
+.plan-nutrition {
+  margin-bottom: $spacing-4;
+  padding: $spacing-3;
+  background: rgba(#28a745, 0.05);
+  border-radius: $border-radius;
+
+  h4 {
+    margin: 0 0 $spacing-2 0;
+    font-size: 0.9rem;
+    color: $primary-dark;
+    font-weight: 600;
+  }
+
+  .nutrition-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: $spacing-2;
+  }
+
+  .nutrition-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.85rem;
+
+    .nutrition-label {
+      color: $gray;
+      font-weight: 500;
+    }
+
+    .nutrition-value {
+      color: $primary-dark;
+      font-weight: 600;
+    }
   }
 }
 
@@ -1038,6 +1115,10 @@ export default {
 
   .plan-actions {
     flex-direction: column;
+  }
+
+  .nutrition-grid {
+    grid-template-columns: 1fr;
   }
 }
 </style>

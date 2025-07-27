@@ -233,9 +233,22 @@ export const mealPlanningApi = {
     return api.post('/nutrition-profile/calculate_targets/')
   },
 
-  // Enhanced Meal Plan endpoints with AI features and fallbacks
+  // Enhanced Meal Plan endpoints with AI features and improved pagination handling
   getMealPlans(params = {}) {
-    return api.get('/meal-plans/', { params })
+    const cleanParams = {
+      page: params.page || 1,
+      page_size: params.page_size || 20,
+      ordering: params.ordering || '-created_at'
+    }
+    
+    // Add any filtering parameters
+    if (params.plan_type) cleanParams.plan_type = params.plan_type
+    if (params.is_active !== undefined) cleanParams.is_active = params.is_active
+    if (params.start_date) cleanParams.start_date = params.start_date
+    if (params.end_date) cleanParams.end_date = params.end_date
+
+    console.log('Fetching meal plans with params:', cleanParams)
+    return api.get('/meal-plans/', { params: cleanParams })
   },
 
   getMealPlan(id) {
@@ -243,12 +256,14 @@ export const mealPlanningApi = {
   },
 
   generateMealPlan(planData) {
+    console.log('Generating meal plan with data:', planData)
     // Enhanced meal plan generation with AI features
     return api.post('/meal-plans/generate/', planData)
   },
 
   async regenerateMeal(planId, day, mealType) {
     try {
+      console.log('Regenerating meal:', { planId, day, mealType })
       // Updated regenerate meal endpoint
       return await api.post(`/meal-plans/${planId}/regenerate_meal/`, {
         day: day,
@@ -266,6 +281,7 @@ export const mealPlanningApi = {
   // New AI-powered methods with fallbacks
   async getMealAlternatives(planId, day, mealType, count = 3) {
     try {
+      console.log('Getting meal alternatives:', { planId, day, mealType, count })
       return await api.post(`/meal-plans/${planId}/get_alternatives/`, {
         day: day,
         meal_type: mealType,
@@ -298,6 +314,7 @@ export const mealPlanningApi = {
 
   async analyzeMealPlan(planId) {
     try {
+      console.log('Analyzing meal plan:', planId)
       return await api.get(`/meal-plans/${planId}/analyze/`)
     } catch (error) {
       if (error.response?.status === 404) {
@@ -305,7 +322,7 @@ export const mealPlanningApi = {
         // Return mock analysis data for development
         return {
           data: {
-            overall_score: 75,
+            overall_score: 85,
             nutritional_adequacy: {
               calories: { status: 'adequate', percentage_of_target: 98 },
               protein: { status: 'adequate', percentage_of_target: 105 },
@@ -324,15 +341,18 @@ export const mealPlanningApi = {
               cooking_method_diversity: 'good'
             },
             recommendations: [
-              'Consider adding more fiber-rich vegetables',
-              'Excellent protein distribution throughout the day'
+              'Excellent meal plan with well-balanced nutrition',
+              'Great variety of cuisines and cooking methods',
+              'Protein distribution is optimal throughout the day'
             ],
             health_highlights: [
               'Well-balanced macronutrients',
-              'Good variety of nutrient-dense foods'
+              'Good variety of nutrient-dense foods',
+              'Appropriate calorie distribution across meals'
             ],
             areas_for_improvement: [
-              'Could increase omega-3 fatty acids'
+              'Consider adding more omega-3 rich foods',
+              'Could include more antioxidant-rich vegetables'
             ]
           }
         }
@@ -374,8 +394,12 @@ export const mealPlanningApi = {
     return api.get('/nutrition-logs/analytics/', { params })
   },
 
-  getDashboardData() {
-    return api.get('/nutrition-logs/dashboard_data/')
+  getDashboardData(params = {}) {
+    const cleanParams = {
+      days: params.days || 7,
+      ...params
+    }
+    return api.get('/nutrition-logs/dashboard_data/', { params: cleanParams })
   },
 
   // New AI insights and recommendations with fallbacks
@@ -454,13 +478,13 @@ export const mealPlanningApi = {
       return await api.get('/dietary-preferences/')
     } catch (error) {
       if (error.response?.status === 404) {
-        // Return default dietary preferences
+        // Return default dietary preferences matching your backend model
         return {
           data: [
             'vegetarian', 'vegan', 'pescatarian', 'keto', 'paleo',
-            'mediterranean', 'low_carb', 'low_fat', 'high_protein',
-            'gluten_free', 'dairy_free', 'low_sodium', 'diabetic',
-            'heart_healthy', 'whole30'
+            'mediterranean', 'dash', 'low_carb', 'low_fat', 'high_protein',
+            'intermittent_fasting', 'whole30', 'raw_food', 'gluten_free',
+            'dairy_free', 'flexitarian'
           ]
         }
       }
@@ -473,11 +497,12 @@ export const mealPlanningApi = {
       return await api.get('/allergens/')
     } catch (error) {
       if (error.response?.status === 404) {
-        // Return default allergens list
+        // Return default allergens list matching your backend model
         return {
           data: [
-            'milk', 'eggs', 'fish', 'shellfish', 'tree_nuts',
-            'peanuts', 'wheat', 'soybeans', 'sesame', 'sulfites'
+            'nuts', 'peanuts', 'dairy', 'gluten', 'eggs', 'fish',
+            'shellfish', 'soy', 'sesame', 'sulfites', 'nightshades',
+            'histamine'
           ]
         }
       }
@@ -490,12 +515,12 @@ export const mealPlanningApi = {
       return await api.get('/cuisines/')
     } catch (error) {
       if (error.response?.status === 404) {
-        // Return default cuisines list
+        // Return default cuisines list matching your backend model
         return {
           data: [
-            'american', 'italian', 'mexican', 'chinese', 'japanese',
-            'indian', 'thai', 'mediterranean', 'french', 'greek',
-            'middle_eastern', 'korean', 'vietnamese', 'spanish'
+            'italian', 'mexican', 'asian', 'indian', 'mediterranean',
+            'american', 'french', 'thai', 'japanese', 'chinese',
+            'greek', 'middle_eastern'
           ]
         }
       }
@@ -563,20 +588,30 @@ export const mealPlanningApi = {
   }
 }
 
-// Enhanced helper functions remain the same as before
+// Enhanced helper functions with support for the new meal plan structure
 export const mealPlanningHelpers = {
-  // All your existing helper functions...
+  /**
+   * Format dietary preference for display
+   */
   formatDietaryPreference(preference) {
+    if (!preference) return ''
     return preference
       .split('_')
       .map(word => word.charAt(0).toUpperCase() + word.slice(1))
       .join(' ')
   },
 
+  /**
+   * Format cuisine name for display
+   */
   formatCuisine(cuisine) {
+    if (!cuisine) return ''
     return cuisine.charAt(0).toUpperCase() + cuisine.slice(1)
   },
 
+  /**
+   * Calculate macro percentages from nutrition data
+   */
   calculateMacroPercentages(calories, protein, carbs, fat) {
     const totalCalories = calories || (protein * 4 + carbs * 4 + fat * 9)
 
@@ -591,7 +626,11 @@ export const mealPlanningHelpers = {
     }
   },
 
+  /**
+   * Format duration in minutes to a readable format
+   */
   formatDuration(minutes) {
+    if (!minutes || minutes < 0) return '0min'
     if (minutes < 60) {
       return `${minutes}min`
     }
@@ -600,8 +639,11 @@ export const mealPlanningHelpers = {
     return remainingMinutes > 0 ? `${hours}h ${remainingMinutes}min` : `${hours}h`
   },
 
+  /**
+   * Calculate nutrition score based on actual vs target values
+   */
   calculateNutritionScore(actual, target, tolerance = 0.1) {
-    if (!target) return 100
+    if (!target || target <= 0) return 100
 
     const difference = Math.abs(actual - target)
     const allowedDifference = target * tolerance
@@ -614,31 +656,46 @@ export const mealPlanningHelpers = {
     return Math.round(score)
   },
 
+  /**
+   * Get color for macronutrient visualization
+   */
   getMacroColor(macro) {
     const colors = {
       protein: '#ff6b6b',
       carbs: '#4ecdc4',
-      fat: '#45b7d1'
+      carbohydrates: '#4ecdc4',
+      fat: '#45b7d1',
+      fats: '#45b7d1'
     }
-    return colors[macro] || '#95a5a6'
+    return colors[macro?.toLowerCase()] || '#95a5a6'
   },
 
+  /**
+   * Format calories for display
+   */
   formatCalories(calories) {
+    if (!calories || calories < 0) return '0'
     if (calories >= 1000) {
       return `${(calories / 1000).toFixed(1)}k`
     }
     return Math.round(calories).toString()
   },
 
+  /**
+   * Get color for difficulty level
+   */
   getDifficultyColor(difficulty) {
     const colors = {
       easy: '#27ae60',
       medium: '#f39c12',
       hard: '#e74c3c'
     }
-    return colors[difficulty] || '#95a5a6'
+    return colors[difficulty?.toLowerCase()] || '#95a5a6'
   },
 
+  /**
+   * Validate nutrition profile data
+   */
   validateNutritionProfile(profile) {
     const errors = []
 
@@ -664,6 +721,9 @@ export const mealPlanningHelpers = {
     }
   },
 
+  /**
+   * Create meal plan request object with defaults
+   */
   createMealPlanRequest(options = {}) {
     const defaults = {
       plan_type: 'daily',
@@ -675,17 +735,115 @@ export const mealPlanningHelpers = {
     return { ...defaults, ...options }
   },
 
+  /**
+   * Extract total meal count from meal plan data
+   */
+  getMealCount(mealPlan) {
+    if (!mealPlan?.meal_plan_data?.meals) return 0
+
+    let totalMeals = 0
+    Object.values(mealPlan.meal_plan_data.meals).forEach(dayMeals => {
+      if (Array.isArray(dayMeals)) {
+        totalMeals += dayMeals.length
+      }
+    })
+    return totalMeals
+  },
+
+  /**
+   * Extract nutrition value from recipe with fallback handling
+   */
+  getNutritionValue(recipe, nutrient) {
+    if (!recipe) return 0
+    
+    // Try estimated_nutrition first (from your API response)
+    if (recipe.estimated_nutrition && recipe.estimated_nutrition[nutrient] !== undefined) {
+      return Math.round(recipe.estimated_nutrition[nutrient])
+    }
+    
+    // Fallback to nutrition object
+    if (recipe.nutrition && recipe.nutrition[nutrient] !== undefined) {
+      return Math.round(recipe.nutrition[nutrient])
+    }
+
+    // Try other common naming patterns
+    const nutrientMappings = {
+      'calories': ['calories_per_serving', 'kcal'],
+      'protein': ['protein_per_serving'],
+      'carbs': ['carbs_per_serving', 'carbohydrates'],
+      'fat': ['fat_per_serving', 'fats']
+    }
+
+    if (nutrientMappings[nutrient]) {
+      for (const mapping of nutrientMappings[nutrient]) {
+        if (recipe[mapping] !== undefined) {
+          return Math.round(recipe[mapping])
+        }
+      }
+    }
+    
+    return 0
+  },
+
+  /**
+   * Format meal plan date range for display
+   */
+  formatDateRange(startDate, endDate) {
+    if (!startDate || !endDate) return 'Date unknown'
+    
+    const start = new Date(startDate).toLocaleDateString()
+    const end = new Date(endDate).toLocaleDateString()
+
+    if (startDate === endDate) {
+      return start
+    }
+    return `${start} - ${end}`
+  },
+
+  /**
+   * Handle API errors with user-friendly messages
+   */
   handleApiError(error, fallbackMessage = 'An error occurred') {
+    console.error('API Error:', error)
+
     if (error.response?.data?.detail) {
       return error.response.data.detail
     }
     if (error.response?.data?.message) {
       return error.response.data.message
     }
+    if (error.response?.data?.error) {
+      return error.response.data.error
+    }
     if (error.message) {
       return error.message
     }
     return fallbackMessage
+  },
+
+  /**
+   * Check if a meal plan is from the new API structure
+   */
+  isNewMealPlanStructure(mealPlan) {
+    return !!(mealPlan?.meal_plan_data?.meals && 
+              mealPlan?.daily_averages && 
+              mealPlan?.generation_version)
+  },
+
+  /**
+   * Get all dates from a meal plan
+   */
+  getMealPlanDates(mealPlan) {
+    if (!mealPlan?.meal_plan_data?.meals) return []
+    return Object.keys(mealPlan.meal_plan_data.meals).sort()
+  },
+
+  /**
+   * Get meals for a specific date
+   */
+  getMealsForDate(mealPlan, date) {
+    if (!mealPlan?.meal_plan_data?.meals?.[date]) return []
+    return mealPlan.meal_plan_data.meals[date]
   }
 }
 
