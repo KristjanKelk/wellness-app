@@ -99,13 +99,6 @@
 
         <div class="meals-section" v-if="mealPlan.meal_plan_data && mealPlan.meal_plan_data.meals">
           <h3>Detailed Meal Plan</h3>
-          <!-- Debug info for meals section -->
-          <div style="background: #fff3cd; padding: 8px; margin-bottom: 10px; font-size: 12px; border-radius: 4px;">
-            <strong>Meals Debug:</strong><br>
-            meals object: {{ Object.keys(mealPlan.meal_plan_data.meals) }}<br>
-            meals count: {{ Object.keys(mealPlan.meal_plan_data.meals).length }}<br>
-            sample meal data: {{ JSON.stringify(Object.values(mealPlan.meal_plan_data.meals)[0]).substring(0, 200) }}...
-          </div>
           <div class="meals-grid">
             <div
               v-for="(dayMeals, date) in mealPlan.meal_plan_data.meals"
@@ -122,16 +115,16 @@
                   <div class="meal-header">
                     <div class="meal-title-section">
                       <h5 class="meal-title">
-                        {{ meal.recipe?.title || `${formatMealType(meal.meal_type)}` }}
+                        {{ getMealTitle(meal) }}
                       </h5>
-                      <span class="meal-type-badge" :class="meal.meal_type">
-                        {{ formatMealType(meal.meal_type || 'meal') }}
+                      <span class="meal-type-badge" :class="getMealTypeClass(meal.meal_type)">
+                        {{ formatMealType(meal.meal_type) }}
                       </span>
                     </div>
                     <div class="meal-meta">
                       <span class="meal-time">
                         <i class="fas fa-clock"></i>
-                        {{ meal.time || '12:00' }}
+                        {{ getMealTime(meal) }}
                       </span>
                       <span class="meal-cuisine" v-if="meal.recipe?.cuisine">
                         <i class="fas fa-globe"></i>
@@ -274,15 +267,6 @@
         <div v-else class="no-meals">
           <i class="fas fa-utensils"></i>
           <p>No meal details available</p>
-          <!-- Debug info for no meals -->
-          <div style="background: #f8d7da; padding: 8px; margin-top: 10px; font-size: 12px; border-radius: 4px;">
-            <strong>No Meals Debug:</strong><br>
-            mealPlan exists: {{ !!mealPlan }}<br>
-            mealPlan.meal_plan_data exists: {{ !!mealPlan?.meal_plan_data }}<br>
-            mealPlan.meal_plan_data.meals exists: {{ !!mealPlan?.meal_plan_data?.meals }}<br>
-            mealPlan structure: {{ JSON.stringify(Object.keys(mealPlan || {})) }}<br>
-            meal_plan_data structure: {{ JSON.stringify(Object.keys(mealPlan?.meal_plan_data || {})) }}
-          </div>
         </div>
       </div>
 
@@ -312,12 +296,31 @@ export default {
   },
   emits: ['close', 'regenerate-meal', 'get-alternatives', 'analyze-plan'],
   mounted() {
-    console.log('MealPlanDetailModal mounted with mealPlan:', this.mealPlan)
-    console.log('mealPlan.meal_plan_data:', this.mealPlan?.meal_plan_data)
-    console.log('mealPlan.meal_plan_data.meals:', this.mealPlan?.meal_plan_data?.meals)
+    console.log('=== MealPlanDetailModal Mounted ===')
+    console.log('Meal Plan ID:', this.mealPlan?.id)
+    console.log('Plan Type:', this.mealPlan?.plan_type)
+    console.log('Has meal_plan_data:', !!this.mealPlan?.meal_plan_data)
+    console.log('Has meals:', !!this.mealPlan?.meal_plan_data?.meals)
+    
     if (this.mealPlan?.meal_plan_data?.meals) {
-      console.log('Available meal dates:', Object.keys(this.mealPlan.meal_plan_data.meals))
+      const mealDates = Object.keys(this.mealPlan.meal_plan_data.meals)
+      console.log('Available meal dates:', mealDates)
+      console.log('Total meal days:', mealDates.length)
+      
+      // Log first day's meals as sample
+      if (mealDates.length > 0) {
+        const firstDate = mealDates[0]
+        const firstDayMeals = this.mealPlan.meal_plan_data.meals[firstDate]
+        console.log(`Sample meals for ${firstDate}:`, firstDayMeals)
+      }
+    } else {
+      console.log('No meal data available - checking structure:')
+      console.log('mealPlan keys:', Object.keys(this.mealPlan || {}))
+      if (this.mealPlan?.meal_plan_data) {
+        console.log('meal_plan_data keys:', Object.keys(this.mealPlan.meal_plan_data))
+      }
     }
+    console.log('=====================================')
   },
   methods: {
     formatPlanType(type) {
@@ -326,32 +329,118 @@ export default {
     },
 
     formatDateRange(startDate, endDate) {
-      if (!startDate || !endDate) return 'Date unknown'
-      
-      const start = new Date(startDate).toLocaleDateString()
-      const end = new Date(endDate).toLocaleDateString()
-
-      if (startDate === endDate) {
-        return start
+      if (!startDate || !endDate) {
+        console.log('formatDateRange: Missing dates - start:', startDate, 'end:', endDate)
+        return 'Date unknown'
       }
-      return `${start} - ${end}`
+      
+      try {
+        const startDateObj = new Date(startDate)
+        const endDateObj = new Date(endDate)
+        
+        if (isNaN(startDateObj.getTime()) || isNaN(endDateObj.getTime())) {
+          console.log('formatDateRange: Invalid dates - start:', startDate, 'end:', endDate)
+          return 'Invalid date range'
+        }
+        
+        const start = startDateObj.toLocaleDateString()
+        const end = endDateObj.toLocaleDateString()
+
+        if (startDate === endDate) {
+          return start
+        }
+        return `${start} - ${end}`
+      } catch (error) {
+        console.error('formatDateRange error:', error, 'for dates:', startDate, endDate)
+        return 'Date error'
+      }
     },
 
     formatDate(dateStr) {
       try {
-        return new Date(dateStr).toLocaleDateString('en-US', {
+        if (!dateStr) {
+          console.log('formatDate: dateStr is null/undefined')
+          return 'Unknown Date'
+        }
+        
+        const date = new Date(dateStr)
+        if (isNaN(date.getTime())) {
+          console.log('formatDate: Invalid date for input:', dateStr)
+          return dateStr // Return original string if can't parse
+        }
+        
+        return date.toLocaleDateString('en-US', {
           weekday: 'long',
           month: 'short',
           day: 'numeric'
         })
       } catch (error) {
-        return dateStr
+        console.error('formatDate error:', error, 'for input:', dateStr)
+        return dateStr || 'Unknown Date'
       }
     },
 
     formatMealType(type) {
       if (!type) return 'Meal'
-      return type.charAt(0).toUpperCase() + type.slice(1)
+      // Handle different possible meal type formats
+      const cleanType = String(type).toLowerCase().trim()
+      const typeMap = {
+        'breakfast': 'Breakfast',
+        'lunch': 'Lunch', 
+        'dinner': 'Dinner',
+        'snack': 'Snack',
+        'dessert': 'Dessert'
+      }
+      return typeMap[cleanType] || type.charAt(0).toUpperCase() + type.slice(1)
+    },
+
+    getMealTitle(meal) {
+      console.log('getMealTitle called for meal:', meal)
+      
+      // If we have a recipe with a title, use that
+      if (meal?.recipe?.title) {
+        return meal.recipe.title
+      }
+      
+      // If we have a recipe with a name, use that
+      if (meal?.recipe?.name) {
+        return meal.recipe.name
+      }
+      
+      // Fallback to meal type
+      const mealType = this.formatMealType(meal?.meal_type)
+      console.log('getMealTitle fallback to meal type:', mealType)
+      return mealType
+    },
+
+    getMealTime(meal) {
+      console.log('getMealTime called for meal:', meal)
+      
+      // Check various possible time fields
+      if (meal?.time) {
+        return meal.time
+      }
+      if (meal?.scheduled_time) {
+        return meal.scheduled_time
+      }
+      
+      // Default times based on meal type
+      const mealType = meal?.meal_type?.toLowerCase()
+      const defaultTimes = {
+        'breakfast': '08:00',
+        'lunch': '12:00',
+        'dinner': '18:00',
+        'snack': '15:00'
+      }
+      
+      const defaultTime = defaultTimes[mealType] || '12:00'
+      console.log('getMealTime using default time:', defaultTime, 'for meal type:', mealType)
+      return defaultTime
+    },
+
+    getMealTypeClass(type) {
+      if (!type) return 'meal'
+      return String(type).toLowerCase()
     },
 
     getTotalMeals() {

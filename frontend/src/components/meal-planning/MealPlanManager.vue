@@ -150,16 +150,7 @@
           class="meal-plan-card"
           @click="viewMealPlan(plan)"
         >
-          <!-- Debug info - remove this later -->
-          <div style="background: #f0f0f0; padding: 8px; margin-bottom: 10px; font-size: 12px; border-radius: 4px;">
-            <strong>Debug Info:</strong><br>
-            Plan ID: {{ plan.id }}<br>
-            Plan Type: {{ plan.plan_type }}<br>
-            Has meal_plan_data: {{ !!plan.meal_plan_data }}<br>
-            Has meals: {{ !!plan.meal_plan_data?.meals }}<br>
-            Meals keys: {{ plan.meal_plan_data?.meals ? Object.keys(plan.meal_plan_data.meals) : 'none' }}<br>
-            Total structure: {{ JSON.stringify(plan).substring(0, 100) }}...
-          </div>
+
           <div class="plan-header">
             <h3>{{ plan ? formatPlanType(plan.plan_type) : 'Loading...' }} Plan</h3>
             <span class="plan-date">{{ plan ? formatDateRange(plan.start_date, plan.end_date) : 'Date unknown' }}</span>
@@ -311,18 +302,34 @@ export default {
   methods: {
     async loadMealPlans() {
       try {
-        console.log('Loading meal plans...')
+        console.log('=== Loading Meal Plans ===')
         const response = await mealPlanningApi.getMealPlans()
-        console.log('Raw API response:', response)
+        console.log('API response status:', response?.status)
+        console.log('API response data type:', typeof response?.data)
         
         // Handle different response structures safely
         const mealPlansData = response?.data?.results || response?.data || []
-        console.log('Processed meal plans data:', mealPlansData)
+        console.log('Found', mealPlansData.length, 'meal plans')
+        
+        // Log each plan briefly
+        mealPlansData.forEach((plan, index) => {
+          console.log(`Plan ${index + 1}:`, {
+            id: plan.id,
+            type: plan.plan_type,
+            hasMealData: !!plan.meal_plan_data,
+            hasMeals: !!plan.meal_plan_data?.meals,
+            dateRange: `${plan.start_date} to ${plan.end_date}`
+          })
+        })
         
         this.mealPlans = mealPlansData
-        console.log('this.mealPlans set to:', this.mealPlans)
+        console.log('Meal plans loaded successfully')
+        console.log('==========================')
       } catch (error) {
-        console.error('Failed to load meal plans:', error)
+        console.error('=== Failed to load meal plans ===')
+        console.error('Error:', error.message)
+        console.error('Response:', error.response?.data)
+        console.error('================================')
         this.mealPlans = [] // Set empty array to prevent null errors
         this.showError('Failed to load meal plans')
       }
@@ -330,24 +337,19 @@ export default {
 
     // Helper method to count meals in a plan based on the new structure
     getMealCount(plan) {
-      console.log('getMealCount called with plan:', plan)
-      
       if (!plan?.meal_plan_data?.meals) {
-        console.log('No meal_plan_data.meals found in plan')
+        console.log('getMealCount: No meal_plan_data.meals found for plan', plan?.id)
         return 'N/A'
       }
       
-      console.log('meal_plan_data.meals:', plan.meal_plan_data.meals)
-      
       let totalMeals = 0
       Object.values(plan.meal_plan_data.meals).forEach(dayMeals => {
-        console.log('Processing dayMeals:', dayMeals)
         if (Array.isArray(dayMeals)) {
           totalMeals += dayMeals.length
         }
       })
       
-      console.log('Total meals calculated:', totalMeals)
+      console.log(`getMealCount: Plan ${plan.id} has ${totalMeals} total meals`)
       return totalMeals || 'N/A'
     },
 
@@ -522,15 +524,25 @@ export default {
     },
 
     viewMealPlan(plan) {
-      console.log('viewMealPlan called with plan:', plan)
-      console.log('Plan meal_plan_data:', plan?.meal_plan_data)
-      console.log('Plan meals structure:', plan?.meal_plan_data?.meals)
+      console.log('=== Meal Plan Details ===')
+      console.log('Plan ID:', plan?.id)
+      console.log('Plan Type:', plan?.plan_type)
+      console.log('Has meal_plan_data:', !!plan?.meal_plan_data)
+      console.log('Has meals:', !!plan?.meal_plan_data?.meals)
+      console.log('Meals structure:', plan?.meal_plan_data?.meals)
+      if (plan?.meal_plan_data?.meals) {
+        console.log('Available meal dates:', Object.keys(plan.meal_plan_data.meals))
+        console.log('Sample meal data for first date:', Object.values(plan.meal_plan_data.meals)[0])
+      }
+      console.log('=========================')
       this.selectedPlan = plan
     },
 
     async regenerateMeal(planId, mealData) {
       try {
-        console.log('regenerateMeal called with:', { planId, mealData })
+        console.log('=== Regenerating Meal ===')
+        console.log('Plan ID:', planId)
+        console.log('Meal Data:', mealData)
         
         if (!mealData) {
           console.error('regenerateMeal: mealData is null/undefined')
@@ -538,38 +550,43 @@ export default {
         }
         
         const { day, mealType } = mealData
-        console.log('Extracted from mealData:', { day, mealType })
+        console.log('Day:', day)
+        console.log('Meal Type:', mealType)
         
         if (!day || !mealType) {
           console.error('regenerateMeal: day or mealType missing', { day, mealType })
           throw new Error('Day and meal type are required')
         }
         
-        console.log('Calling API with:', { planId, day, mealType })
+        console.log('Making API call to regenerate meal...')
         const response = await mealPlanningApi.regenerateMeal(planId, day, mealType)
+        console.log('Regeneration successful, updating UI...')
 
         // Update the meal plan in our list
         const planIndex = this.mealPlans.findIndex(p => p.id === planId)
         if (planIndex !== -1) {
           this.mealPlans[planIndex] = response.data
           this.selectedPlan = response.data
+          console.log('Meal plan updated in list')
         }
 
         this.showSuccess(`${mealType} meal regenerated successfully!`)
+        console.log('========================')
       } catch (error) {
-        console.error('Failed to regenerate meal:', error)
-        console.error('Error details:', {
-          message: error.message,
-          response: error.response?.data,
-          stack: error.stack
-        })
+        console.error('=== Failed to regenerate meal ===')
+        console.error('Error message:', error.message)
+        console.error('Error response:', error.response?.data)
+        console.error('Full error:', error)
+        console.error('================================')
         this.showError(`Failed to regenerate meal: ${error.message}`)
       }
     },
 
     async getMealAlternatives(planId, mealData) {
       try {
-        console.log('getMealAlternatives called with:', { planId, mealData })
+        console.log('=== Getting Meal Alternatives ===')
+        console.log('Plan ID:', planId)
+        console.log('Meal Data:', mealData)
         
         if (!mealData) {
           console.error('getMealAlternatives: mealData is null/undefined')
@@ -577,23 +594,25 @@ export default {
         }
         
         const { day, mealType } = mealData
-        console.log('Extracted from mealData:', { day, mealType })
+        console.log('Day:', day)
+        console.log('Meal Type:', mealType)
         
         if (!day || !mealType) {
           console.error('getMealAlternatives: day or mealType missing', { day, mealType })
           throw new Error('Day and meal type are required')
         }
         
-        console.log('Calling API with:', { planId, day, mealType })
+        console.log('Making API call to get alternatives...')
         const response = await mealPlanningApi.getMealAlternatives(planId, day, mealType)
+        console.log('Alternatives retrieved:', response.data?.length || 0, 'options')
+        console.log('===============================')
         return response.data || []
       } catch (error) {
-        console.error('Failed to get meal alternatives:', error)
-        console.error('Error details:', {
-          message: error.message,
-          response: error.response?.data,
-          stack: error.stack
-        })
+        console.error('=== Failed to get meal alternatives ===')
+        console.error('Error message:', error.message)
+        console.error('Error response:', error.response?.data)
+        console.error('Full error:', error)
+        console.error('=====================================')
         this.showError(`Failed to get meal alternatives: ${error.message}`)
         return []
       }
@@ -645,16 +664,30 @@ export default {
 
     formatDateRange(startDate, endDate) {
       if (!startDate || !endDate) {
+        console.log('formatDateRange: Missing dates - start:', startDate, 'end:', endDate)
         return 'Date unknown'
       }
 
-      const start = new Date(startDate).toLocaleDateString()
-      const end = new Date(endDate).toLocaleDateString()
+      try {
+        const startDateObj = new Date(startDate)
+        const endDateObj = new Date(endDate)
+        
+        if (isNaN(startDateObj.getTime()) || isNaN(endDateObj.getTime())) {
+          console.log('formatDateRange: Invalid dates - start:', startDate, 'end:', endDate)
+          return 'Invalid date range'
+        }
+        
+        const start = startDateObj.toLocaleDateString()
+        const end = endDateObj.toLocaleDateString()
 
-      if (startDate === endDate) {
-        return start
+        if (startDate === endDate) {
+          return start
+        }
+        return `${start} - ${end}`
+      } catch (error) {
+        console.error('formatDateRange error:', error, 'for dates:', startDate, endDate)
+        return 'Date error'
       }
-      return `${start} - ${end}`
     },
 
     showSuccess(message) {
