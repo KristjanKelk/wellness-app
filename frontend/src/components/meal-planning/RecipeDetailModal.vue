@@ -351,7 +351,7 @@ export default {
 
     &.difficulty-easy { background: rgba($success, 0.8); }
     &.difficulty-medium { background: rgba($warning, 0.8); }
-    &.difficulty-hard { background: rgba($danger, 0.8); }
+    &.difficulty-hard { background: rgba($error, 0.8); }
   }
 
   .close-btn {
@@ -430,7 +430,7 @@ export default {
 
 .nutrition-panel {
   padding: 24px;
-  background: $gray-lightest;
+  background: $gray-lighter;
   border-left: 1px solid $gray-lighter;
 
   @include responsive('md') {
@@ -529,7 +529,7 @@ export default {
 
 .ingredient-item {
   padding: 12px 16px;
-  background: $gray-lightest;
+  background: $gray-lighter;
   border-radius: 8px;
   border-left: 3px solid $primary;
 
@@ -605,7 +605,7 @@ export default {
 
 .modal-footer {
   padding: 24px 32px;
-  background: $gray-lightest;
+  background: $gray-lighter;
   border-radius: 0 0 20px 20px;
 }
 
