@@ -260,6 +260,180 @@ class SpoonacularService:
 
         return self._make_request(self.endpoints['generate_meal_plan'], params)
 
+    def connect_user(self, username: str, first_name: str = "", last_name: str = "", email: str = "") -> Dict:
+        """
+        Connect a user to Spoonacular to enable user-specific meal planning
+
+        Args:
+            username: User's name in your system
+            first_name: User's first name
+            last_name: User's last name  
+            email: User's email
+
+        Returns:
+            Dictionary with Spoonacular username, password, and hash
+        """
+        data = {
+            'username': username,
+            'firstName': first_name,
+            'lastName': last_name,
+            'email': email
+        }
+
+        try:
+            url = f"{self.base_url}/users/connect"
+            params = {'apiKey': self.api_key}
+            
+            logger.info(f"Connecting user to Spoonacular: {username}")
+            response = requests.post(url, json=data, params=params, timeout=30)
+            response.raise_for_status()
+
+            # Update rate limit counters
+            self._update_rate_limit_counters()
+
+            result = response.json()
+            logger.info(f"Successfully connected user {username} to Spoonacular")
+            return result
+
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Spoonacular user connection failed: {e}")
+            raise SpoonacularAPIError(f"User connection failed: {e}")
+        except ValueError as e:
+            logger.error(f"Failed to parse Spoonacular user connection response: {e}")
+            raise SpoonacularAPIError(f"Invalid JSON response: {e}")
+
+    def get_meal_plan_week(self, spoonacular_username: str, start_date: str, user_hash: str) -> Dict:
+        """
+        Get a user's meal plan for a specific week
+
+        Args:
+            spoonacular_username: Spoonacular username from connect_user
+            start_date: Start date in format YYYY-MM-DD
+            user_hash: User hash from connect_user
+
+        Returns:
+            Dictionary with weekly meal plan
+        """
+        endpoint = f"/mealplanner/{spoonacular_username}/week/{start_date}"
+        params = {'hash': user_hash}
+
+        return self._make_request(endpoint, params, use_cache=False)
+
+    def add_to_meal_plan(self, spoonacular_username: str, user_hash: str, date: str, slot: int, 
+                        position: int, item_type: str, value: Dict) -> Dict:
+        """
+        Add an item to user's meal plan
+
+        Args:
+            spoonacular_username: Spoonacular username
+            user_hash: User hash
+            date: Date in format YYYY-MM-DD
+            slot: Meal slot (1=breakfast, 2=lunch, 3=dinner)
+            position: Position in the slot
+            item_type: Type of item (RECIPE, INGREDIENTS, CUSTOM_FOOD, MENU_ITEM)
+            value: Item data (recipe ID, ingredients list, etc.)
+
+        Returns:
+            Dictionary with add result
+        """
+        endpoint = f"/mealplanner/{spoonacular_username}/items"
+        params = {'hash': user_hash}
+        
+        data = {
+            'date': date,
+            'slot': slot,
+            'position': position,
+            'type': item_type,
+            'value': value
+        }
+
+        try:
+            url = f"{self.base_url}{endpoint}"
+            response = requests.post(url, json=data, params=params, timeout=30)
+            response.raise_for_status()
+
+            # Update rate limit counters
+            self._update_rate_limit_counters()
+
+            return response.json()
+
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Failed to add item to meal plan: {e}")
+            raise SpoonacularAPIError(f"Add to meal plan failed: {e}")
+
+    def generate_shopping_list(self, spoonacular_username: str, start_date: str, end_date: str, user_hash: str) -> Dict:
+        """
+        Generate shopping list for user's meal plan
+
+        Args:
+            spoonacular_username: Spoonacular username
+            start_date: Start date in format YYYY-MM-DD
+            end_date: End date in format YYYY-MM-DD
+            user_hash: User hash
+
+        Returns:
+            Dictionary with shopping list
+        """
+        endpoint = f"/mealplanner/{spoonacular_username}/shopping-list/{start_date}/{end_date}"
+        params = {'hash': user_hash}
+
+        return self._make_request(endpoint, params, use_cache=False)
+
+    def get_shopping_list(self, spoonacular_username: str, user_hash: str) -> Dict:
+        """
+        Get user's current shopping list
+
+        Args:
+            spoonacular_username: Spoonacular username
+            user_hash: User hash
+
+        Returns:
+            Dictionary with shopping list
+        """
+        endpoint = f"/mealplanner/{spoonacular_username}/shopping-list"
+        params = {'hash': user_hash}
+
+        return self._make_request(endpoint, params, use_cache=False)
+
+    def delete_from_shopping_list(self, spoonacular_username: str, user_hash: str, item_id: int) -> Dict:
+        """
+        Delete item from shopping list
+
+        Args:
+            spoonacular_username: Spoonacular username
+            user_hash: User hash
+            item_id: Shopping list item ID
+
+        Returns:
+            Dictionary with deletion result
+        """
+        endpoint = f"/mealplanner/{spoonacular_username}/shopping-list/items/{item_id}"
+        params = {'hash': user_hash}
+
+        try:
+            url = f"{self.base_url}{endpoint}"
+            response = requests.delete(url, params=params, timeout=30)
+            response.raise_for_status()
+
+            # Update rate limit counters
+            self._update_rate_limit_counters()
+
+            return response.json() if response.content else {}
+
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Failed to delete from shopping list: {e}")
+            raise SpoonacularAPIError(f"Delete from shopping list failed: {e}")
+
+    def get_meal_plan_templates(self) -> Dict:
+        """
+        Get available meal plan templates (vegetarian, keto, etc.)
+
+        Returns:
+            Dictionary with meal plan templates
+        """
+        endpoint = "/mealplanner/templates"
+        return self._make_request(endpoint, {}, use_cache=True)
+
     def normalize_recipe_data(self, spoonacular_recipe: Dict) -> Dict:
         """
         Normalize Spoonacular recipe data to our internal format

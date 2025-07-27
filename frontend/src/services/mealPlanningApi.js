@@ -501,6 +501,65 @@ export const mealPlanningApi = {
       }
       throw error
     }
+  },
+
+  // Spoonacular integration endpoints
+  async connectSpoonacular() {
+    try {
+      return await api.post('/nutrition-profile/connect_spoonacular/')
+    } catch (error) {
+      console.error('Failed to connect to Spoonacular:', error)
+      throw error
+    }
+  },
+
+  async getSpoonacularStatus() {
+    try {
+      return await api.get('/nutrition-profile/spoonacular_status/')
+    } catch (error) {
+      console.error('Failed to get Spoonacular status:', error)
+      throw error
+    }
+  },
+
+  async getSpoonacularMealPlan(startDate = null) {
+    try {
+      const params = startDate ? { start_date: startDate } : {}
+      return await api.get('/nutrition-profile/spoonacular_meal_plan/', { params })
+    } catch (error) {
+      console.error('Failed to get Spoonacular meal plan:', error)
+      throw error
+    }
+  },
+
+  async addToSpoonacularMealPlan(mealData) {
+    try {
+      return await api.post('/nutrition-profile/add_to_spoonacular_meal_plan/', mealData)
+    } catch (error) {
+      console.error('Failed to add to Spoonacular meal plan:', error)
+      throw error
+    }
+  },
+
+  async getSpoonacularShoppingList() {
+    try {
+      return await api.get('/nutrition-profile/spoonacular_shopping_list/')
+    } catch (error) {
+      console.error('Failed to get Spoonacular shopping list:', error)
+      throw error
+    }
+  },
+
+  async generateSpoonacularShoppingList(startDate, endDate) {
+    try {
+      return await api.post('/nutrition-profile/generate_spoonacular_shopping_list/', {
+        start_date: startDate,
+        end_date: endDate
+      })
+    } catch (error) {
+      console.error('Failed to generate Spoonacular shopping list:', error)
+      throw error
+    }
   }
 }
 
