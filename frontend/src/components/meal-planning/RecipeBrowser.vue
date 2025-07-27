@@ -71,7 +71,7 @@
             @error="handleImageError"
           />
           <div class="recipe-badges">
-            <span v-for="tag in recipe.dietary_tags.slice(0, 2)" :key="tag" class="badge">
+            <span v-for="tag in (recipe.dietary_tags || []).slice(0, 2)" :key="tag" class="badge">
               {{ formatTag(tag) }}
             </span>
           </div>
@@ -84,30 +84,30 @@
           <div class="recipe-stats">
             <div class="stat">
               <i class="fas fa-clock"></i>
-              <span>{{ recipe.total_time_minutes }}min</span>
+              <span>{{ recipe.total_time_minutes || 'N/A' }}{{ recipe.total_time_minutes ? 'min' : '' }}</span>
             </div>
             <div class="stat">
               <i class="fas fa-fire"></i>
-              <span>{{ Math.round(recipe.calories_per_serving) }} cal</span>
+              <span>{{ recipe.calories_per_serving ? Math.round(recipe.calories_per_serving) : 'N/A' }}{{ recipe.calories_per_serving ? ' cal' : '' }}</span>
             </div>
             <div class="stat">
               <i class="fas fa-users"></i>
-              <span>{{ recipe.servings }} servings</span>
+              <span>{{ recipe.servings || 'N/A' }}{{ recipe.servings ? ' servings' : '' }}</span>
             </div>
           </div>
 
           <div class="nutrition-preview">
             <div class="macro">
               <span class="macro-label">Protein</span>
-              <span class="macro-value">{{ Math.round(recipe.protein_per_serving) }}g</span>
+              <span class="macro-value">{{ recipe.protein_per_serving ? Math.round(recipe.protein_per_serving) : 'N/A' }}{{ recipe.protein_per_serving ? 'g' : '' }}</span>
             </div>
             <div class="macro">
               <span class="macro-label">Carbs</span>
-              <span class="macro-value">{{ Math.round(recipe.carbs_per_serving) }}g</span>
+              <span class="macro-value">{{ recipe.carbs_per_serving ? Math.round(recipe.carbs_per_serving) : 'N/A' }}{{ recipe.carbs_per_serving ? 'g' : '' }}</span>
             </div>
             <div class="macro">
               <span class="macro-label">Fat</span>
-              <span class="macro-value">{{ Math.round(recipe.fat_per_serving) }}g</span>
+              <span class="macro-value">{{ recipe.fat_per_serving ? Math.round(recipe.fat_per_serving) : 'N/A' }}{{ recipe.fat_per_serving ? 'g' : '' }}</span>
             </div>
           </div>
         </div>
@@ -159,8 +159,14 @@ export default {
   watch: {
     recipes: {
       immediate: true,
-      handler() {
+      handler(newRecipes) {
+        console.log('=== RecipeBrowser recipes changed ===')
+        console.log('New recipes array length:', newRecipes?.length || 0)
+        console.log('First recipe sample:', newRecipes?.[0])
+        console.log('Recipe IDs:', newRecipes?.map(r => r.id).slice(0, 5))
         this.filteredRecipes = this.recipes
+        console.log('Filtered recipes set to:', this.filteredRecipes?.length || 0)
+        console.log('====================================')
       }
     }
   },
@@ -169,27 +175,41 @@ export default {
   },
   methods: {
     applyFilters() {
+      console.log('=== Applying filters ===')
+      console.log('Starting with recipes:', this.recipes?.length || 0)
+      console.log('Search query:', this.searchQuery)
+      console.log('Selected cuisine:', this.selectedCuisine)
+      console.log('Selected meal type:', this.selectedMealType)
+      
       let filtered = this.recipes
 
       // Search filter
       if (this.searchQuery) {
         const query = this.searchQuery.toLowerCase()
+        const beforeSearch = filtered.length
         filtered = filtered.filter(recipe =>
-          recipe.title.toLowerCase().includes(query) ||
-          recipe.summary.toLowerCase().includes(query)
+          (recipe.title && recipe.title.toLowerCase().includes(query)) ||
+          (recipe.summary && recipe.summary.toLowerCase().includes(query))
         )
+        console.log(`Search filter: ${beforeSearch} -> ${filtered.length}`)
       }
 
       // Cuisine filter
       if (this.selectedCuisine) {
+        const beforeCuisine = filtered.length
         filtered = filtered.filter(recipe => recipe.cuisine === this.selectedCuisine)
+        console.log(`Cuisine filter: ${beforeCuisine} -> ${filtered.length}`)
       }
 
       // Meal type filter
       if (this.selectedMealType) {
+        const beforeMealType = filtered.length
         filtered = filtered.filter(recipe => recipe.meal_type === this.selectedMealType)
+        console.log(`Meal type filter: ${beforeMealType} -> ${filtered.length}`)
       }
 
+      console.log('Final filtered count:', filtered.length)
+      console.log('========================')
       this.filteredRecipes = filtered
     },
 

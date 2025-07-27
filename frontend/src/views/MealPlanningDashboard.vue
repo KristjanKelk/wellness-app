@@ -131,13 +131,46 @@ export default {
         // Add cache busting parameter to ensure fresh data
         const params = {
           _t: Date.now(),
-          page_size: 50  // Load more recipes by default
+          page_size: 100  // Load more recipes by default
         }
+        console.log('=== Loading Recipes ===')
+        console.log('Params:', params)
+        
         const response = await mealPlanningApi.getRecipes(params)
-        this.recipes = response.data.results || response.data || []
-        console.log(`Loaded ${this.recipes.length} recipes`)
+        console.log('Raw API response:', response)
+        console.log('Response data structure:', response?.data)
+        console.log('Response data type:', typeof response?.data)
+        
+        // Handle pagination response
+        if (response?.data?.results && Array.isArray(response.data.results)) {
+          this.recipes = response.data.results
+          console.log(`Loaded ${this.recipes.length} recipes from paginated response`)
+          console.log('Total recipes available:', response.data.count)
+          console.log('Has next page:', !!response.data.next)
+        } else if (Array.isArray(response?.data)) {
+          this.recipes = response.data
+          console.log(`Loaded ${this.recipes.length} recipes from array response`)
+        } else {
+          console.warn('Unexpected response structure:', response?.data)
+          this.recipes = []
+        }
+        
+        // Log sample recipe for debugging
+        if (this.recipes.length > 0) {
+          console.log('Sample recipe:', this.recipes[0])
+        } else {
+          console.log('No recipes found in response')
+        }
+        
+        console.log('======================')
       } catch (error) {
-        console.error('Failed to load recipes:', error)
+        console.error('=== Failed to load recipes ===')
+        console.error('Error:', error.message)
+        console.error('Error response:', error.response?.data)
+        console.error('Error status:', error.response?.status)
+        console.error('===============================')
+        
+        this.recipes = []
         // Show user-friendly error
         this.$toast?.error?.('Failed to load recipes') ||
         alert('Failed to load recipes')
