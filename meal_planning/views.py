@@ -7,8 +7,8 @@ from django.shortcuts import get_object_or_404
 from django.db import transaction
 from django.db import models
 from .models import NutritionProfile, Recipe, Ingredient, MealPlan, UserRecipeRating, NutritionLog
-from .services.ai_meal_planning_service import AIMealPlanningService
-from .services.spoonacular_service import SpoonacularService, SpoonacularAPIError
+from .services.ai_enhanced_meal_service import AIEnhancedMealService
+from .services.enhanced_spoonacular_service import EnhancedSpoonacularService, SpoonacularAPIError
 from .serializers import (
     NutritionProfileSerializer, RecipeSerializer, IngredientSerializer,
     MealPlanSerializer, UserRecipeRatingSerializer, NutritionLogSerializer
@@ -320,29 +320,18 @@ class NutritionProfileViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['get'])
     def spoonacular_meal_plan(self, request):
-        """Get user's Spoonacular meal plan for a week"""
+        """Get user's Spoonacular meal plan with AI analysis"""
         try:
             profile = self.get_object()
             
-            if not profile.spoonacular_username or not profile.spoonacular_user_hash:
-                return Response(
-                    {'error': 'User not connected to Spoonacular. Please connect first.'},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-            
-            # Get start date from query params (default to current week)
-            from datetime import date, timedelta
+            # Get start date from query params
             start_date = request.query_params.get('start_date')
-            if not start_date:
-                today = date.today()
-                start_of_week = today - timedelta(days=today.weekday())
-                start_date = start_of_week.strftime('%Y-%m-%d')
             
-            spoonacular_service = SpoonacularService()
-            meal_plan = spoonacular_service.get_meal_plan_week(
-                spoonacular_username=profile.spoonacular_username,
-                start_date=start_date,
-                user_hash=profile.spoonacular_user_hash
+            # Use enhanced service that combines Spoonacular + AI
+            ai_meal_service = AIEnhancedMealService()
+            meal_plan = ai_meal_service.get_spoonacular_meal_plan(
+                nutrition_profile=profile,
+                start_date=start_date
             )
             
             return Response(meal_plan)
@@ -413,17 +402,9 @@ class NutritionProfileViewSet(viewsets.ModelViewSet):
         try:
             profile = self.get_object()
             
-            if not profile.spoonacular_username or not profile.spoonacular_user_hash:
-                return Response(
-                    {'error': 'User not connected to Spoonacular'},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-            
-            spoonacular_service = SpoonacularService()
-            shopping_list = spoonacular_service.get_shopping_list(
-                spoonacular_username=profile.spoonacular_username,
-                user_hash=profile.spoonacular_user_hash
-            )
+            # Use enhanced service
+            ai_meal_service = AIEnhancedMealService()
+            shopping_list = ai_meal_service.get_spoonacular_shopping_list(profile)
             
             return Response(shopping_list)
             
@@ -435,6 +416,104 @@ class NutritionProfileViewSet(viewsets.ModelViewSet):
             )
         except Exception as e:
             logger.error(f"Unexpected error getting shopping list: {str(e)}")
+            return Response(
+                {'error': 'Unexpected error occurred'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    @action(detail=False, methods=['post'])
+    def generate_smart_meal_plan(self, request):
+        """Generate an AI-enhanced meal plan using Spoonacular"""
+        try:
+            profile = self.get_object()
+            days = request.data.get('days', 7)
+            
+            # Validate days parameter
+            if not isinstance(days, int) or days < 1 or days > 14:
+                return Response(
+                    {'error': 'Days must be an integer between 1 and 14'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Generate meal plan with AI enhancements
+            ai_meal_service = AIEnhancedMealService()
+            meal_plan = ai_meal_service.generate_smart_meal_plan(profile, days)
+            
+            return Response(meal_plan)
+            
+        except SpoonacularAPIError as e:
+            logger.error(f"Failed to generate smart meal plan: {str(e)}")
+            return Response(
+                {'error': 'Failed to generate meal plan', 'details': str(e)},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        except Exception as e:
+            logger.error(f"Unexpected error generating smart meal plan: {str(e)}")
+            return Response(
+                {'error': 'Unexpected error occurred'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    @action(detail=False, methods=['post'])
+    def analyze_meal_plan(self, request):
+        """Analyze any meal plan with AI"""
+        try:
+            profile = self.get_object()
+            meal_plan_data = request.data.get('meal_plan_data')
+            
+            if not meal_plan_data:
+                return Response(
+                    {'error': 'meal_plan_data is required'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Analyze with AI
+            ai_meal_service = AIEnhancedMealService()
+            analysis = ai_meal_service.analyze_meal_plan_with_ai(meal_plan_data, profile)
+            
+            return Response(analysis)
+            
+        except Exception as e:
+            logger.error(f"Failed to analyze meal plan: {str(e)}")
+            return Response(
+                {'error': 'Analysis failed', 'details': str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    @action(detail=False, methods=['post'])
+    def connect_spoonacular(self, request):
+        """Connect user to Spoonacular for personalized meal planning"""
+        try:
+            profile = self.get_object()
+            
+            # Use enhanced service to connect
+            ai_meal_service = AIEnhancedMealService()
+            connection = ai_meal_service.spoonacular_service.connect_user(
+                username=f"user_{profile.user.id}",
+                first_name=profile.user.first_name,
+                last_name=profile.user.last_name,
+                email=profile.user.email
+            )
+            
+            # Save connection details
+            profile.spoonacular_username = connection.get('username')
+            profile.spoonacular_user_hash = connection.get('hash')
+            profile.save()
+            
+            return Response({
+                'message': 'Successfully connected to Spoonacular',
+                'connected': True,
+                'spoonacular_username': profile.spoonacular_username
+            })
+            
+        except SpoonacularAPIError as e:
+            logger.error(f"Failed to connect to Spoonacular: {str(e)}")
+            return Response(
+                {'error': 'Failed to connect to Spoonacular', 'details': str(e)},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        except Exception as e:
+            logger.error(f"Unexpected error connecting to Spoonacular: {str(e)}")
             return Response(
                 {'error': 'Unexpected error occurred'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
@@ -596,12 +675,36 @@ class MealPlanViewSet(viewsets.ModelViewSet):
             else:
                 start_date_obj = start_date
 
-            # Use the AI meal planning service to generate a full meal plan
-            ai_service = AIMealPlanningService()
-            meal_plan = ai_service.generate_meal_plan(
+            # Use the enhanced AI meal planning service
+            ai_meal_service = AIEnhancedMealService()
+            nutrition_profile = get_object_or_404(NutritionProfile, user=request.user)
+            
+            # Determine number of days based on plan type
+            days = 1 if plan_type == 'daily' else 7
+            
+            # Generate the meal plan
+            meal_plan_data = ai_meal_service.generate_smart_meal_plan(nutrition_profile, days)
+            
+            # Create a MealPlan object
+            end_date = start_date_obj
+            if plan_type == 'weekly':
+                from datetime import timedelta
+                end_date = start_date_obj + timedelta(days=6)
+            
+            meal_plan = MealPlan.objects.create(
                 user=request.user,
                 plan_type=plan_type,
                 start_date=start_date_obj,
+                end_date=end_date,
+                meal_plan_data=meal_plan_data,
+                total_calories=meal_plan_data.get('nutrition', {}).get('calories', 0),
+                avg_daily_calories=meal_plan_data.get('nutrition', {}).get('calories', 0),
+                total_protein=meal_plan_data.get('nutrition', {}).get('protein', 0),
+                total_carbs=meal_plan_data.get('nutrition', {}).get('carbs', 0),
+                total_fat=meal_plan_data.get('nutrition', {}).get('fat', 0),
+                nutritional_balance_score=meal_plan_data.get('scores', {}).get('balance_score', 5.0),
+                variety_score=meal_plan_data.get('scores', {}).get('variety_score', 5.0),
+                preference_match_score=meal_plan_data.get('scores', {}).get('preference_match_score', 5.0)
             )
 
             serializer = self.get_serializer(meal_plan)
