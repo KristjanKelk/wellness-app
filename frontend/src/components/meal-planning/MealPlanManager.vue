@@ -543,6 +543,8 @@ export default {
         console.log('=== Regenerating Meal ===')
         console.log('Plan ID:', planId)
         console.log('Meal Data:', mealData)
+        console.log('Meal Data type:', typeof mealData)
+        console.log('Meal Data structure:', JSON.stringify(mealData, null, 2))
         
         if (!mealData) {
           console.error('regenerateMeal: mealData is null/undefined')
@@ -550,12 +552,43 @@ export default {
         }
         
         const { day, mealType } = mealData
-        console.log('Day:', day)
-        console.log('Meal Type:', mealType)
+        console.log('Day:', day, 'type:', typeof day)
+        console.log('Meal Type:', mealType, 'type:', typeof mealType)
         
-        if (!day || !mealType) {
-          console.error('regenerateMeal: day or mealType missing', { day, mealType })
-          throw new Error('Day and meal type are required')
+        // Additional validation with more descriptive error messages
+        if (!day) {
+          console.error('regenerateMeal: day is missing or invalid', { day, mealType, mealData })
+          throw new Error('Day is required for meal regeneration')
+        }
+        
+        if (!mealType) {
+          console.error('regenerateMeal: mealType is missing or invalid', { day, mealType, mealData })
+          throw new Error('Meal type is required for meal regeneration')
+        }
+        
+        // Validate that day looks like a proper date string
+        if (typeof day !== 'string' || day.length < 8) {
+          console.error('regenerateMeal: day does not appear to be a valid date string', { day, mealType })
+          throw new Error('Invalid date format provided')
+        }
+        
+        // Check for the specific error case we're debugging
+        const possibleMealTypes = ['breakfast', 'lunch', 'dinner', 'snack']
+        if (possibleMealTypes.includes(String(day).toLowerCase())) {
+          console.error('🚨 CRITICAL BUG: Day parameter contains meal type instead of date!', {
+            day,
+            mealType,
+            mealData,
+            planId,
+            stackTrace: new Error().stack
+          })
+          throw new Error(`Invalid parameters: day="${day}" appears to be a meal type, not a date`)
+        }
+        
+        // Validate meal type
+        const validMealTypes = ['breakfast', 'lunch', 'dinner', 'snack']
+        if (!validMealTypes.includes(mealType.toLowerCase())) {
+          console.warn('regenerateMeal: unusual meal type provided', { mealType, validTypes: validMealTypes })
         }
         
         console.log('Making API call to regenerate meal...')

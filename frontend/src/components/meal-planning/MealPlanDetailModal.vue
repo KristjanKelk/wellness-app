@@ -237,8 +237,9 @@
 
                   <div class="meal-actions">
                     <button
-                      @click="regenerateMeal(date, meal.meal_type || inferMealTypeFromTime(new Date()))"
+                      @click="debugAndRegenerateMeal(date, meal, index)"
                       class="btn btn-sm btn-outline"
+                      :title="`Regenerate ${meal.meal_type || 'meal'} for ${formatDate(date)}`"
                     >
                       <i class="fas fa-redo"></i>
                       Regenerate
@@ -496,11 +497,46 @@ export default {
       return 0
     },
 
+    debugAndRegenerateMeal(date, meal, index) {
+      console.log('=== debugAndRegenerateMeal called ===')
+      console.log('Date from template:', date)
+      console.log('Date type:', typeof date)
+      console.log('Meal object:', meal)
+      console.log('Meal index:', index)
+      console.log('Meal.meal_type:', meal?.meal_type)
+      console.log('Meal.meal_type type:', typeof meal?.meal_type)
+      
+      const mealType = meal.meal_type || this.inferMealTypeFromTime(new Date())
+      console.log('Computed mealType:', mealType)
+      console.log('About to call regenerateMeal with:', { date, mealType })
+      console.log('==========================================')
+      
+      this.regenerateMeal(date, mealType)
+    },
+
     regenerateMeal(date, mealType) {
       console.log('=== regenerateMeal called ===')
       console.log('Date:', date)
+      console.log('Date type:', typeof date)
       console.log('MealType (raw):', mealType)
       console.log('MealType type:', typeof mealType)
+      
+      // Debug: Check if date is unexpectedly a meal type
+      const possibleMealTypes = ['breakfast', 'lunch', 'dinner', 'snack']
+      if (possibleMealTypes.includes(String(date).toLowerCase())) {
+        console.error('🚨 BUG DETECTED: Date parameter contains meal type instead of date!', {
+          dateParam: date,
+          mealTypeParam: mealType,
+          stackTrace: new Error().stack
+        })
+        // This helps identify where the wrong call is coming from
+      }
+      
+      // Validate date parameter
+      if (!date || typeof date !== 'string') {
+        console.error('Invalid date provided:', date, 'type:', typeof date)
+        return
+      }
       
       // Ensure mealType is properly defined
       if (!mealType || mealType === 'undefined' || mealType === 'null') {
@@ -514,12 +550,20 @@ export default {
       // Clean up the mealType string
       const cleanMealType = String(mealType).toLowerCase().trim()
       
-      console.log('Final cleaned mealType:', cleanMealType)
+      // Additional validation to ensure we have valid values
+      let finalMealType = cleanMealType
+      if (!finalMealType || finalMealType === 'undefined' || finalMealType === 'null') {
+        console.error('Failed to determine valid mealType, using breakfast as fallback')
+        finalMealType = 'breakfast'
+      }
+      
+      console.log('Final date:', date)
+      console.log('Final cleaned mealType:', finalMealType)
       console.log('=============================')
       
       this.$emit('regenerate-meal', {
         day: date,
-        mealType: cleanMealType
+        mealType: finalMealType
       })
     },
 
