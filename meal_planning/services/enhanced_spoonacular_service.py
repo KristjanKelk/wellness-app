@@ -38,6 +38,201 @@ class EnhancedSpoonacularService:
             'requests_per_second': 1
         }
 
+    def _save_recipe_to_database(self, recipe_data: Dict, created_by=None) -> Optional['Recipe']:
+        """
+        Save a recipe from Spoonacular to our Recipe database
+        
+        Args:
+            recipe_data: Recipe data from Spoonacular API
+            created_by: User who saved this recipe (optional)
+        
+        Returns:
+            Saved Recipe instance or None if failed
+        """
+        try:
+            from ..models import Recipe
+            
+            # Check if recipe already exists
+            spoonacular_id = recipe_data.get('id')
+            if spoonacular_id:
+                existing_recipe = Recipe.objects.filter(spoonacular_id=spoonacular_id).first()
+                if existing_recipe:
+                    logger.debug(f"Recipe {spoonacular_id} already exists in database")
+                    return existing_recipe
+            
+            # Extract recipe information
+            title = recipe_data.get('title', 'Untitled Recipe')
+            summary = recipe_data.get('summary', '')
+            
+            # Determine meal type - this might need to be inferred or passed as parameter
+            meal_type = self._infer_meal_type(title, recipe_data)
+            
+            # Extract nutrition information
+            nutrition = self._extract_nutrition(recipe_data)
+            
+            # Extract timing information
+            prep_time = recipe_data.get('preparationMinutes', 0)
+            cook_time = recipe_data.get('cookingMinutes', 0)
+            ready_in_minutes = recipe_data.get('readyInMinutes', prep_time + cook_time)
+            
+            # Extract dietary tags
+            dietary_tags = self._extract_dietary_tags(recipe_data)
+            
+            # Extract allergens
+            allergens = self._extract_allergens(recipe_data)
+            
+            # Create recipe instance with better error handling
+            recipe = Recipe.objects.create(
+                title=title[:300],  # Ensure title fits in field
+                summary=summary[:1000] if summary else '',  # Limit summary length
+                meal_type=meal_type,
+                servings=max(1, recipe_data.get('servings', 1)),  # Ensure positive servings
+                prep_time_minutes=max(0, prep_time),
+                cook_time_minutes=max(0, cook_time),
+                total_time_minutes=max(0, ready_in_minutes),
+                difficulty_level='medium',  # Default, could be inferred
+                spoonacular_id=spoonacular_id,
+                ingredients_data=self._extract_ingredients_data(recipe_data),
+                instructions=self._extract_instructions(recipe_data),
+                calories_per_serving=max(0, nutrition.get('calories', 0)),
+                protein_per_serving=max(0, nutrition.get('protein', 0)),
+                carbs_per_serving=max(0, nutrition.get('carbs', 0)),
+                fat_per_serving=max(0, nutrition.get('fat', 0)),
+                fiber_per_serving=max(0, nutrition.get('fiber', 0)),
+                dietary_tags=dietary_tags,
+                allergens=allergens,
+                image_url=recipe_data.get('image', '')[:500] if recipe_data.get('image') else '',  # Limit URL length
+                source_url=recipe_data.get('sourceUrl', '')[:500] if recipe_data.get('sourceUrl') else '',
+                source_type='spoonacular',
+                is_verified=True,
+                is_public=True,
+                created_by=created_by
+            )
+            
+            logger.info(f"Successfully saved recipe '{title}' to database")
+            return recipe
+            
+        except Exception as e:
+            logger.error(f"Failed to save recipe to database: {str(e)}")
+            return None
+
+    def _infer_meal_type(self, title: str, recipe_data: Dict) -> str:
+        """
+        Infer meal type from recipe title and data
+        
+        Args:
+            title: Recipe title
+            recipe_data: Full recipe data
+        
+        Returns:
+            Meal type string
+        """
+        title_lower = title.lower()
+        
+        # Breakfast keywords
+        if any(word in title_lower for word in ['breakfast', 'morning', 'pancake', 'waffle', 'oat', 'cereal', 'toast', 'egg', 'omelet']):
+            return 'breakfast'
+        
+        # Dinner keywords (more substantial meals)
+        if any(word in title_lower for word in ['dinner', 'roast', 'steak', 'pasta', 'curry', 'stew', 'casserole']):
+            return 'dinner'
+        
+        # Snack keywords
+        if any(word in title_lower for word in ['snack', 'chip', 'dip', 'cookie', 'bar', 'bite']):
+            return 'snack'
+        
+        # Default to lunch
+        return 'lunch'
+
+    def _extract_dietary_tags(self, recipe_data: Dict) -> List[str]:
+        """Extract dietary tags from recipe data"""
+        tags = []
+        
+        # Check recipe data for dietary information
+        if recipe_data.get('vegetarian'):
+            tags.append('vegetarian')
+        if recipe_data.get('vegan'):
+            tags.append('vegan')
+        if recipe_data.get('glutenFree'):
+            tags.append('gluten_free')
+        if recipe_data.get('dairyFree'):
+            tags.append('dairy_free')
+        if recipe_data.get('veryHealthy'):
+            tags.append('healthy')
+        if recipe_data.get('cheap'):
+            tags.append('budget_friendly')
+        if recipe_data.get('veryPopular'):
+            tags.append('popular')
+        
+        # Check dish types
+        dish_types = recipe_data.get('dishTypes', [])
+        for dish_type in dish_types:
+            if dish_type in ['salad', 'soup', 'dessert']:
+                tags.append(dish_type)
+        
+        return tags
+
+    def _extract_allergens(self, recipe_data: Dict) -> List[str]:
+        """Extract potential allergens from recipe data"""
+        allergens = []
+        
+        # This is a basic implementation - could be enhanced with ingredient analysis
+        if not recipe_data.get('glutenFree', True):
+            allergens.append('gluten')
+        if not recipe_data.get('dairyFree', True):
+            allergens.append('dairy')
+        
+        return allergens
+
+    def _extract_ingredients_data(self, recipe_data: Dict) -> List[Dict]:
+        """Extract ingredients data in our format"""
+        ingredients = []
+        
+        # Extract from extendedIngredients if available
+        extended_ingredients = recipe_data.get('extendedIngredients', [])
+        for ingredient in extended_ingredients:
+            ingredients.append({
+                'id': ingredient.get('id'),
+                'name': ingredient.get('name', ''),
+                'original': ingredient.get('original', ''),
+                'amount': ingredient.get('amount', 0),
+                'unit': ingredient.get('unit', ''),
+                'measures': ingredient.get('measures', {})
+            })
+        
+        return ingredients
+
+    def _extract_instructions(self, recipe_data: Dict) -> List[Dict]:
+        """Extract cooking instructions in our format"""
+        instructions = []
+        
+        # Extract from analyzedInstructions if available
+        analyzed_instructions = recipe_data.get('analyzedInstructions', [])
+        for instruction_group in analyzed_instructions:
+            steps = instruction_group.get('steps', [])
+            for step in steps:
+                instructions.append({
+                    'number': step.get('number', 0),
+                    'step': step.get('step', ''),
+                    'ingredients': step.get('ingredients', []),
+                    'equipment': step.get('equipment', []),
+                    'length': step.get('length', {})
+                })
+        
+        # Fallback to simple instructions if no analyzed instructions
+        if not instructions and 'instructions' in recipe_data:
+            simple_instructions = recipe_data.get('instructions', '')
+            if simple_instructions:
+                instructions.append({
+                    'number': 1,
+                    'step': simple_instructions,
+                    'ingredients': [],
+                    'equipment': [],
+                    'length': {}
+                })
+        
+        return instructions
+
     def _check_rate_limit(self) -> bool:
         """Check if we're within rate limits"""
         try:
@@ -446,24 +641,25 @@ class EnhancedSpoonacularService:
 
         return meal_plan
 
-    def normalize_meal_plan_data(self, spoonacular_data: Dict, time_frame: str = "day") -> Dict:
+    def normalize_meal_plan_data(self, spoonacular_data: Dict, time_frame: str = "day", created_by=None) -> Dict:
         """
-        Normalize Spoonacular meal plan data to our internal format
+        Normalize Spoonacular meal plan data to our internal format and save recipes to database
         
         Args:
             spoonacular_data: Raw data from Spoonacular
             time_frame: "day" or "week"
+            created_by: User who created this meal plan (for recipe saving)
         
         Returns:
             Normalized meal plan data
         """
         if time_frame == "day":
-            return self._normalize_day_meal_plan(spoonacular_data)
+            return self._normalize_day_meal_plan(spoonacular_data, created_by)
         else:
-            return self._normalize_week_meal_plan(spoonacular_data)
+            return self._normalize_week_meal_plan(spoonacular_data, created_by)
 
-    def _normalize_day_meal_plan(self, data: Dict) -> Dict:
-        """Normalize a single day meal plan"""
+    def _normalize_day_meal_plan(self, data: Dict, created_by=None) -> Dict:
+        """Normalize a single day meal plan and save recipes to database"""
         normalized = {
             'date': date.today().isoformat(),
             'meals': {
@@ -480,14 +676,36 @@ class EnhancedSpoonacularService:
         }
 
         for meal in data.get('meals', []):
+            # Get detailed recipe information if not already complete
+            detailed_meal = meal
+            recipe_id = meal.get('id')
+            
+            # If meal data is incomplete (common with meal plan generation), fetch detailed info
+            if recipe_id and not meal.get('extendedIngredients'):
+                try:
+                    logger.info(f"Fetching detailed recipe information for recipe ID: {recipe_id}")
+                    detailed_meal = self.get_recipe_information(recipe_id, include_nutrition=True)
+                    # Merge with original meal data to preserve any meal plan specific info
+                    detailed_meal.update({
+                        key: value for key, value in meal.items() 
+                        if key not in detailed_meal or not detailed_meal[key]
+                    })
+                except Exception as e:
+                    logger.warning(f"Failed to fetch detailed recipe info for {recipe_id}: {str(e)}")
+                    detailed_meal = meal
+            
+            # Save recipe to database with detailed information
+            saved_recipe = self._save_recipe_to_database(detailed_meal, created_by)
+            
             meal_data = {
-                'id': meal.get('id'),
-                'title': meal.get('title', ''),
-                'readyInMinutes': meal.get('readyInMinutes', 0),
-                'servings': meal.get('servings', 1),
-                'sourceUrl': meal.get('sourceUrl', ''),
-                'image': meal.get('image', ''),
-                'nutrition': self._extract_nutrition(meal)
+                'id': detailed_meal.get('id'),
+                'title': detailed_meal.get('title', ''),
+                'readyInMinutes': detailed_meal.get('readyInMinutes', 0),
+                'servings': detailed_meal.get('servings', 1),
+                'sourceUrl': detailed_meal.get('sourceUrl', ''),
+                'image': detailed_meal.get('image', ''),
+                'nutrition': self._extract_nutrition(detailed_meal),
+                'database_id': str(saved_recipe.id) if saved_recipe else None  # Add reference to saved recipe
             }
 
             # Determine meal type based on meal plan structure
@@ -510,8 +728,8 @@ class EnhancedSpoonacularService:
 
         return normalized
 
-    def _normalize_week_meal_plan(self, data: Dict) -> Dict:
-        """Normalize a week meal plan"""
+    def _normalize_week_meal_plan(self, data: Dict, created_by=None) -> Dict:
+        """Normalize a week meal plan and save recipes to database"""
         normalized = {
             'week': data.get('week', {}),
             'days': []
@@ -520,7 +738,7 @@ class EnhancedSpoonacularService:
         week_data = data.get('week', {})
         for day_key in ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']:
             if day_key in week_data:
-                day_data = self._normalize_day_meal_plan({'meals': week_data[day_key].get('meals', [])})
+                day_data = self._normalize_day_meal_plan({'meals': week_data[day_key].get('meals', [])}, created_by)
                 day_data['day'] = day_key
                 normalized['days'].append(day_data)
 
