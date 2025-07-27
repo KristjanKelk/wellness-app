@@ -464,7 +464,15 @@ export default {
 
     async regenerateMeal(planId, mealData) {
       try {
+        if (!mealData) {
+          throw new Error('Meal data is required')
+        }
+        
         const { day, mealType } = mealData
+        if (!day || !mealType) {
+          throw new Error('Day and meal type are required')
+        }
+        
         const response = await mealPlanningApi.regenerateMeal(planId, day, mealType)
 
         // Update the meal plan in our list
@@ -483,7 +491,15 @@ export default {
 
     async getMealAlternatives(planId, mealData) {
       try {
+        if (!mealData) {
+          throw new Error('Meal data is required')
+        }
+        
         const { day, mealType } = mealData
+        if (!day || !mealType) {
+          throw new Error('Day and meal type are required')
+        }
+        
         const response = await mealPlanningApi.getMealAlternatives(planId, day, mealType)
         return response.data || []
       } catch (error) {

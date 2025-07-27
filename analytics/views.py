@@ -10,8 +10,14 @@ from collections import Counter
 import re
 import openai
 
-
-openai.api_key = settings.OPENAI_API_KEY
+# Handle OpenAI API key setup for older versions
+try:
+    # Try new version first
+    openai_client = openai.OpenAI(api_key=settings.OPENAI_API_KEY)
+except AttributeError:
+    # Fall back to old version
+    openai.api_key = settings.OPENAI_API_KEY
+    openai_client = None
 
 from .models import AIInsight, WellnessScore, Milestone, HealthSummary, SummaryMetric
 from .serializers import AIInsightSerializer, WellnessScoreSerializer, MilestoneSerializer,HealthSummarySerializer, HealthSummaryCreateSerializer, HealthSummaryListSerializer, SummaryStatsSerializer,SummaryInsightSerializer, SummaryMetricSerializer
@@ -364,21 +370,41 @@ class AIInsightViewSet(viewsets.ModelViewSet):
             # Build enhanced prompt
             prompt = self._build_enhanced_prompt(context_data)
 
-            resp = openai.ChatCompletion.create(
-                model="gpt-3.5-turbo-1106",
-                messages=[
-                    {
-                        "role": "system",
-                        "content": "You are a certified wellness coach…"
-                    },
-                    {
-                        "role": "user",
-                        "content": prompt
-                    }
-                ],
-                max_tokens=200,
-                temperature=0.7
-            )
+            # Use compatible OpenAI call based on version
+            if openai_client:
+                # New version
+                resp = openai_client.chat.completions.create(
+                    model="gpt-3.5-turbo",
+                    messages=[
+                        {
+                            "role": "system",
+                            "content": "You are a certified wellness coach…"
+                        },
+                        {
+                            "role": "user",
+                            "content": prompt
+                        }
+                    ],
+                    max_tokens=200,
+                    temperature=0.7
+                )
+            else:
+                # Old version
+                resp = openai.ChatCompletion.create(
+                    model="gpt-3.5-turbo",
+                    messages=[
+                        {
+                            "role": "system",
+                            "content": "You are a certified wellness coach…"
+                        },
+                        {
+                            "role": "user",
+                            "content": prompt
+                        }
+                    ],
+                    max_tokens=200,
+                    temperature=0.7
+                )
 
             insights_text = resp.choices[0].message.content
             lines = [
