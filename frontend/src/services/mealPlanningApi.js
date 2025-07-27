@@ -3,7 +3,7 @@ import axios from 'axios';
 import AuthService from './auth.service';
 import store from '../store';
 
-const API_BASE_URL = 'http://localhost:8000/meal-planning/api';
+const API_BASE_URL = (process.env.VUE_APP_API_URL || 'https://wellness-app-tx2c.onrender.com/api').replace(/\/+$/, '').replace('/api', '') + '/meal-planning/api';
 
 // Create axios instance with base configuration - MATCHING your http.service.js pattern
 const api = axios.create({
