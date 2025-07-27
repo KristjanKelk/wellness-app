@@ -99,6 +99,13 @@
 
         <div class="meals-section" v-if="mealPlan.meal_plan_data && mealPlan.meal_plan_data.meals">
           <h3>Detailed Meal Plan</h3>
+          <!-- Debug info for meals section -->
+          <div style="background: #fff3cd; padding: 8px; margin-bottom: 10px; font-size: 12px; border-radius: 4px;">
+            <strong>Meals Debug:</strong><br>
+            meals object: {{ Object.keys(mealPlan.meal_plan_data.meals) }}<br>
+            meals count: {{ Object.keys(mealPlan.meal_plan_data.meals).length }}<br>
+            sample meal data: {{ JSON.stringify(Object.values(mealPlan.meal_plan_data.meals)[0]).substring(0, 200) }}...
+          </div>
           <div class="meals-grid">
             <div
               v-for="(dayMeals, date) in mealPlan.meal_plan_data.meals"
@@ -267,6 +274,15 @@
         <div v-else class="no-meals">
           <i class="fas fa-utensils"></i>
           <p>No meal details available</p>
+          <!-- Debug info for no meals -->
+          <div style="background: #f8d7da; padding: 8px; margin-top: 10px; font-size: 12px; border-radius: 4px;">
+            <strong>No Meals Debug:</strong><br>
+            mealPlan exists: {{ !!mealPlan }}<br>
+            mealPlan.meal_plan_data exists: {{ !!mealPlan?.meal_plan_data }}<br>
+            mealPlan.meal_plan_data.meals exists: {{ !!mealPlan?.meal_plan_data?.meals }}<br>
+            mealPlan structure: {{ JSON.stringify(Object.keys(mealPlan || {})) }}<br>
+            meal_plan_data structure: {{ JSON.stringify(Object.keys(mealPlan?.meal_plan_data || {})) }}
+          </div>
         </div>
       </div>
 
@@ -295,6 +311,14 @@ export default {
     }
   },
   emits: ['close', 'regenerate-meal', 'get-alternatives', 'analyze-plan'],
+  mounted() {
+    console.log('MealPlanDetailModal mounted with mealPlan:', this.mealPlan)
+    console.log('mealPlan.meal_plan_data:', this.mealPlan?.meal_plan_data)
+    console.log('mealPlan.meal_plan_data.meals:', this.mealPlan?.meal_plan_data?.meals)
+    if (this.mealPlan?.meal_plan_data?.meals) {
+      console.log('Available meal dates:', Object.keys(this.mealPlan.meal_plan_data.meals))
+    }
+  },
   methods: {
     formatPlanType(type) {
       if (!type) return 'Unknown'

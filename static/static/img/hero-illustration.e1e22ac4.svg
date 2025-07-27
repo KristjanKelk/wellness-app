@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="600" height="400" viewBox="0 0 600 400" fill="none">
+  <!-- Background Elements -->
+  <circle cx="300" cy="200" r="180" fill="#F0FFFC" />
+  <circle cx="300" cy="200" r="150" fill="#E0FAF8" />
+
+  <!-- Dashboard Display -->
+  <rect x="150" y="100" width="300" height="200" rx="12" fill="white" stroke="#30C1B1" stroke-width="3"/>
+
+  <!-- Charts and Elements -->
+  <!-- Progress Chart -->
+  <path d="M180 250C180 250 200 220 220 230C240 240 250 220 270 210C290 200 310 210 330 200C350 190 370 180 390 190C410 200 420 180 420 180" stroke="#30C1B1" stroke-width="4" stroke-linecap="round"/>
+
+  <!-- Activity Gauge -->
+  <circle cx="220" cy="150" r="30" fill="#F5F5F5" stroke="#30C1B1" stroke-width="2"/>
+  <path d="M220 150L220 130" stroke="#30C1B1" stroke-width="3" stroke-linecap="round"/>
+  <path d="M220 150L235 160" stroke="#212A36" stroke-width="3" stroke-linecap="round"/>
+
+  <!-- BMI Scale -->
+  <rect x="300" y="130" width="120" height="12" rx="6" fill="#F5F5F5"/>
+  <rect x="300" y="130" width="60" height="12" rx="6" fill="#30C1B1"/>
+  <circle cx="360" cy="136" r="8" fill="white" stroke="#212A36" stroke-width="2"/>
+
+  <!-- Wellness Score -->
+  <circle cx="350" cy="200" r="35" fill="#F5F5F5" stroke="#30C1B1" stroke-width="3"/>
+  <path d="M350 200L350 175" stroke="#30C1B1" stroke-width="3" stroke-linecap="round"/>
+  <path d="M350 200L370 210" stroke="#212A36" stroke-width="3" stroke-linecap="round"/>
+
+  <!-- Person Icon -->
+  <circle cx="440" cy="130" r="20" fill="#30C1B1"/>
+  <path d="M440 125C443.314 125 446 122.314 446 119C446 115.686 443.314 113 440 113C436.686 113 434 115.686 434 119C434 122.314 436.686 125 440 125Z" fill="white"/>
+  <path d="M430 145V138C430 133.582 434.477 130 440 130C445.523 130 450 133.582 450 138V145" fill="#30C1B1"/>
+  <path d="M430 145V138C430 133.582 434.477 130 440 130C445.523 130 450 133.582 450 138V145" stroke="white" stroke-width="2"/>
+
+  <!-- AI Recommendation Card -->
+  <rect x="280" y="250" width="150" height="30" rx="6" fill="#F0FFFC" stroke="#30C1B1" stroke-width="2"/>
+  <circle cx="295" cy="265" r="8" fill="#30C1B1"/>
+  <line x1="315" y1="260" x2="415" y2="260" stroke="#212A36" stroke-width="2" stroke-linecap="round"/>
+  <line x1="315" y1="270" x2="395" y2="270" stroke="#212A36" stroke-width="2" stroke-linecap="round"/>
+
+  <!-- Device Mockups -->
+  <rect x="100" y="250" width="40" height="70" rx="5" fill="white" stroke="#212A36" stroke-width="2"/>
+  <rect x="110" y="260" width="20" height="30" rx="2" fill="#30C1B1"/>
+  <rect x="110" y="295" width="20" height="5" rx="1" fill="#212A36"/>
+  <rect x="110" y="305" width="20" height="5" rx="1" fill="#212A36"/>
+
+  <rect x="460" y="230" width="80" height="50" rx="5" fill="white" stroke="#212A36" stroke-width="2"/>
+  <circle cx="480" cy="255" r="10" fill="#30C1B1"/>
+  <rect x="500" y="245" width="30" height="5" rx="1" fill="#212A36"/>
+  <rect x="500" y="255" width="20" height="5" rx="1" fill="#212A36"/>
+
+  <!-- Abstract Elements -->
+  <circle cx="130" cy="110" r="15" fill="#30C1B1" opacity="0.2"/>
+  <circle cx="470" cy="300" r="25" fill="#30C1B1" opacity="0.2"/>
+  <circle cx="500" cy="120" r="10" fill="#30C1B1" opacity="0.3"/>
+  <circle cx="150" cy="330" r="20" fill="#30C1B1" opacity="0.2"/>
+</svg>
