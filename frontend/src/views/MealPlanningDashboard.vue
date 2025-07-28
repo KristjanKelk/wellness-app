@@ -27,6 +27,7 @@
             :loading="recipesLoading"
             @recipe-selected="selectRecipe"
             @refresh-recipes="loadRecipes"
+            @remove-recipe="removeRecipe"
           />
         </div>
 
@@ -63,6 +64,7 @@
     v-if="showRecipeModal"
     :recipe="selectedRecipe"
     @close="closeRecipeModal"
+    @recipe-saved="onRecipeSaved"
   />
 </div>
 </template>
@@ -90,7 +92,7 @@ export default {
     return {
       activeTab: 'recipes',
       tabs: [
-        { id: 'recipes', name: 'Recipes', icon: 'fas fa-utensils' },
+        { id: 'recipes', name: 'My Recipes', icon: 'fas fa-utensils' },
         { id: 'profile', name: 'Nutrition Profile', icon: 'fas fa-user-cog' },
         { id: 'meal-plans', name: 'Meal Plans', icon: 'fas fa-calendar-alt' },
         { id: 'spoonacular', name: 'Spoonacular', icon: 'fas fa-link' },
@@ -134,28 +136,28 @@ export default {
           page_size: 100  // Load more recipes by default
         }
         if (process.env.NODE_ENV === 'development') {
-          console.log('🔄 Loading recipes from API...')
+          console.log('🔄 Loading my recipes from API...')
         }
         
-        const response = await mealPlanningApi.getRecipes(params)
+        const response = await mealPlanningApi.getMyRecipes(params)
         
         // Handle pagination response
         if (response?.data?.results && Array.isArray(response.data.results)) {
           this.recipes = response.data.results
           if (process.env.NODE_ENV === 'development') {
-            console.log(`✅ Loaded ${this.recipes.length} recipes (${response.data.count} total available)`)
+            console.log(`✅ Loaded ${this.recipes.length} my recipes (${response.data.count} total available)`)
           }
         } else if (Array.isArray(response?.data)) {
           this.recipes = response.data
           if (process.env.NODE_ENV === 'development') {
-            console.log(`✅ Loaded ${this.recipes.length} recipes`)
+            console.log(`✅ Loaded ${this.recipes.length} my recipes`)
           }
         } else {
           console.warn('⚠️ Unexpected API response structure:', response?.data)
           this.recipes = []
         }
       } catch (error) {
-        console.error('❌ Failed to load recipes:', error.message)
+        console.error('❌ Failed to load my recipes:', error.message)
         if (process.env.NODE_ENV === 'development') {
           console.error('Error details:', {
             status: error.response?.status,
@@ -165,8 +167,8 @@ export default {
         
         this.recipes = []
         // Show user-friendly error
-        this.$toast?.error?.('Failed to load recipes') ||
-        alert('Failed to load recipes')
+        this.$toast?.error?.('Failed to load your recipes') ||
+        alert('Failed to load your recipes')
       } finally {
         this.recipesLoading = false
       }
@@ -220,6 +222,39 @@ export default {
     closeRecipeModal() {
       this.showRecipeModal = false
       this.selectedRecipe = null
+    },
+
+    async removeRecipe(recipe) {
+      if (confirm(`Are you sure you want to remove "${recipe.title}" from your collection?`)) {
+        try {
+          await mealPlanningApi.removeRecipeFromMyCollection(recipe.id)
+          
+          // Remove from local state
+          this.recipes = this.recipes.filter(r => r.id !== recipe.id)
+          
+          this.$toast?.success?.('Recipe removed from your collection') ||
+          alert('Recipe removed from your collection')
+          
+        } catch (error) {
+          console.error('Error removing recipe:', error)
+          this.$toast?.error?.('Failed to remove recipe') ||
+          alert('Failed to remove recipe')
+        }
+      }
+    },
+
+    async onRecipeSaved(savedRecipe) {
+      console.log('Recipe saved event received:', savedRecipe)
+      
+      // Refresh the recipes list to show the newly saved recipe
+      await this.loadRecipes()
+      
+      // If we're on the recipes tab, show a brief highlight or message
+      if (this.activeTab === 'recipes') {
+        this.$nextTick(() => {
+          console.log('My recipes refreshed after saving new recipe')
+        })
+      }
     },
 
     async onMealPlanGenerated(mealPlan) {

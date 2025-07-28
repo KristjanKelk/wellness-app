@@ -237,6 +237,15 @@
 
                   <div class="meal-actions">
                     <button
+                      @click="saveRecipeToCollection(meal.recipe)"
+                      class="btn btn-sm btn-primary"
+                      :disabled="savingRecipe === meal.recipe?.id"
+                    >
+                      <i v-if="savingRecipe === meal.recipe?.id" class="fas fa-spinner fa-spin"></i>
+                      <i v-else class="fas fa-heart"></i>
+                      {{ savingRecipe === meal.recipe?.id ? 'Saving...' : 'Save Recipe' }}
+                    </button>
+                    <button
                       @click="regenerateMeal(date, meal.meal_type || inferMealTypeFromTime(new Date()))"
                       class="btn btn-sm btn-outline"
                     >
@@ -299,6 +308,11 @@ export default {
     }
   },
   emits: ['close', 'regenerate-meal', 'get-alternatives', 'analyze-plan', 'delete-plan'],
+  data() {
+    return {
+      savingRecipe: null // Track which recipe is being saved
+    }
+  },
   mounted() {
     console.log('=== MealPlanDetailModal Mounted ===')
     console.log('Meal Plan ID:', this.mealPlan?.id)
@@ -581,6 +595,62 @@ export default {
         day: date,
         mealType: cleanMealType
       })
+    },
+
+    async saveRecipeToCollection(recipe) {
+      if (!recipe) {
+        console.warn('No recipe provided to save')
+        return
+      }
+
+      this.savingRecipe = recipe.id || recipe.spoonacular_id
+
+      try {
+        console.log('Saving recipe to collection:', recipe)
+        
+        // Import the API service
+        const { mealPlanningApi } = await import('@/services/mealPlanningApi')
+        
+        // Prepare recipe data for saving
+        const recipeData = {
+          title: recipe.title || recipe.name || 'Untitled Recipe',
+          summary: recipe.summary || '',
+          cuisine: recipe.cuisine || '',
+          meal_type: recipe.meal_type || 'dinner',
+          servings: recipe.servings || 4,
+          prep_time_minutes: recipe.prep_time || 0,
+          cook_time_minutes: recipe.cook_time || 0,
+          total_time_minutes: recipe.total_time || 0,
+          difficulty_level: recipe.difficulty_level || 'medium',
+          spoonacular_id: recipe.spoonacular_id || recipe.id,
+          ingredients_data: recipe.ingredients || [],
+          instructions: recipe.instructions || [],
+          calories_per_serving: this.getNutritionValue(recipe, 'calories'),
+          protein_per_serving: this.getNutritionValue(recipe, 'protein'),
+          carbs_per_serving: this.getNutritionValue(recipe, 'carbs'),
+          fat_per_serving: this.getNutritionValue(recipe, 'fat'),
+          fiber_per_serving: 0,
+          dietary_tags: recipe.dietary_tags || [],
+          allergens: recipe.allergens || [],
+          image_url: recipe.image_url || recipe.image || '',
+          source_url: recipe.source_url || '',
+          source_type: 'spoonacular'
+        }
+        
+        const response = await mealPlanningApi.saveRecipeFromMealPlan(recipeData)
+        
+        // Show success message
+        this.$toast?.success?.(response.data.message || 'Recipe saved to your collection!') ||
+        alert(response.data.message || 'Recipe saved to your collection!')
+        
+      } catch (error) {
+        console.error('Error saving recipe:', error)
+        const errorMessage = error.response?.data?.message || error.message || 'Failed to save recipe'
+        this.$toast?.error?.(errorMessage) ||
+        alert(errorMessage)
+      } finally {
+        this.savingRecipe = null
+      }
     },
 
     viewRecipeDetails(recipe) {

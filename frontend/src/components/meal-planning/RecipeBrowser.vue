@@ -4,7 +4,7 @@
     <!-- Search and Filters -->
     <div class="search-section">
       <div class="search-header">
-        <h3>Recipe Library</h3>
+        <h3>My Recipe Collection</h3>
         <button @click="$emit('refresh-recipes')" class="refresh-btn" :disabled="loading">
           <i :class="loading ? 'fas fa-spinner fa-spin' : 'fas fa-sync-alt'"></i>
           Refresh
@@ -50,9 +50,9 @@
       <i class="fas fa-utensils"></i>
       <h3>No recipes found</h3>
       <p v-if="recipes.length === 0">
-        Generate your first meal plan to populate your recipe library with personalized recipes!
+        You haven't saved any recipes yet! Save recipes from your meal plans to build your personal collection.
         <br><br>
-        <strong>💡 Tip:</strong> Go to the "Meal Plans" tab to create an AI-powered meal plan.
+        <strong>💡 Tip:</strong> Go to the "Meal Plans" tab to create meal plans, then save your favorite recipes.
       </p>
       <p v-else>Try adjusting your search or filters</p>
     </div>
@@ -62,9 +62,8 @@
         v-for="recipe in filteredRecipes"
         :key="recipe.id"
         class="recipe-card"
-        @click="$emit('recipe-selected', recipe)"
       >
-        <div class="recipe-image">
+        <div class="recipe-image" @click="$emit('recipe-selected', recipe)">
           <img
             :src="recipe.image_url || 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzAwIiBoZWlnaHQ9IjIwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KICA8cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjZjBmMGYwIi8+CiAgPHRleHQgeD0iNTAlIiB5PSI1MCUiIGZvbnQtZmFtaWx5PSJBcmlhbCwgc2Fucy1zZXJpZiIgZm9udC1zaXplPSIxOCIgZmlsbD0iIzk5OTk5OSIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZHk9Ii4zZW0iPkZvb2QgUmVjaXBlPC90ZXh0Pgo8L3N2Zz4K'"
             :alt="recipe.title"
@@ -75,9 +74,16 @@
               {{ formatTag(tag) }}
             </span>
           </div>
+          <button 
+            class="remove-btn" 
+            @click.stop="$emit('remove-recipe', recipe)"
+            title="Remove from my recipes"
+          >
+            <i class="fas fa-trash"></i>
+          </button>
         </div>
 
-        <div class="recipe-content">
+        <div class="recipe-content" @click="$emit('recipe-selected', recipe)">
           <h3 class="recipe-title">{{ recipe.title }}</h3>
           <p class="recipe-summary" v-html="truncateSummary(recipe.summary)"></p>
 
@@ -142,7 +148,7 @@ export default {
       default: false
     }
   },
-  emits: ['recipe-selected', 'refresh-recipes'],
+  emits: ['recipe-selected', 'refresh-recipes', 'remove-recipe'],
   data() {
     return {
       searchQuery: '',
@@ -410,6 +416,39 @@ export default {
   display: flex;
   flex-direction: column;
   gap: 6px;
+}
+
+.remove-btn {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  background: rgba($error, 0.9);
+  color: $white;
+  border: none;
+  border-radius: 50%;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  opacity: 0;
+  transform: scale(0.8);
+
+  &:hover {
+    background: $error;
+    transform: scale(1);
+  }
+
+  i {
+    font-size: 0.9rem;
+  }
+}
+
+.recipe-card:hover .remove-btn {
+  opacity: 1;
+  transform: scale(1);
 }
 
 .badge {

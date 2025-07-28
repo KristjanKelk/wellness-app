@@ -521,13 +521,21 @@ class NutritionProfileViewSet(viewsets.ModelViewSet):
             )
 
 
-class RecipeViewSet(viewsets.ReadOnlyModelViewSet):
-    """Browse and search recipes"""
+class RecipeViewSet(viewsets.ModelViewSet):
+    """Browse and search recipes with save/remove functionality"""
     serializer_class = RecipeSerializer
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        queryset = Recipe.objects.all()
+        # Check if we should filter by user's saved recipes
+        my_recipes_only = self.request.query_params.get('my_recipes', 'false').lower() == 'true'
+        
+        if my_recipes_only:
+            # Show only recipes saved/created by the current user
+            queryset = Recipe.objects.filter(created_by=self.request.user)
+        else:
+            # Show all public recipes
+            queryset = Recipe.objects.filter(is_public=True)
 
         # Filter by dietary preferences
         dietary_prefs = self.request.query_params.getlist('dietary_preferences')
@@ -617,6 +625,143 @@ class RecipeViewSet(viewsets.ReadOnlyModelViewSet):
 
         serializer = UserRecipeRatingSerializer(rating)
         return Response(serializer.data)
+
+    @action(detail=True, methods=['post'])
+    def save_to_my_recipes(self, request, pk=None):
+        """Save a recipe to user's collection"""
+        try:
+            source_recipe = self.get_object()
+            
+            # Check if user already has this recipe saved
+            existing_recipe = Recipe.objects.filter(
+                created_by=request.user,
+                spoonacular_id=source_recipe.spoonacular_id
+            ).first()
+            
+            if existing_recipe:
+                return Response(
+                    {'message': 'Recipe already in your collection', 'recipe_id': str(existing_recipe.id)},
+                    status=status.HTTP_200_OK
+                )
+            
+            # Create a copy of the recipe for the user
+            saved_recipe = Recipe.objects.create(
+                title=source_recipe.title,
+                summary=source_recipe.summary,
+                cuisine=source_recipe.cuisine,
+                meal_type=source_recipe.meal_type,
+                servings=source_recipe.servings,
+                prep_time_minutes=source_recipe.prep_time_minutes,
+                cook_time_minutes=source_recipe.cook_time_minutes,
+                total_time_minutes=source_recipe.total_time_minutes,
+                difficulty_level=source_recipe.difficulty_level,
+                spoonacular_id=source_recipe.spoonacular_id,
+                ingredients_data=source_recipe.ingredients_data,
+                instructions=source_recipe.instructions,
+                calories_per_serving=source_recipe.calories_per_serving,
+                protein_per_serving=source_recipe.protein_per_serving,
+                carbs_per_serving=source_recipe.carbs_per_serving,
+                fat_per_serving=source_recipe.fat_per_serving,
+                fiber_per_serving=source_recipe.fiber_per_serving,
+                dietary_tags=source_recipe.dietary_tags,
+                allergens=source_recipe.allergens,
+                image_url=source_recipe.image_url,
+                source_url=source_recipe.source_url,
+                source_type=source_recipe.source_type,
+                enhanced_data=source_recipe.enhanced_data,
+                is_public=False,  # User's saved recipes are private by default
+                created_by=request.user
+            )
+            
+            serializer = self.get_serializer(saved_recipe)
+            return Response({
+                'message': 'Recipe saved to your collection!',
+                'recipe': serializer.data
+            }, status=status.HTTP_201_CREATED)
+            
+        except Exception as e:
+            logger.error(f"Error saving recipe: {str(e)}")
+            return Response(
+                {'error': 'Failed to save recipe'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    @action(detail=False, methods=['post'])
+    def save_from_meal_plan(self, request):
+        """Save a recipe from meal plan data to user's collection"""
+        try:
+            recipe_data = request.data
+            
+            # Check if user already has this recipe saved by spoonacular_id
+            spoonacular_id = recipe_data.get('spoonacular_id') or recipe_data.get('id')
+            if spoonacular_id:
+                existing_recipe = Recipe.objects.filter(
+                    created_by=request.user,
+                    spoonacular_id=spoonacular_id
+                ).first()
+                
+                if existing_recipe:
+                    return Response(
+                        {'message': 'Recipe already in your collection', 'recipe_id': str(existing_recipe.id)},
+                        status=status.HTTP_200_OK
+                    )
+            
+            # Extract and normalize the data
+            saved_recipe = Recipe.objects.create(
+                title=recipe_data.get('title', 'Untitled Recipe'),
+                summary=recipe_data.get('summary', ''),
+                cuisine=recipe_data.get('cuisine', ''),
+                meal_type=recipe_data.get('meal_type', 'dinner'),
+                servings=recipe_data.get('servings', 4),
+                prep_time_minutes=recipe_data.get('prep_time_minutes', 0),
+                cook_time_minutes=recipe_data.get('cook_time_minutes', 0),
+                total_time_minutes=recipe_data.get('total_time_minutes', 0),
+                difficulty_level=recipe_data.get('difficulty_level', 'medium'),
+                spoonacular_id=spoonacular_id,
+                ingredients_data=recipe_data.get('ingredients_data', []),
+                instructions=recipe_data.get('instructions', []),
+                calories_per_serving=recipe_data.get('calories_per_serving', 0),
+                protein_per_serving=recipe_data.get('protein_per_serving', 0),
+                carbs_per_serving=recipe_data.get('carbs_per_serving', 0),
+                fat_per_serving=recipe_data.get('fat_per_serving', 0),
+                fiber_per_serving=recipe_data.get('fiber_per_serving', 0),
+                dietary_tags=recipe_data.get('dietary_tags', []),
+                allergens=recipe_data.get('allergens', []),
+                image_url=recipe_data.get('image_url', ''),
+                source_url=recipe_data.get('source_url', ''),
+                source_type='spoonacular',
+                is_public=False,  # User's saved recipes are private by default
+                created_by=request.user
+            )
+            
+            serializer = self.get_serializer(saved_recipe)
+            return Response({
+                'message': 'Recipe saved to your collection!',
+                'recipe': serializer.data
+            }, status=status.HTTP_201_CREATED)
+            
+        except Exception as e:
+            logger.error(f"Error saving recipe from meal plan: {str(e)}")
+            return Response(
+                {'error': 'Failed to save recipe'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    def destroy(self, request, *args, **kwargs):
+        """Remove a recipe from user's collection - only allow deletion of user's own recipes"""
+        recipe = self.get_object()
+        
+        if recipe.created_by != request.user:
+            return Response(
+                {'error': 'You can only delete your own saved recipes'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        recipe.delete()
+        return Response(
+            {'message': 'Recipe removed from your collection'},
+            status=status.HTTP_204_NO_CONTENT
+        )
 
 
 class IngredientViewSet(viewsets.ReadOnlyModelViewSet):
