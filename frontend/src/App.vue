@@ -22,15 +22,21 @@ export default {
                          this.$store.state.auth.status.loggedIn;
 
     if (userStr && !storeHasUser) {
-      console.log('Inconsistent auth state detected, attempting to restore session');
+      if (process.env.NODE_ENV === 'development') {
+        console.log('🔄 Inconsistent auth state detected, attempting to restore session');
+      }
       this.$store.dispatch('auth/checkAuth')
         .catch(() => {
-          console.log('Failed to restore session, continuing as unauthenticated');
+          if (process.env.NODE_ENV === 'development') {
+            console.log('🔓 Failed to restore session, continuing as unauthenticated');
+          }
         });
     } else if (storeHasUser) {
       this.$store.dispatch('auth/checkAuth')
         .catch(() => {
-          console.log('Session validation failed, logging out');
+          if (process.env.NODE_ENV === 'development') {
+            console.log('🔐 Session validation failed, logging out');
+          }
           this.$store.dispatch('auth/logout');
           this.$router.push('/login');
         });

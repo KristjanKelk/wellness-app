@@ -160,13 +160,14 @@ export default {
     recipes: {
       immediate: true,
       handler(newRecipes) {
-        console.log('=== RecipeBrowser recipes changed ===')
-        console.log('New recipes array length:', newRecipes?.length || 0)
-        console.log('First recipe sample:', newRecipes?.[0])
-        console.log('Recipe IDs:', newRecipes?.map(r => r.id).slice(0, 5))
+        if (process.env.NODE_ENV === 'development') {
+          console.log('🍽️ RecipeBrowser: Recipes updated')
+          console.log(`📊 Count: ${newRecipes?.length || 0} recipes`)
+          if (newRecipes?.length > 0) {
+            console.log(`📋 Sample: "${newRecipes[0]?.title}" (${newRecipes[0]?.id})`)
+          }
+        }
         this.filteredRecipes = this.recipes
-        console.log('Filtered recipes set to:', this.filteredRecipes?.length || 0)
-        console.log('====================================')
       }
     }
   },
@@ -175,41 +176,32 @@ export default {
   },
   methods: {
     applyFilters() {
-      console.log('=== Applying filters ===')
-      console.log('Starting with recipes:', this.recipes?.length || 0)
-      console.log('Search query:', this.searchQuery)
-      console.log('Selected cuisine:', this.selectedCuisine)
-      console.log('Selected meal type:', this.selectedMealType)
-      
       let filtered = this.recipes
 
       // Search filter
       if (this.searchQuery) {
         const query = this.searchQuery.toLowerCase()
-        const beforeSearch = filtered.length
         filtered = filtered.filter(recipe =>
           (recipe.title && recipe.title.toLowerCase().includes(query)) ||
           (recipe.summary && recipe.summary.toLowerCase().includes(query))
         )
-        console.log(`Search filter: ${beforeSearch} -> ${filtered.length}`)
       }
 
       // Cuisine filter
       if (this.selectedCuisine) {
-        const beforeCuisine = filtered.length
         filtered = filtered.filter(recipe => recipe.cuisine === this.selectedCuisine)
-        console.log(`Cuisine filter: ${beforeCuisine} -> ${filtered.length}`)
       }
 
       // Meal type filter
       if (this.selectedMealType) {
-        const beforeMealType = filtered.length
         filtered = filtered.filter(recipe => recipe.meal_type === this.selectedMealType)
-        console.log(`Meal type filter: ${beforeMealType} -> ${filtered.length}`)
       }
 
-      console.log('Final filtered count:', filtered.length)
-      console.log('========================')
+      if (process.env.NODE_ENV === 'development' && 
+          (this.searchQuery || this.selectedCuisine || this.selectedMealType)) {
+        console.log(`🔍 Filters applied: ${this.recipes?.length || 0} → ${filtered.length} recipes`)
+      }
+
       this.filteredRecipes = filtered
     },
 

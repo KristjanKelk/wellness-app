@@ -120,7 +120,9 @@ export const mealPlanningApi = {
       cleanParams.max_calories = parseInt(params.max_calories.trim())
     }
     
-    console.log('Making API request to /recipes/ with params:', cleanParams)
+    if (process.env.NODE_ENV === 'development') {
+      console.log('🔗 API request: /recipes/', cleanParams)
+    }
     return api.get('/recipes/', { params: cleanParams })
   },
 
@@ -247,7 +249,9 @@ export const mealPlanningApi = {
     if (params.start_date) cleanParams.start_date = params.start_date
     if (params.end_date) cleanParams.end_date = params.end_date
 
-    console.log('Fetching meal plans with params:', cleanParams)
+    if (process.env.NODE_ENV === 'development') {
+      console.log('🔗 API request: /meal-plans/', cleanParams)
+    }
     return api.get('/meal-plans/', { params: cleanParams })
   },
 
@@ -256,7 +260,9 @@ export const mealPlanningApi = {
   },
 
   generateMealPlan(planData) {
-    console.log('Generating meal plan with data:', planData)
+    if (process.env.NODE_ENV === 'development') {
+      console.log('🎯 Generating meal plan with data:', planData)
+    }
     // Enhanced meal plan generation with AI features
     return api.post('/meal-plans/generate/', planData)
   },

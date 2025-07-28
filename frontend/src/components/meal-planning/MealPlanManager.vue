@@ -302,32 +302,21 @@ export default {
   methods: {
     async loadMealPlans() {
       try {
-        console.log('=== Loading Meal Plans ===')
+        if (process.env.NODE_ENV === 'development') {
+          console.log('🍽️ Loading meal plans...')
+        }
         const response = await mealPlanningApi.getMealPlans()
-        console.log('API response status:', response?.status)
-        console.log('API response data type:', typeof response?.data)
         
         // Handle different response structures safely
         const mealPlansData = response?.data?.results || response?.data || []
-        console.log('Found', mealPlansData.length, 'meal plans')
         
-        // Log each plan briefly
-        mealPlansData.forEach((plan, index) => {
-          console.log(`Plan ${index + 1}:`, {
-            id: plan.id,
-            type: plan.plan_type,
-            hasMealData: !!plan.meal_plan_data,
-            hasMeals: !!plan.meal_plan_data?.meals,
-            dateRange: `${plan.start_date} to ${plan.end_date}`
-          })
-        })
+        if (process.env.NODE_ENV === 'development') {
+          console.log(`✅ Loaded ${mealPlansData.length} meal plans`)
+        }
         
         this.mealPlans = mealPlansData
-        console.log('Meal plans loaded successfully')
-        console.log('==========================')
       } catch (error) {
-        console.error('=== Failed to load meal plans ===')
-        console.error('Error:', error.message)
+        console.error('❌ Failed to load meal plans:', error.message)
         console.error('Response:', error.response?.data)
         console.error('================================')
         this.mealPlans = [] // Set empty array to prevent null errors
