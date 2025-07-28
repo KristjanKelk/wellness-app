@@ -280,6 +280,10 @@
           <i class="fas fa-chart-line"></i>
           AI Analysis
         </button>
+        <button @click="deletePlan" class="btn btn-danger">
+          <i class="fas fa-trash"></i>
+          Delete Plan
+        </button>
       </div>
     </div>
   </div>
@@ -294,7 +298,7 @@ export default {
       required: true
     }
   },
-  emits: ['close', 'regenerate-meal', 'get-alternatives', 'analyze-plan'],
+  emits: ['close', 'regenerate-meal', 'get-alternatives', 'analyze-plan', 'delete-plan'],
   mounted() {
     console.log('=== MealPlanDetailModal Mounted ===')
     console.log('Meal Plan ID:', this.mealPlan?.id)
@@ -363,6 +367,19 @@ export default {
           return 'Unknown Date'
         }
         
+        // Handle meal type strings for daily plans
+        const mealTypeLabels = {
+          'breakfast': 'Breakfast',
+          'lunch': 'Lunch', 
+          'dinner': 'Dinner',
+          'snack': 'Snack'
+        }
+        
+        if (mealTypeLabels[dateStr.toLowerCase()]) {
+          return mealTypeLabels[dateStr.toLowerCase()]
+        }
+        
+        // Try to parse as date for weekly plans
         const date = new Date(dateStr)
         if (isNaN(date.getTime())) {
           console.log('formatDate: Invalid date for input:', dateStr)
@@ -563,6 +580,10 @@ export default {
 
     analyzePlan() {
       this.$emit('analyze-plan', this.mealPlan)
+    },
+
+    deletePlan() {
+      this.$emit('delete-plan', this.mealPlan)
     }
   }
 }
@@ -1145,6 +1166,15 @@ $gray-lighter: #e9ecef;
 
     &:hover {
       background: darken($success, 10%);
+    }
+  }
+
+  &.btn-danger {
+    background: $danger;
+    color: $white;
+
+    &:hover {
+      background: darken($danger, 10%);
     }
   }
 }
