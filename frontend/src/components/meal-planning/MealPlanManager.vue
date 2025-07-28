@@ -223,6 +223,10 @@
               <i class="fas fa-redo"></i>
               Regenerate
             </button>
+            <button @click.stop="deleteMealPlan(plan)" class="btn btn-danger">
+              <i class="fas fa-trash"></i>
+              Delete
+            </button>
           </div>
         </div>
       </div>
@@ -236,6 +240,7 @@
       @regenerate-meal="(mealData) => regenerateMeal(selectedPlan.id, mealData)"
       @get-alternatives="(mealData) => getMealAlternatives(selectedPlan.id, mealData)"
       @analyze-plan="analyzeMealPlanFromModal"
+      @delete-plan="deleteMealPlan"
     />
 
     <!-- Nutritional Analysis Modal -->
@@ -509,6 +514,29 @@ export default {
         }, 3000)
       } finally {
         this.generating = false
+      }
+    },
+
+    async deleteMealPlan(plan) {
+      try {
+        const confirmed = confirm(`Are you sure you want to delete this ${plan.plan_type} meal plan? This action cannot be undone.`)
+        if (!confirmed) return
+
+        await mealPlanningApi.deleteMealPlan(plan.id)
+
+        // Remove the plan from the local list
+        this.mealPlans = this.mealPlans.filter(p => p.id !== plan.id)
+
+        this.showSuccess('Meal plan deleted successfully')
+        
+        // Close modal if the deleted plan was being viewed
+        if (this.selectedPlan && this.selectedPlan.id === plan.id) {
+          this.selectedPlan = null
+        }
+
+      } catch (error) {
+        console.error('Error deleting meal plan:', error)
+        this.showError('Failed to delete meal plan')
       }
     },
 
@@ -1138,6 +1166,16 @@ export default {
 
       &:hover {
         background: #138496;
+      }
+    }
+
+    &.btn-danger {
+      background: #dc3545;
+      color: white;
+      border: none;
+
+      &:hover {
+        background: #c82333;
       }
     }
   }

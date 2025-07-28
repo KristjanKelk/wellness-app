@@ -267,6 +267,13 @@ export const mealPlanningApi = {
     return api.post('/meal-plans/generate/', planData)
   },
 
+  deleteMealPlan(planId) {
+    if (process.env.NODE_ENV === 'development') {
+      console.log('🗑️ Deleting meal plan:', planId)
+    }
+    return api.delete(`/meal-plans/${planId}/`)
+  },
+
   async regenerateMeal(planId, day, mealType) {
     try {
       console.log('Regenerating meal:', { planId, day, mealType })
@@ -365,10 +372,6 @@ export const mealPlanningApi = {
       }
       throw error
     }
-  },
-
-  deleteMealPlan(planId) {
-    return api.delete(`/meal-plans/${planId}/`)
   },
 
   generateShoppingList(planId, options = {}) {
