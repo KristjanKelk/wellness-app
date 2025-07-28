@@ -9,6 +9,7 @@ from django.db import models
 from .models import NutritionProfile, Recipe, Ingredient, MealPlan, UserRecipeRating, NutritionLog
 from .services.ai_enhanced_meal_service import AIEnhancedMealService
 from .services.enhanced_spoonacular_service import EnhancedSpoonacularService, SpoonacularAPIError
+from .services.ai_meal_planning_service import AIMealPlanningService
 from .serializers import (
     NutritionProfileSerializer, RecipeSerializer, IngredientSerializer,
     MealPlanSerializer, UserRecipeRatingSerializer, NutritionLogSerializer
