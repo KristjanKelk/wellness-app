@@ -163,10 +163,36 @@ export default {
   computed: {
     normalizedInstructions() {
       const instr = this.recipe.instructions || []
-      if (instr.length && typeof instr[0] === 'object') {
+      
+      // Handle empty instructions
+      if (!instr || instr.length === 0) {
+        return []
+      }
+      
+      // If it's already an array of objects with step property, use it as is
+      if (instr.length && typeof instr[0] === 'object' && instr[0].step) {
         return instr
       }
-      return instr.map((s, i) => ({ description: s, step: `Step ${i + 1}` }))
+      
+      // If it's an array of strings, convert to objects
+      if (instr.length && typeof instr[0] === 'string') {
+        return instr.map((stepText, i) => ({
+          number: i + 1,
+          step: stepText,
+          description: stepText
+        }))
+      }
+      
+      // If it's an array of objects without step property, try to extract the step text
+      if (instr.length && typeof instr[0] === 'object') {
+        return instr.map((stepObj, i) => ({
+          number: stepObj.number || i + 1,
+          step: stepObj.step || stepObj.description || stepObj.instruction || `Step ${i + 1}`,
+          description: stepObj.step || stepObj.description || stepObj.instruction || `Step ${i + 1}`
+        }))
+      }
+      
+      return []
     }
   },
   methods: {
@@ -243,19 +269,35 @@ export default {
     async saveRecipe() {
       this.saving = true
       try {
-        // Here you would make an API call to save the recipe
         console.log('Saving recipe:', this.recipe)
         
-        // Simulate API call
-        await new Promise(resolve => setTimeout(resolve, 1000))
+        // Import the API service
+        const { mealPlanningApi } = await import('@/services/mealPlanningApi')
         
-        this.$toast?.success?.('Recipe saved to your collection!') ||
-        alert('Recipe saved to your collection!')
+        let response
+        
+        // Check if this is a recipe from meal plan (has spoonacular_id but no recipe.id in our DB)
+        if (this.recipe.spoonacular_id && !this.recipe.created_by) {
+          // Save from meal plan data
+          response = await mealPlanningApi.saveRecipeFromMealPlan(this.recipe)
+        } else if (this.recipe.id) {
+          // Save existing recipe to user's collection
+          response = await mealPlanningApi.saveRecipeToMyCollection(this.recipe.id)
+        } else {
+          throw new Error('Invalid recipe data for saving')
+        }
+        
+        this.$toast?.success?.(response.data.message || 'Recipe saved to your collection!') ||
+        alert(response.data.message || 'Recipe saved to your collection!')
+        
+        // Emit event to refresh recipes if needed
+        this.$emit('recipe-saved', response.data.recipe)
         
       } catch (error) {
         console.error('Error saving recipe:', error)
-        this.$toast?.error?.('Failed to save recipe') ||
-        alert('Failed to save recipe')
+        const errorMessage = error.response?.data?.message || error.message || 'Failed to save recipe'
+        this.$toast?.error?.(errorMessage) ||
+        alert(errorMessage)
       } finally {
         this.saving = false
       }

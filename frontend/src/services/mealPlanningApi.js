@@ -138,6 +138,46 @@ export const mealPlanningApi = {
     return api.post(`/recipes/${recipeId}/rate/`, { rating, review })
   },
 
+  saveRecipeToMyCollection(recipeId) {
+    return api.post(`/recipes/${recipeId}/save_to_my_recipes/`)
+  },
+
+  saveRecipeFromMealPlan(recipeData) {
+    return api.post(`/recipes/save_from_meal_plan/`, recipeData)
+  },
+
+  removeRecipeFromMyCollection(recipeId) {
+    return api.delete(`/recipes/${recipeId}/`)
+  },
+
+  getMyRecipes(params = {}) {
+    // Get only user's saved recipes
+    const cleanParams = { ...params, my_recipes: 'true' }
+    
+    // Basic pagination
+    if (!cleanParams.page) cleanParams.page = 1
+    if (!cleanParams.page_size) cleanParams.page_size = 100
+    
+    // Search parameters
+    if (cleanParams.search && cleanParams.search.trim()) {
+      cleanParams.search = cleanParams.search.trim()
+    }
+    
+    // Filter parameters
+    if (cleanParams.cuisine && cleanParams.cuisine.trim()) {
+      cleanParams.cuisine = cleanParams.cuisine.trim()
+    }
+    
+    if (cleanParams.meal_type && cleanParams.meal_type.trim()) {
+      cleanParams.meal_type = cleanParams.meal_type.trim()
+    }
+    
+    if (process.env.NODE_ENV === 'development') {
+      console.log('🔗 API request: /recipes/ (my recipes only)', cleanParams)
+    }
+    return api.get('/recipes/', { params: cleanParams })
+  },
+
   // Enhanced recipe methods for AI features (with fallbacks)
   async generateRecipe(recipeParams) {
     try {
