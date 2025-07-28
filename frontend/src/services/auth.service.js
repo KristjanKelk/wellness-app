@@ -32,9 +32,42 @@ class AuthService {
     try {
       return JSON.parse(userStr);
     } catch (e) {
-      console.error('Error parsing user data:', e);
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Error parsing user data:', e);
+      }
       return null;
     }
+  }
+
+  /**
+   * Attempt to restore user session on app start
+   * @returns {Object|null} Restored user data or null
+   */
+  restoreSession() {
+    if (process.env.NODE_ENV === 'development') {
+      console.log('🔐 Attempting to restore session...');
+    }
+    
+    const user = this.getCurrentUser();
+    if (!user) {
+      if (process.env.NODE_ENV === 'development') {
+        console.log('🔓 No stored session found, continuing as unauthenticated');
+      }
+      return null;
+    }
+
+    if (!this.validateToken()) {
+      if (process.env.NODE_ENV === 'development') {
+        console.log('🔐 Session expired, clearing stored data');
+      }
+      this.clearUser();
+      return null;
+    }
+
+    if (process.env.NODE_ENV === 'development') {
+      console.log('✅ Session restored successfully');
+    }
+    return user;
   }
 
   /**
@@ -77,7 +110,9 @@ class AuthService {
       // Make sure to return true if the token is NOT expired
       return !(payload.exp && payload.exp < now);
     } catch (e) {
-      console.error('Error validating token:', e);
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Error validating token:', e);
+      }
       return false;
     }
   }
