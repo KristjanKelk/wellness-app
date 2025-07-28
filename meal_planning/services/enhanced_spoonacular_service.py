@@ -660,12 +660,14 @@ class EnhancedSpoonacularService:
 
     def _normalize_day_meal_plan(self, data: Dict, created_by=None) -> Dict:
         """Normalize a single day meal plan and save recipes to database"""
+        from datetime import date
+        
+        date_str = date.today().isoformat()
+        
         normalized = {
-            'date': date.today().isoformat(),
+            'date': date_str,
             'meals': {
-                'breakfast': [],
-                'lunch': [],
-                'dinner': []
+                date_str: []  # Use date as key instead of meal types
             },
             'nutrition': {
                 'calories': 0,
@@ -675,7 +677,14 @@ class EnhancedSpoonacularService:
             }
         }
 
-        for meal in data.get('meals', []):
+        # Create a list to hold all meals for the day
+        daily_meals = []
+        meal_types = ['breakfast', 'lunch', 'dinner']  # Maintain order
+        meal_times = ['08:00', '12:30', '19:00']  # Default times for each meal type
+        
+        meals_data = data.get('meals', [])
+        
+        for i, meal in enumerate(meals_data):
             # Get detailed recipe information if not already complete
             detailed_meal = meal
             recipe_id = meal.get('id')
@@ -697,50 +706,137 @@ class EnhancedSpoonacularService:
             # Save recipe to database with detailed information
             saved_recipe = self._save_recipe_to_database(detailed_meal, created_by)
             
+            # Determine meal type and time based on position in meals array
+            meal_type = meal_types[i] if i < len(meal_types) else 'snack'
+            meal_time = meal_times[i] if i < len(meal_times) else '15:00'
+            
             meal_data = {
-                'id': detailed_meal.get('id'),
-                'title': detailed_meal.get('title', ''),
-                'readyInMinutes': detailed_meal.get('readyInMinutes', 0),
-                'servings': detailed_meal.get('servings', 1),
-                'sourceUrl': detailed_meal.get('sourceUrl', ''),
-                'image': detailed_meal.get('image', ''),
-                'nutrition': self._extract_nutrition(detailed_meal),
-                'database_id': str(saved_recipe.id) if saved_recipe else None  # Add reference to saved recipe
+                'meal_type': meal_type,
+                'time': meal_time,
+                'recipe': {
+                    'id': detailed_meal.get('id'),
+                    'title': detailed_meal.get('title', ''),
+                    'name': detailed_meal.get('title', ''),  # Add name field for compatibility
+                    'readyInMinutes': detailed_meal.get('readyInMinutes', 0),
+                    'prep_time': detailed_meal.get('preparationMinutes', 0),
+                    'cook_time': detailed_meal.get('cookingMinutes', 0),
+                    'total_time': detailed_meal.get('readyInMinutes', 0),
+                    'servings': detailed_meal.get('servings', 1),
+                    'sourceUrl': detailed_meal.get('sourceUrl', ''),
+                    'image': detailed_meal.get('image', ''),
+                    'cuisine': detailed_meal.get('cuisines', [None])[0] if detailed_meal.get('cuisines') else None,
+                    'estimated_nutrition': self._extract_nutrition(detailed_meal),
+                    'nutrition': self._extract_nutrition(detailed_meal),  # Add both for compatibility
+                    'ingredients': self._extract_ingredients_data(detailed_meal),
+                    'instructions': self._extract_instructions(detailed_meal),
+                    'database_id': str(saved_recipe.id) if saved_recipe else None
+                },
+                'cuisine': detailed_meal.get('cuisines', [None])[0] if detailed_meal.get('cuisines') else 'International',
+                'target_calories': detailed_meal.get('nutrition', {}).get('calories', 0),
+                'target_protein': detailed_meal.get('nutrition', {}).get('protein', 0),
+                'target_carbs': detailed_meal.get('nutrition', {}).get('carbs', 0),
+                'target_fat': detailed_meal.get('nutrition', {}).get('fat', 0)
             }
 
-            # Determine meal type based on meal plan structure
-            meal_type = 'lunch'  # Default
-            if len(normalized['meals']['breakfast']) == 0:
-                meal_type = 'breakfast'
-            elif len(normalized['meals']['lunch']) == 0:
-                meal_type = 'lunch'
-            else:
-                meal_type = 'dinner'
-
-            normalized['meals'][meal_type].append(meal_data)
+            daily_meals.append(meal_data)
 
             # Add to total nutrition
-            nutrition = meal_data['nutrition']
+            nutrition = meal_data['recipe']['nutrition']
             normalized['nutrition']['calories'] += nutrition.get('calories', 0)
             normalized['nutrition']['protein'] += nutrition.get('protein', 0)
             normalized['nutrition']['carbs'] += nutrition.get('carbs', 0)
             normalized['nutrition']['fat'] += nutrition.get('fat', 0)
 
+        # Assign the complete daily meals to the date key
+        normalized['meals'][date_str] = daily_meals
+
         return normalized
 
     def _normalize_week_meal_plan(self, data: Dict, created_by=None) -> Dict:
         """Normalize a week meal plan and save recipes to database"""
+        from datetime import date, timedelta
+        
+        base_date = date.today()
+        day_mapping = {
+            'monday': 0, 'tuesday': 1, 'wednesday': 2, 'thursday': 3,
+            'friday': 4, 'saturday': 5, 'sunday': 6
+        }
+        
         normalized = {
             'week': data.get('week', {}),
-            'days': []
+            'meals': {},  # Use meals structure for consistency
+            'nutrition': {
+                'calories': 0,
+                'protein': 0,
+                'carbs': 0,
+                'fat': 0
+            }
         }
 
         week_data = data.get('week', {})
+        
         for day_key in ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']:
             if day_key in week_data:
-                day_data = self._normalize_day_meal_plan({'meals': week_data[day_key].get('meals', [])}, created_by)
-                day_data['day'] = day_key
-                normalized['days'].append(day_data)
+                # Calculate the actual date for this day
+                days_offset = day_mapping[day_key]
+                actual_date = base_date + timedelta(days=days_offset)
+                date_str = actual_date.isoformat()
+                
+                # Normalize the day's meals with the actual date
+                day_meals_data = week_data[day_key].get('meals', [])
+                
+                if day_meals_data:
+                    # Create daily meals structure similar to day plan
+                    daily_meals = []
+                    meal_types = ['breakfast', 'lunch', 'dinner']
+                    meal_times = ['08:00', '12:30', '19:00']
+                    
+                    for i, meal in enumerate(day_meals_data):
+                        # Save recipe to database
+                        saved_recipe = self._save_recipe_to_database(meal, created_by)
+                        
+                        meal_type = meal_types[i] if i < len(meal_types) else 'snack'
+                        meal_time = meal_times[i] if i < len(meal_times) else '15:00'
+                        
+                        meal_data = {
+                            'meal_type': meal_type,
+                            'time': meal_time,
+                            'recipe': {
+                                'id': meal.get('id'),
+                                'title': meal.get('title', ''),
+                                'name': meal.get('title', ''),
+                                'readyInMinutes': meal.get('readyInMinutes', 0),
+                                'prep_time': meal.get('preparationMinutes', 0),
+                                'cook_time': meal.get('cookingMinutes', 0),
+                                'total_time': meal.get('readyInMinutes', 0),
+                                'servings': meal.get('servings', 1),
+                                'sourceUrl': meal.get('sourceUrl', ''),
+                                'image': meal.get('image', ''),
+                                'cuisine': meal.get('cuisines', [None])[0] if meal.get('cuisines') else None,
+                                'estimated_nutrition': self._extract_nutrition(meal),
+                                'nutrition': self._extract_nutrition(meal),
+                                'ingredients': self._extract_ingredients_data(meal),
+                                'instructions': self._extract_instructions(meal),
+                                'database_id': str(saved_recipe.id) if saved_recipe else None
+                            },
+                            'cuisine': meal.get('cuisines', [None])[0] if meal.get('cuisines') else 'International',
+                            'target_calories': meal.get('nutrition', {}).get('calories', 0),
+                            'target_protein': meal.get('nutrition', {}).get('protein', 0),
+                            'target_carbs': meal.get('nutrition', {}).get('carbs', 0),
+                            'target_fat': meal.get('nutrition', {}).get('fat', 0)
+                        }
+                        
+                        daily_meals.append(meal_data)
+                        
+                        # Add to weekly nutrition totals
+                        nutrition = meal_data['recipe']['nutrition']
+                        normalized['nutrition']['calories'] += nutrition.get('calories', 0)
+                        normalized['nutrition']['protein'] += nutrition.get('protein', 0)
+                        normalized['nutrition']['carbs'] += nutrition.get('carbs', 0)
+                        normalized['nutrition']['fat'] += nutrition.get('fat', 0)
+                    
+                    # Add the day's meals to the normalized structure
+                    normalized['meals'][date_str] = daily_meals
 
         return normalized
 

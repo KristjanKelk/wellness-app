@@ -367,19 +367,20 @@ export default {
           return 'Unknown Date'
         }
         
-        // Handle meal type strings for daily plans
+        // Handle meal type strings for legacy daily plans (backwards compatibility)
         const mealTypeLabels = {
-          'breakfast': 'Breakfast',
-          'lunch': 'Lunch', 
-          'dinner': 'Dinner',
-          'snack': 'Snack'
+          'breakfast': 'Breakfast Meals',
+          'lunch': 'Lunch Meals', 
+          'dinner': 'Dinner Meals',
+          'snack': 'Snack Meals'
         }
         
         if (mealTypeLabels[dateStr.toLowerCase()]) {
+          console.log('formatDate: Detected legacy meal type structure:', dateStr)
           return mealTypeLabels[dateStr.toLowerCase()]
         }
         
-        // Try to parse as date for weekly plans
+        // Try to parse as date for date-based plans
         const date = new Date(dateStr)
         if (isNaN(date.getTime())) {
           console.log('formatDate: Invalid date for input:', dateStr)
@@ -424,6 +425,15 @@ export default {
         return meal.recipe.name
       }
       
+      // Handle direct meal objects (for backwards compatibility)
+      if (meal?.title) {
+        return meal.title
+      }
+      
+      if (meal?.name) {
+        return meal.name
+      }
+      
       // Fallback to meal type
       const mealType = this.formatMealType(meal?.meal_type)
       console.log('getMealTitle fallback to meal type:', mealType)
@@ -447,6 +457,14 @@ export default {
       }
       if (meal?.scheduled_time) {
         return meal.scheduled_time
+      }
+      
+      // Handle nested recipe time fields (for backwards compatibility)
+      if (meal?.recipe?.time) {
+        return meal.recipe.time
+      }
+      if (meal?.recipe?.scheduled_time) {
+        return meal.recipe.scheduled_time
       }
       
       // Default times based on meal type
