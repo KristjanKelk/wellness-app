@@ -25,7 +25,14 @@ class AIEnhancedMealService:
 
     def generate_smart_meal_plan(self, nutrition_profile: NutritionProfile, days: int = 7, generation_options: Dict = None) -> Dict:
         """
-        Generate an intelligent meal plan using Spoonacular + AI analysis
+        Generate an intelligent meal plan using sequential AI prompting approach
+        
+        Sequential Prompting Steps:
+        1. Initial Assessment: Analyze user profile to define meal plan strategy
+        2. Meal Structure: Design specific meals and timing based on nutrition profile
+        3. Recipe Generation: Create detailed recipes with nutritional analysis  
+        4. Nutritional Analysis: Evaluate nutritional balance and make adjustments
+        5. Refinement: Final optimization and recommendations
         
         Args:
             nutrition_profile: User's nutrition profile
@@ -36,28 +43,25 @@ class AIEnhancedMealService:
             Complete meal plan with AI insights
         """
         try:
-            # Step 1: Generate meal plan using Spoonacular
-            logger.info(f"Generating {days}-day meal plan for user {nutrition_profile.user.id}")
+            logger.info(f"Generating {days}-day meal plan using sequential AI prompting for user {nutrition_profile.user.id}")
             
-            spoonacular_meal_plan = self.spoonacular_service.create_personalized_meal_plan(
-                nutrition_profile, days, generation_options or {}
-            )
+            # Sequential Prompting Step 1: Initial Assessment
+            meal_strategy = self._step1_analyze_profile(nutrition_profile, days, generation_options)
             
-            # Step 2: Normalize the data and save recipes to database
-            time_frame = "week" if days > 1 else "day"
-            normalized_plan = self.spoonacular_service.normalize_meal_plan_data(
-                spoonacular_meal_plan, time_frame, nutrition_profile.user
-            )
+            # Sequential Prompting Step 2: Meal Structure Design
+            meal_structure = self._step2_design_meal_structure(meal_strategy, nutrition_profile)
             
-            # Step 3: Enhance with AI analysis
-            ai_enhanced_plan = self._add_ai_analysis(normalized_plan, nutrition_profile)
+            # Sequential Prompting Step 3: Recipe Generation
+            detailed_meal_plan = self._step3_generate_recipes(meal_structure, nutrition_profile)
             
-            # Step 4: Calculate nutritional scores
-            scores = self._calculate_nutritional_scores(ai_enhanced_plan, nutrition_profile)
-            ai_enhanced_plan['scores'] = scores
+            # Sequential Prompting Step 4: Nutritional Analysis
+            analyzed_plan = self._step4_nutritional_analysis(detailed_meal_plan, nutrition_profile)
             
-            logger.info("Successfully generated AI-enhanced meal plan")
-            return ai_enhanced_plan
+            # Sequential Prompting Step 5: Refinement
+            final_plan = self._step5_refinement(analyzed_plan, nutrition_profile)
+            
+            logger.info("Successfully generated AI-enhanced meal plan using sequential prompting")
+            return final_plan
             
         except SpoonacularAPIError as e:
             logger.error(f"Spoonacular API error: {str(e)}")
@@ -65,7 +69,8 @@ class AIEnhancedMealService:
             return self._generate_fallback_meal_plan(nutrition_profile, days)
         except Exception as e:
             logger.error(f"Unexpected error generating meal plan: {str(e)}")
-            raise
+            # Fallback to traditional approach
+            return self._generate_traditional_meal_plan(nutrition_profile, days, generation_options)
 
     def _add_ai_analysis(self, meal_plan: Dict, nutrition_profile: NutritionProfile) -> Dict:
         """Add OpenAI nutritional analysis to the meal plan"""
@@ -95,6 +100,369 @@ class AIEnhancedMealService:
                 'recommendations': []
             }
             return meal_plan
+
+    # ===== SEQUENTIAL PROMPTING IMPLEMENTATION =====
+    
+    def _step1_analyze_profile(self, nutrition_profile: NutritionProfile, days: int, generation_options: Dict) -> Dict:
+        """
+        Step 1: Analyze user profile to define meal plan strategy
+        """
+        try:
+            prompt = f"""
+            As a certified nutritionist, analyze this user profile and recommend a meal planning strategy:
+
+            USER PROFILE:
+            - Age: {getattr(nutrition_profile.user, 'age', 'N/A')}
+            - Calorie Target: {nutrition_profile.calorie_target} kcal/day
+            - Protein Target: {nutrition_profile.protein_target}g
+            - Carb Target: {nutrition_profile.carb_target}g  
+            - Fat Target: {nutrition_profile.fat_target}g
+            - Meals per day: {nutrition_profile.meals_per_day}
+            - Dietary Preferences: {', '.join(nutrition_profile.dietary_preferences or ['None'])}
+            - Allergies/Intolerances: {', '.join(nutrition_profile.allergies_intolerances or ['None'])}
+            - Cuisine Preferences: {', '.join(nutrition_profile.cuisine_preferences or ['None'])}
+            - Disliked Ingredients: {', '.join(nutrition_profile.disliked_ingredients or ['None'])}
+
+            PLAN REQUIREMENTS:
+            - Duration: {days} days
+            - Max cooking time: {generation_options.get('max_cook_time', 'flexible')} minutes
+            - Budget consideration: {generation_options.get('budget_level', 'moderate')}
+
+            Please provide a strategic analysis including:
+            1. Recommended macro distribution strategy
+            2. Optimal meal timing and frequency
+            3. Key nutritional priorities
+            4. Potential challenges and solutions
+            5. Meal prep recommendations
+            """
+
+            response = openai.ChatCompletion.create(
+                model="gpt-3.5-turbo",
+                messages=[{"role": "user", "content": prompt}],
+                max_tokens=800,
+                temperature=0.3
+            )
+
+            strategy_text = response.choices[0].message.content
+            
+            return {
+                'strategy_analysis': strategy_text,
+                'calorie_target': nutrition_profile.calorie_target,
+                'macro_targets': {
+                    'protein': nutrition_profile.protein_target,
+                    'carbs': nutrition_profile.carb_target,
+                    'fat': nutrition_profile.fat_target
+                },
+                'meals_per_day': nutrition_profile.meals_per_day,
+                'days': days,
+                'preferences': {
+                    'dietary': nutrition_profile.dietary_preferences or [],
+                    'allergies': nutrition_profile.allergies_intolerances or [],
+                    'cuisines': nutrition_profile.cuisine_preferences or [],
+                    'dislikes': nutrition_profile.disliked_ingredients or []
+                }
+            }
+
+        except Exception as e:
+            logger.error(f"Step 1 analysis failed: {str(e)}")
+            # Return basic strategy
+            return {
+                'strategy_analysis': 'Using standard balanced nutrition approach',
+                'calorie_target': nutrition_profile.calorie_target,
+                'macro_targets': {
+                    'protein': nutrition_profile.protein_target,
+                    'carbs': nutrition_profile.carb_target,
+                    'fat': nutrition_profile.fat_target
+                },
+                'meals_per_day': nutrition_profile.meals_per_day,
+                'days': days
+            }
+
+    def _step2_design_meal_structure(self, meal_strategy: Dict, nutrition_profile: NutritionProfile) -> Dict:
+        """
+        Step 2: Design specific meal structure and timing
+        """
+        try:
+            prompt = f"""
+            Based on this nutritional strategy, design a detailed meal structure:
+
+            STRATEGY ANALYSIS:
+            {meal_strategy['strategy_analysis']}
+
+            TARGETS:
+            - Daily Calories: {meal_strategy['calorie_target']}
+            - Protein: {meal_strategy['macro_targets']['protein']}g
+            - Carbs: {meal_strategy['macro_targets']['carbs']}g
+            - Fat: {meal_strategy['macro_targets']['fat']}g
+            - Meals per day: {meal_strategy['meals_per_day']}
+
+            Please design a {meal_strategy['days']}-day meal structure with:
+            1. Specific meal types (breakfast, lunch, dinner, snacks)
+            2. Calorie distribution per meal
+            3. Macro distribution per meal
+            4. Optimal timing suggestions
+            5. Meal complexity levels (simple/moderate/complex)
+
+            Format as a structured plan for each day.
+            """
+
+            response = openai.ChatCompletion.create(
+                model="gpt-3.5-turbo",
+                messages=[{"role": "user", "content": prompt}],
+                max_tokens=1000,
+                temperature=0.3
+            )
+
+            structure_text = response.choices[0].message.content
+
+            # Create structured meal framework
+            meal_structure = {
+                'structure_design': structure_text,
+                'daily_framework': self._create_meal_framework(meal_strategy),
+                'strategy': meal_strategy
+            }
+
+            return meal_structure
+
+        except Exception as e:
+            logger.error(f"Step 2 structure design failed: {str(e)}")
+            return {
+                'structure_design': 'Using standard meal structure',
+                'daily_framework': self._create_meal_framework(meal_strategy),
+                'strategy': meal_strategy
+            }
+
+    def _step3_generate_recipes(self, meal_structure: Dict, nutrition_profile: NutritionProfile) -> Dict:
+        """
+        Step 3: Generate specific recipes for each meal
+        """
+        try:
+            # Use Spoonacular to get actual recipes
+            spoonacular_meal_plan = self.spoonacular_service.create_personalized_meal_plan(
+                nutrition_profile, meal_structure['strategy']['days'], {}
+            )
+            
+            # Normalize the data
+            time_frame = "week" if meal_structure['strategy']['days'] > 1 else "day"
+            normalized_plan = self.spoonacular_service.normalize_meal_plan_data(
+                spoonacular_meal_plan, time_frame, nutrition_profile.user
+            )
+
+            # Enhance with AI recipe suggestions
+            prompt = f"""
+            Review these generated recipes and suggest improvements:
+
+            MEAL STRUCTURE PLAN:
+            {meal_structure['structure_design']}
+
+            GENERATED RECIPES:
+            {self._format_recipes_for_ai(normalized_plan)}
+
+            Please provide:
+            1. Recipe quality assessment
+            2. Nutritional balance evaluation
+            3. Variety and appeal rating
+            4. Suggestions for recipe swaps or modifications
+            5. Cooking complexity analysis
+            """
+
+            response = openai.ChatCompletion.create(
+                model="gpt-3.5-turbo",
+                messages=[{"role": "user", "content": prompt}],
+                max_tokens=800,
+                temperature=0.3
+            )
+
+            recipe_analysis = response.choices[0].message.content
+
+            normalized_plan['recipe_analysis'] = recipe_analysis
+            normalized_plan['meal_structure'] = meal_structure
+
+            return normalized_plan
+
+        except Exception as e:
+            logger.error(f"Step 3 recipe generation failed: {str(e)}")
+            return self._generate_fallback_meal_plan(nutrition_profile, meal_structure['strategy']['days'])
+
+    def _step4_nutritional_analysis(self, detailed_meal_plan: Dict, nutrition_profile: NutritionProfile) -> Dict:
+        """
+        Step 4: Comprehensive nutritional analysis and evaluation
+        """
+        try:
+            prompt = f"""
+            As a registered dietitian, perform a comprehensive nutritional analysis:
+
+            USER TARGETS:
+            - Calories: {nutrition_profile.calorie_target}
+            - Protein: {nutrition_profile.protein_target}g
+            - Carbs: {nutrition_profile.carb_target}g  
+            - Fat: {nutrition_profile.fat_target}g
+
+            MEAL PLAN:
+            {self._format_nutrition_for_ai(detailed_meal_plan)}
+
+            PREVIOUS ANALYSIS:
+            {detailed_meal_plan.get('recipe_analysis', 'No previous analysis')}
+
+            Please provide:
+            1. Target vs actual nutritional comparison
+            2. Micronutrient analysis (vitamins, minerals)
+            3. Fiber and sodium content evaluation
+            4. Overall nutritional quality score (1-10)
+            5. Specific recommendations for improvement
+            6. Health benefits and potential concerns
+            """
+
+            response = openai.ChatCompletion.create(
+                model="gpt-3.5-turbo",
+                messages=[{"role": "user", "content": prompt}],
+                max_tokens=1000,
+                temperature=0.3
+            )
+
+            nutritional_analysis = response.choices[0].message.content
+
+            # Calculate nutritional scores
+            scores = self._calculate_nutritional_scores(detailed_meal_plan, nutrition_profile)
+            
+            detailed_meal_plan['nutritional_analysis'] = nutritional_analysis
+            detailed_meal_plan['scores'] = scores
+
+            return detailed_meal_plan
+
+        except Exception as e:
+            logger.error(f"Step 4 nutritional analysis failed: {str(e)}")
+            detailed_meal_plan['nutritional_analysis'] = 'Nutritional analysis temporarily unavailable'
+            detailed_meal_plan['scores'] = self._calculate_nutritional_scores(detailed_meal_plan, nutrition_profile)
+            return detailed_meal_plan
+
+    def _step5_refinement(self, analyzed_plan: Dict, nutrition_profile: NutritionProfile) -> Dict:
+        """
+        Step 5: Final refinement and optimization
+        """
+        try:
+            prompt = f"""
+            Provide final optimization recommendations for this meal plan:
+
+            NUTRITIONAL ANALYSIS:
+            {analyzed_plan.get('nutritional_analysis', 'No analysis available')}
+
+            NUTRITIONAL SCORES:
+            - Balance Score: {analyzed_plan.get('scores', {}).get('balance_score', 'N/A')}
+            - Variety Score: {analyzed_plan.get('scores', {}).get('variety_score', 'N/A')}
+            - Preference Match: {analyzed_plan.get('scores', {}).get('preference_match_score', 'N/A')}
+
+            Please provide:
+            1. Overall meal plan rating (1-10)
+            2. Top 3 strengths of this plan
+            3. Top 3 areas for improvement
+            4. Practical tips for meal prep and execution
+            5. Long-term sustainability assessment
+            6. Personalized motivational message for the user
+            """
+
+            response = openai.ChatCompletion.create(
+                model="gpt-3.5-turbo",
+                messages=[{"role": "user", "content": prompt}],
+                max_tokens=800,
+                temperature=0.4
+            )
+
+            final_insights = response.choices[0].message.content
+
+            analyzed_plan['ai_insights'] = {
+                'final_optimization': final_insights,
+                'generation_method': 'sequential_prompting',
+                'analysis_steps': [
+                    'Profile Strategy Analysis',
+                    'Meal Structure Design', 
+                    'Recipe Generation',
+                    'Nutritional Analysis',
+                    'Final Refinement'
+                ]
+            }
+
+            return analyzed_plan
+
+        except Exception as e:
+            logger.error(f"Step 5 refinement failed: {str(e)}")
+            analyzed_plan['ai_insights'] = {
+                'final_optimization': 'Final optimization temporarily unavailable',
+                'generation_method': 'sequential_prompting_partial'
+            }
+            return analyzed_plan
+
+    def _create_meal_framework(self, meal_strategy: Dict) -> Dict:
+        """Create basic meal framework structure"""
+        meals_per_day = meal_strategy['meals_per_day']
+        daily_calories = meal_strategy['calorie_target']
+        
+        if meals_per_day == 3:
+            framework = {
+                'breakfast': {'calories': int(daily_calories * 0.25), 'complexity': 'simple'},
+                'lunch': {'calories': int(daily_calories * 0.35), 'complexity': 'moderate'},
+                'dinner': {'calories': int(daily_calories * 0.40), 'complexity': 'moderate'}
+            }
+        elif meals_per_day == 4:
+            framework = {
+                'breakfast': {'calories': int(daily_calories * 0.20), 'complexity': 'simple'},
+                'lunch': {'calories': int(daily_calories * 0.30), 'complexity': 'moderate'},
+                'snack': {'calories': int(daily_calories * 0.15), 'complexity': 'simple'},
+                'dinner': {'calories': int(daily_calories * 0.35), 'complexity': 'moderate'}
+            }
+        else:
+            # Default 3-meal structure
+            framework = {
+                'breakfast': {'calories': int(daily_calories * 0.25), 'complexity': 'simple'},
+                'lunch': {'calories': int(daily_calories * 0.35), 'complexity': 'moderate'},
+                'dinner': {'calories': int(daily_calories * 0.40), 'complexity': 'moderate'}
+            }
+        
+        return framework
+
+    def _format_recipes_for_ai(self, meal_plan: Dict) -> str:
+        """Format recipe data for AI analysis"""
+        formatted = ""
+        if 'meals' in meal_plan:
+            for date, meals in meal_plan['meals'].items():
+                formatted += f"\nDay {date}:\n"
+                for meal in meals:
+                    formatted += f"- {meal.get('title', 'Unknown')} ({meal.get('meal_type', 'Unknown type')})\n"
+        return formatted
+
+    def _format_nutrition_for_ai(self, meal_plan: Dict) -> str:
+        """Format nutritional data for AI analysis"""
+        nutrition = meal_plan.get('nutrition', {})
+        return f"""
+        Total Calories: {nutrition.get('calories', 0)}
+        Protein: {nutrition.get('protein', 0)}g
+        Carbs: {nutrition.get('carbs', 0)}g
+        Fat: {nutrition.get('fat', 0)}g
+        Fiber: {nutrition.get('fiber', 0)}g
+        """
+
+    def _generate_traditional_meal_plan(self, nutrition_profile: NutritionProfile, days: int, generation_options: Dict) -> Dict:
+        """Fallback to traditional meal plan generation"""
+        try:
+            spoonacular_meal_plan = self.spoonacular_service.create_personalized_meal_plan(
+                nutrition_profile, days, generation_options or {}
+            )
+            
+            time_frame = "week" if days > 1 else "day"
+            normalized_plan = self.spoonacular_service.normalize_meal_plan_data(
+                spoonacular_meal_plan, time_frame, nutrition_profile.user
+            )
+            
+            # Add basic AI analysis
+            ai_enhanced_plan = self._add_ai_analysis(normalized_plan, nutrition_profile)
+            
+            scores = self._calculate_nutritional_scores(ai_enhanced_plan, nutrition_profile)
+            ai_enhanced_plan['scores'] = scores
+            
+            return ai_enhanced_plan
+        except Exception as e:
+            logger.error(f"Traditional meal plan generation failed: {str(e)}")
+            return self._generate_fallback_meal_plan(nutrition_profile, days)
 
     def _prepare_ai_context(self, meal_plan: Dict, nutrition_profile: NutritionProfile) -> str:
         """Prepare context for OpenAI analysis"""

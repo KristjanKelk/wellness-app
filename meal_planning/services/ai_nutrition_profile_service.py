@@ -121,6 +121,272 @@ class AINutritionProfileService:
                 'message': f'Failed to generate nutrition profile: {str(e)}'
             }
 
+    @transaction.atomic
+    def generate_custom_nutrition_profile(self, user, user_data: Dict, goals: Dict, preferences: Dict) -> Dict:
+        """
+        Generate nutrition profile based on custom user input data
+        
+        Args:
+            user: Django User instance
+            user_data: Dictionary with age, gender, height, weight
+            goals: Dictionary with primary_goal, activity_level
+            preferences: Dictionary with dietary_preferences
+            
+        Returns:
+            Dictionary with profile data and AI insights
+        """
+        try:
+            # Get or create nutrition profile
+            nutrition_profile, created = NutritionProfile.objects.get_or_create(
+                user=user,
+                defaults={'calorie_target': 2000, 'protein_target': 150, 'carb_target': 200, 'fat_target': 65}
+            )
+
+            # Create mock health profile data from custom input
+            mock_health_context = {
+                'age': user_data.get('age'),
+                'gender': user_data.get('gender'),
+                'height': user_data.get('height'),
+                'weight': user_data.get('weight'),
+                'primary_goal': goals.get('primary_goal', 'maintenance'),
+                'activity_level': goals.get('activity_level', 'moderate'),
+                'dietary_preferences': preferences.get('dietary_preferences', [])
+            }
+
+            # Calculate nutrition profile using AI or fallback
+            if self.openai_client or hasattr(openai, 'api_key'):
+                ai_recommendations = self._get_ai_recommendations_from_custom_data(mock_health_context)
+                
+                if ai_recommendations:
+                    # Apply AI recommendations
+                    self._apply_ai_recommendations(nutrition_profile, ai_recommendations)
+                    
+                    # Update dietary preferences if provided
+                    if preferences.get('dietary_preferences'):
+                        nutrition_profile.dietary_preferences = preferences['dietary_preferences']
+                    
+                    # Save AI generation metadata
+                    nutrition_profile.advanced_preferences.update({
+                        'ai_generated': True,
+                        'ai_generation_date': str(timezone.now()),
+                        'ai_recommendations': ai_recommendations,
+                        'generation_version': '2.0',
+                        'custom_input': mock_health_context
+                    })
+                    nutrition_profile.save()
+
+                    logger.info(f"Successfully generated custom AI nutrition profile for user {user.id}")
+                    
+                    return {
+                        'status': 'success',
+                        'data': self._profile_to_dict(nutrition_profile),
+                        'ai_insights': ai_recommendations,
+                        'message': 'AI nutrition profile generated successfully!'
+                    }
+            
+            # Fallback calculation
+            calculated_profile = self._calculate_fallback_profile(mock_health_context)
+            
+            # Apply fallback calculations
+            nutrition_profile.calorie_target = calculated_profile['calorie_target']
+            nutrition_profile.protein_target = calculated_profile['protein_target']
+            nutrition_profile.carb_target = calculated_profile['carb_target']
+            nutrition_profile.fat_target = calculated_profile['fat_target']
+            nutrition_profile.meals_per_day = calculated_profile['meals_per_day']
+            
+            if preferences.get('dietary_preferences'):
+                nutrition_profile.dietary_preferences = preferences['dietary_preferences']
+            
+            nutrition_profile.save()
+            
+            return {
+                'status': 'success',
+                'data': self._profile_to_dict(nutrition_profile),
+                'message': 'Nutrition profile calculated successfully using smart algorithms!'
+            }
+
+        except Exception as e:
+            logger.error(f"Error generating custom nutrition profile for user {user.id}: {str(e)}")
+            return {
+                'status': 'error',
+                'message': f'Failed to generate nutrition profile: {str(e)}'
+            }
+
+    def _get_ai_recommendations_from_custom_data(self, health_context: Dict) -> Dict:
+        """Get AI recommendations from custom health context data"""
+        try:
+            if not self.openai_client and not hasattr(openai, 'api_key'):
+                return None
+
+            # Prepare custom context
+            context = self._prepare_custom_nutrition_context(health_context)
+            
+            # Use function calling for structured nutrition profile generation
+            function_schema = {
+                "name": "generate_nutrition_profile",
+                "description": "Generate a comprehensive nutrition profile based on user's health data and fitness goals",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "calorie_target": {"type": "integer", "minimum": 1200, "maximum": 4000},
+                        "protein_target": {"type": "number", "minimum": 50, "maximum": 300},
+                        "carb_target": {"type": "number", "minimum": 50, "maximum": 500},
+                        "fat_target": {"type": "number", "minimum": 30, "maximum": 200},
+                        "meals_per_day": {"type": "integer", "minimum": 3, "maximum": 6},
+                        "recommendations": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": "Personalized nutrition recommendations"
+                        }
+                    },
+                    "required": ["calorie_target", "protein_target", "carb_target", "fat_target", "meals_per_day"]
+                }
+            }
+
+            # Generate prompt
+            prompt = f"""
+            As a certified nutritionist and dietitian, create a personalized nutrition profile for the following individual:
+
+            {context}
+
+            Please generate a comprehensive nutrition plan that includes:
+            1. Optimal daily calorie target based on their TDEE and goals
+            2. Macronutrient targets (protein, carbs, fat) in grams
+            3. Recommended number of meals per day
+            4. Personalized nutrition recommendations
+
+            Consider their specific dietary preferences, activity level, and health goals.
+            Ensure the recommendations are safe, evidence-based, and sustainable.
+            """
+
+            # Call OpenAI API
+            try:
+                # Try new client API first
+                if self.openai_client:
+                    response = self.openai_client.chat.completions.create(
+                        model="gpt-3.5-turbo",
+                        messages=[{"role": "user", "content": prompt}],
+                        functions=[function_schema],
+                        function_call={"name": "generate_nutrition_profile"},
+                        temperature=0.3
+                    )
+                    
+                    if response.choices[0].message.function_call:
+                        function_args = json.loads(response.choices[0].message.function_call.arguments)
+                        return function_args
+                else:
+                    # Fallback to older API
+                    response = openai.ChatCompletion.create(
+                        model="gpt-3.5-turbo",
+                        messages=[{"role": "user", "content": prompt}],
+                        functions=[function_schema],
+                        function_call={"name": "generate_nutrition_profile"},
+                        temperature=0.3
+                    )
+                    
+                    if response.choices[0].message.get('function_call'):
+                        function_args = json.loads(response.choices[0].message['function_call']['arguments'])
+                        return function_args
+
+            except Exception as e:
+                logger.error(f"OpenAI API call failed: {str(e)}")
+                return None
+
+        except Exception as e:
+            logger.error(f"Error getting AI recommendations from custom data: {str(e)}")
+            return None
+
+    def _prepare_custom_nutrition_context(self, health_context: Dict) -> str:
+        """Prepare context string from custom health data"""
+        age = health_context.get('age')
+        gender = health_context.get('gender')
+        height = health_context.get('height')
+        weight = health_context.get('weight')
+        goal = health_context.get('primary_goal', 'maintenance')
+        activity = health_context.get('activity_level', 'moderate')
+        dietary_prefs = health_context.get('dietary_preferences', [])
+
+        # Calculate BMI
+        height_m = height / 100 if height else 1.7
+        bmi = (weight / (height_m ** 2)) if weight and height else 22
+
+        context = f"""
+        Personal Information:
+        - Age: {age} years
+        - Gender: {gender}
+        - Height: {height} cm
+        - Weight: {weight} kg
+        - BMI: {bmi:.1f}
+
+        Fitness Goals:
+        - Primary Goal: {goal}
+        - Activity Level: {activity}
+
+        Dietary Preferences: {', '.join(dietary_prefs) if dietary_prefs else 'No specific preferences'}
+        """
+
+        return context
+
+    def _calculate_fallback_profile(self, health_context: Dict) -> Dict:
+        """Calculate nutrition profile using rule-based approach"""
+        age = health_context.get('age', 30)
+        gender = health_context.get('gender', 'female')
+        height = health_context.get('height', 170)
+        weight = health_context.get('weight', 70)
+        goal = health_context.get('primary_goal', 'maintenance')
+        activity = health_context.get('activity_level', 'moderate')
+        dietary_prefs = health_context.get('dietary_preferences', [])
+
+        # Calculate BMR using Mifflin-St Jeor Equation
+        if gender == 'male':
+            bmr = 10 * weight + 6.25 * height - 5 * age + 5
+        else:
+            bmr = 10 * weight + 6.25 * height - 5 * age - 161
+
+        # Activity multipliers
+        activity_multipliers = {
+            'sedentary': 1.2,
+            'light': 1.375,
+            'moderate': 1.55,
+            'very_active': 1.725,
+            'extra_active': 1.9
+        }
+
+        tdee = bmr * activity_multipliers.get(activity, 1.55)
+
+        # Adjust for goals
+        if goal == 'weight_loss':
+            tdee -= 500  # 1 lb per week
+        elif goal == 'muscle_gain':
+            tdee += 300  # Moderate surplus
+
+        # Calculate macros based on dietary preferences
+        protein_ratio = 0.25
+        carb_ratio = 0.45
+        fat_ratio = 0.30
+
+        if 'keto' in dietary_prefs:
+            protein_ratio = 0.25
+            carb_ratio = 0.05
+            fat_ratio = 0.70
+        elif 'high_protein' in dietary_prefs:
+            protein_ratio = 0.35
+            carb_ratio = 0.40
+            fat_ratio = 0.25
+        elif 'low_carb' in dietary_prefs:
+            protein_ratio = 0.30
+            carb_ratio = 0.20
+            fat_ratio = 0.50
+
+        return {
+            'calorie_target': int(tdee),
+            'protein_target': int(tdee * protein_ratio / 4),
+            'carb_target': int(tdee * carb_ratio / 4),
+            'fat_target': int(tdee * fat_ratio / 9),
+            'meals_per_day': 4 if goal == 'muscle_gain' else 3,
+            'snacks_per_day': 2 if goal == 'muscle_gain' else 1
+        }
+
     def _get_ai_nutrition_recommendations(self, nutrition_profile: NutritionProfile, health_profile: HealthProfile) -> Dict:
         """Get comprehensive nutrition recommendations from OpenAI"""
         try:

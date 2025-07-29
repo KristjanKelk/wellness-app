@@ -11,6 +11,12 @@ class NutritionCalculationService:
     """
     Service for calculating nutrition information using function calling
     This handles the backend of OpenAI function calls for nutrition calculations
+    
+    Supports OpenAI Function Calling for:
+    - calculate_nutrition: Calculate nutritional information for recipes/ingredients
+    - analyze_dietary_compliance: Check if meals meet dietary restrictions
+    - suggest_substitutions: Recommend ingredient alternatives
+    - calculate_meal_macros: Calculate macronutrient distribution
     """
 
     def __init__(self):
@@ -603,3 +609,419 @@ class NutritionCalculationService:
             highlights.append("Naturally gluten-free")
 
         return highlights
+
+    # ===== OPENAI FUNCTION CALLING METHODS =====
+    
+    def calculate_nutrition(self, ingredients: List[Dict], servings: int = 1) -> Dict:
+        """
+        OpenAI Function Call: Calculate nutritional information for a recipe or ingredient list
+        
+        Args:
+            ingredients: List of ingredients with name, quantity, and unit
+            servings: Number of servings the recipe makes
+            
+        Returns:
+            Dictionary with detailed nutritional information
+        """
+        try:
+            total_nutrition = {
+                'calories': 0,
+                'protein': 0,
+                'carbs': 0,
+                'fat': 0,
+                'fiber': 0,
+                'sugar': 0,
+                'sodium': 0,
+                'cholesterol': 0,
+                'vitamin_c': 0,
+                'iron': 0,
+                'calcium': 0
+            }
+            
+            ingredient_breakdown = []
+            
+            for ingredient in ingredients:
+                ingredient_name = ingredient.get('name', '').lower()
+                quantity = ingredient.get('quantity', 0)
+                unit = ingredient.get('unit', 'g')
+                
+                # Convert to grams if needed
+                quantity_grams = self._convert_to_grams(quantity, unit, ingredient_name)
+                
+                # Get nutrition info from database or estimates
+                nutrition_per_100g = self._get_ingredient_nutrition(ingredient_name)
+                
+                # Calculate nutrition for this quantity
+                ingredient_nutrition = {}
+                for nutrient, value_per_100g in nutrition_per_100g.items():
+                    ingredient_nutrition[nutrient] = (value_per_100g * quantity_grams) / 100
+                    total_nutrition[nutrient] += ingredient_nutrition[nutrient]
+                
+                ingredient_breakdown.append({
+                    'name': ingredient_name,
+                    'quantity': f"{quantity} {unit}",
+                    'nutrition': ingredient_nutrition
+                })
+            
+            # Calculate per serving
+            per_serving = {}
+            for nutrient, total_value in total_nutrition.items():
+                per_serving[nutrient] = total_value / servings
+            
+            return {
+                'total_nutrition': total_nutrition,
+                'per_serving': per_serving,
+                'servings': servings,
+                'ingredient_breakdown': ingredient_breakdown,
+                'macronutrient_percentages': self._calculate_macro_percentages(per_serving)
+            }
+            
+        except Exception as e:
+            logger.error(f"Error calculating nutrition: {str(e)}")
+            return {
+                'error': 'Failed to calculate nutrition',
+                'total_nutrition': {},
+                'per_serving': {}
+            }
+
+    def analyze_dietary_compliance(self, ingredients: List[str], dietary_preferences: List[str], allergies: List[str] = None) -> Dict:
+        """
+        OpenAI Function Call: Analyze if a recipe meets dietary restrictions and allergies
+        
+        Args:
+            ingredients: List of ingredient names
+            dietary_preferences: List of dietary preferences (vegetarian, vegan, etc.)
+            allergies: List of allergens to check for
+            
+        Returns:
+            Dictionary with compliance analysis
+        """
+        try:
+            allergies = allergies or []
+            compliance_results = {
+                'is_compliant': True,
+                'violations': [],
+                'warnings': [],
+                'highlights': [],
+                'allergen_analysis': {},
+                'dietary_analysis': {}
+            }
+            
+            # Check allergens
+            for allergen in allergies:
+                allergen_check = self._check_allergens(ingredients, allergen)
+                compliance_results['allergen_analysis'][allergen] = allergen_check
+                
+                if allergen_check['contains_allergen']:
+                    compliance_results['is_compliant'] = False
+                    compliance_results['violations'].extend(allergen_check['allergen_ingredients'])
+            
+            # Check dietary preferences
+            for preference in dietary_preferences:
+                dietary_check = self._check_dietary_compliance(ingredients, preference)
+                compliance_results['dietary_analysis'][preference] = dietary_check
+                
+                if not dietary_check['is_compliant']:
+                    compliance_results['is_compliant'] = False
+                    compliance_results['violations'].extend(dietary_check['violations'])
+                
+                compliance_results['highlights'].extend(dietary_check.get('highlights', []))
+            
+            return compliance_results
+            
+        except Exception as e:
+            logger.error(f"Error analyzing dietary compliance: {str(e)}")
+            return {
+                'error': 'Failed to analyze dietary compliance',
+                'is_compliant': False
+            }
+
+    def suggest_substitutions(self, ingredient: str, dietary_preferences: List[str] = None, allergies: List[str] = None) -> Dict:
+        """
+        OpenAI Function Call: Suggest ingredient substitutions based on dietary needs
+        
+        Args:
+            ingredient: Original ingredient name
+            dietary_preferences: List of dietary preferences to accommodate
+            allergies: List of allergens to avoid
+            
+        Returns:
+            Dictionary with substitution suggestions
+        """
+        try:
+            dietary_preferences = dietary_preferences or []
+            allergies = allergies or []
+            
+            # Get base substitutions
+            substitutions = self.get_ingredient_substitution(ingredient, dietary_preferences)
+            
+            # Filter out allergens
+            safe_substitutions = []
+            for sub in substitutions:
+                is_safe = True
+                for allergen in allergies:
+                    allergen_check = self._check_allergens([sub['substitute']], allergen)
+                    if allergen_check['contains_allergen']:
+                        is_safe = False
+                        break
+                
+                if is_safe:
+                    safe_substitutions.append(sub)
+            
+            # Get nutrition comparison
+            original_nutrition = self._get_ingredient_nutrition(ingredient.lower())
+            
+            enhanced_substitutions = []
+            for sub in safe_substitutions[:5]:  # Limit to top 5
+                sub_nutrition = self._get_ingredient_nutrition(sub['substitute'].lower())
+                
+                enhanced_substitutions.append({
+                    'substitute': sub['substitute'],
+                    'reason': sub['reason'],
+                    'conversion_notes': sub.get('conversion_notes', ''),
+                    'nutrition_comparison': self._compare_nutrition(original_nutrition, sub_nutrition)
+                })
+            
+            return {
+                'original_ingredient': ingredient,
+                'substitutions': enhanced_substitutions,
+                'dietary_compatibility': {
+                    'vegetarian': all('vegetarian' not in pref or self._is_vegetarian_friendly(sub['substitute']) 
+                                    for sub in enhanced_substitutions for pref in dietary_preferences),
+                    'vegan': all('vegan' not in pref or self._is_vegan_friendly(sub['substitute']) 
+                               for sub in enhanced_substitutions for pref in dietary_preferences)
+                }
+            }
+            
+        except Exception as e:
+            logger.error(f"Error suggesting substitutions: {str(e)}")
+            return {
+                'error': 'Failed to suggest substitutions',
+                'substitutions': []
+            }
+
+    def calculate_meal_macros(self, meals: List[Dict]) -> Dict:
+        """
+        OpenAI Function Call: Calculate macronutrient distribution for a full day of meals
+        
+        Args:
+            meals: List of meals with nutritional information
+            
+        Returns:
+            Dictionary with comprehensive macro analysis
+        """
+        try:
+            total_macros = {
+                'calories': 0,
+                'protein': 0,
+                'carbs': 0,
+                'fat': 0,
+                'fiber': 0
+            }
+            
+            meal_breakdown = []
+            
+            for meal in meals:
+                meal_name = meal.get('name', 'Unknown Meal')
+                nutrition = meal.get('nutrition', {})
+                
+                meal_macros = {
+                    'calories': nutrition.get('calories', 0),
+                    'protein': nutrition.get('protein', 0),
+                    'carbs': nutrition.get('carbs', 0),
+                    'fat': nutrition.get('fat', 0),
+                    'fiber': nutrition.get('fiber', 0)
+                }
+                
+                # Add to totals
+                for macro, value in meal_macros.items():
+                    total_macros[macro] += value
+                
+                meal_breakdown.append({
+                    'meal': meal_name,
+                    'macros': meal_macros,
+                    'percentages': self._calculate_macro_percentages(meal_macros)
+                })
+            
+            # Calculate overall percentages
+            daily_percentages = self._calculate_macro_percentages(total_macros)
+            
+            # Assess balance
+            balance_assessment = self._assess_macro_balance(daily_percentages)
+            
+            return {
+                'total_macros': total_macros,
+                'daily_percentages': daily_percentages,
+                'meal_breakdown': meal_breakdown,
+                'balance_assessment': balance_assessment,
+                'recommendations': self._get_macro_recommendations(daily_percentages)
+            }
+            
+        except Exception as e:
+            logger.error(f"Error calculating meal macros: {str(e)}")
+            return {
+                'error': 'Failed to calculate meal macros',
+                'total_macros': {}
+            }
+
+    # ===== HELPER METHODS FOR FUNCTION CALLING =====
+    
+    def _convert_to_grams(self, quantity: float, unit: str, ingredient_name: str) -> float:
+        """Convert various units to grams"""
+        unit = unit.lower()
+        
+        # Volume to weight conversions (approximate)
+        volume_conversions = {
+            'ml': 1,  # Assume 1ml = 1g for most liquids
+            'l': 1000,
+            'cup': 240,  # 1 cup = 240ml
+            'tbsp': 15,  # 1 tablespoon = 15ml
+            'tsp': 5,    # 1 teaspoon = 5ml
+            'oz': 28.35  # 1 oz = 28.35g
+        }
+        
+        if unit in ['g', 'gram', 'grams']:
+            return quantity
+        elif unit in ['kg', 'kilogram', 'kilograms']:
+            return quantity * 1000
+        elif unit in volume_conversions:
+            return quantity * volume_conversions[unit]
+        else:
+            # Default to treating as grams
+            return quantity
+
+    def _get_ingredient_nutrition(self, ingredient_name: str) -> Dict:
+        """Get nutrition info per 100g for an ingredient"""
+        # This is a simplified version - in production, you'd use a comprehensive nutrition database
+        nutrition_database = {
+            # Basic staples
+            'rice': {'calories': 130, 'protein': 2.7, 'carbs': 28, 'fat': 0.3, 'fiber': 0.4, 'sugar': 0.1, 'sodium': 5},
+            'chicken breast': {'calories': 165, 'protein': 31, 'carbs': 0, 'fat': 3.6, 'fiber': 0, 'sugar': 0, 'sodium': 74},
+            'salmon': {'calories': 208, 'protein': 25, 'carbs': 0, 'fat': 12, 'fiber': 0, 'sugar': 0, 'sodium': 69},
+            'broccoli': {'calories': 34, 'protein': 2.8, 'carbs': 7, 'fat': 0.4, 'fiber': 2.6, 'sugar': 1.5, 'sodium': 33},
+            'olive oil': {'calories': 884, 'protein': 0, 'carbs': 0, 'fat': 100, 'fiber': 0, 'sugar': 0, 'sodium': 2},
+            
+            # Default values for unknown ingredients
+            'default': {'calories': 100, 'protein': 5, 'carbs': 10, 'fat': 3, 'fiber': 2, 'sugar': 2, 'sodium': 50}
+        }
+        
+        # Try to find ingredient in database
+        for key in nutrition_database:
+            if key in ingredient_name.lower():
+                return nutrition_database[key]
+        
+        return nutrition_database['default']
+
+    def _calculate_macro_percentages(self, nutrition: Dict) -> Dict:
+        """Calculate macronutrient percentages"""
+        calories = nutrition.get('calories', 0)
+        if calories == 0:
+            return {'protein_percent': 0, 'carbs_percent': 0, 'fat_percent': 0}
+        
+        protein_calories = nutrition.get('protein', 0) * 4
+        carb_calories = nutrition.get('carbs', 0) * 4
+        fat_calories = nutrition.get('fat', 0) * 9
+        
+        return {
+            'protein_percent': round((protein_calories / calories) * 100, 1),
+            'carbs_percent': round((carb_calories / calories) * 100, 1),
+            'fat_percent': round((fat_calories / calories) * 100, 1)
+        }
+
+    def _compare_nutrition(self, original: Dict, substitute: Dict) -> Dict:
+        """Compare nutrition between original and substitute ingredients"""
+        comparison = {}
+        for nutrient in ['calories', 'protein', 'carbs', 'fat', 'fiber']:
+            orig_val = original.get(nutrient, 0)
+            sub_val = substitute.get(nutrient, 0)
+            
+            if orig_val == 0:
+                comparison[nutrient] = 'similar'
+            else:
+                diff_percent = ((sub_val - orig_val) / orig_val) * 100
+                if abs(diff_percent) < 10:
+                    comparison[nutrient] = 'similar'
+                elif diff_percent > 0:
+                    comparison[nutrient] = f'higher ({diff_percent:.0f}%)'
+                else:
+                    comparison[nutrient] = f'lower ({abs(diff_percent):.0f}%)'
+        
+        return comparison
+
+    def _assess_macro_balance(self, percentages: Dict) -> Dict:
+        """Assess if macro distribution is balanced"""
+        protein_pct = percentages.get('protein_percent', 0)
+        carbs_pct = percentages.get('carbs_percent', 0)
+        fat_pct = percentages.get('fat_percent', 0)
+        
+        assessment = {
+            'overall_balance': 'good',
+            'protein_status': 'optimal',
+            'carbs_status': 'optimal',
+            'fat_status': 'optimal'
+        }
+        
+        # Check protein (should be 15-35%)
+        if protein_pct < 15:
+            assessment['protein_status'] = 'too_low'
+            assessment['overall_balance'] = 'needs_improvement'
+        elif protein_pct > 35:
+            assessment['protein_status'] = 'too_high'
+            assessment['overall_balance'] = 'needs_improvement'
+        
+        # Check carbs (should be 45-65%)
+        if carbs_pct < 45:
+            assessment['carbs_status'] = 'too_low'
+            assessment['overall_balance'] = 'needs_improvement'
+        elif carbs_pct > 65:
+            assessment['carbs_status'] = 'too_high'
+            assessment['overall_balance'] = 'needs_improvement'
+        
+        # Check fat (should be 20-35%)
+        if fat_pct < 20:
+            assessment['fat_status'] = 'too_low'
+            assessment['overall_balance'] = 'needs_improvement'
+        elif fat_pct > 35:
+            assessment['fat_status'] = 'too_high'
+            assessment['overall_balance'] = 'needs_improvement'
+        
+        return assessment
+
+    def _get_macro_recommendations(self, percentages: Dict) -> List[str]:
+        """Get recommendations based on macro distribution"""
+        recommendations = []
+        
+        protein_pct = percentages.get('protein_percent', 0)
+        carbs_pct = percentages.get('carbs_percent', 0)
+        fat_pct = percentages.get('fat_percent', 0)
+        
+        if protein_pct < 15:
+            recommendations.append("Consider adding more protein sources like lean meats, fish, eggs, or legumes")
+        elif protein_pct > 35:
+            recommendations.append("Consider reducing protein and increasing carbohydrates or healthy fats")
+        
+        if carbs_pct < 45:
+            recommendations.append("Add more complex carbohydrates like whole grains, fruits, and vegetables")
+        elif carbs_pct > 65:
+            recommendations.append("Consider reducing refined carbohydrates and adding more protein or healthy fats")
+        
+        if fat_pct < 20:
+            recommendations.append("Include more healthy fats like nuts, avocado, olive oil, or fatty fish")
+        elif fat_pct > 35:
+            recommendations.append("Consider reducing added fats and oils while maintaining essential fatty acids")
+        
+        if not recommendations:
+            recommendations.append("Your macronutrient distribution looks well balanced!")
+        
+        return recommendations
+
+    def _is_vegetarian_friendly(self, ingredient: str) -> bool:
+        """Check if ingredient is vegetarian-friendly"""
+        non_vegetarian = ['meat', 'beef', 'pork', 'chicken', 'turkey', 'fish', 'seafood', 'gelatin']
+        return not any(item in ingredient.lower() for item in non_vegetarian)
+
+    def _is_vegan_friendly(self, ingredient: str) -> bool:
+        """Check if ingredient is vegan-friendly"""
+        non_vegan = ['meat', 'beef', 'pork', 'chicken', 'turkey', 'fish', 'seafood', 'dairy', 
+                     'milk', 'cheese', 'butter', 'eggs', 'honey', 'gelatin']
+        return not any(item in ingredient.lower() for item in non_vegan)

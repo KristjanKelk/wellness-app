@@ -227,6 +227,48 @@ class NutritionProfileViewSet(viewsets.ModelViewSet):
             )
 
     @action(detail=False, methods=['post'])
+    def ai_generate(self, request):
+        """Generate AI-powered nutrition profile based on custom input data"""
+        try:
+            from .services.ai_nutrition_profile_service import AINutritionProfileService
+            
+            # Extract user data from request
+            user_data = request.data.get('user_data', {})
+            goals = request.data.get('goals', {})
+            preferences = request.data.get('preferences', {})
+            
+            # Validate required fields
+            required_fields = ['age', 'gender', 'height', 'weight']
+            for field in required_fields:
+                if field not in user_data:
+                    return Response(
+                        {'error': f'Missing required field: {field}'},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+            
+            ai_service = AINutritionProfileService()
+            
+            # Generate profile using custom data
+            result = ai_service.generate_custom_nutrition_profile(
+                user=request.user,
+                user_data=user_data,
+                goals=goals,
+                preferences=preferences
+            )
+            
+            if result['status'] == 'success':
+                return Response(result, status=status.HTTP_200_OK)
+            else:
+                return Response(result, status=status.HTTP_400_BAD_REQUEST)
+                
+        except Exception as e:
+            logger.error(f"Error generating custom AI nutrition profile: {str(e)}")
+            return Response(
+                {'error': 'Failed to generate AI nutrition profile', 'details': str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    @action(detail=False, methods=['post'])
     def update_with_progress(self, request):
         """Update nutrition profile based on user progress and feedback"""
         try:
