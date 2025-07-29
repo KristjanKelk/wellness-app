@@ -851,7 +851,7 @@ class EnhancedSpoonacularService:
                     detailed_meal = meal
             
             # Save recipe to database with detailed information
-            saved_recipe = self._save_recipe_to_database(detailed_meal, created_by)
+            # saved_recipe = self._save_recipe_to_database(detailed_meal, created_by)
             
             # Use meal type and time from the meal data (already set in generate_custom_meal_plan)
             meal_type = meal.get('meal_type', f'meal_{i+1}')
@@ -939,8 +939,8 @@ class EnhancedSpoonacularService:
                     meal_times = ['08:00', '12:30', '19:00']
                     
                     for i, meal in enumerate(day_meals_data):
-                        # Save recipe to database
-                        saved_recipe = self._save_recipe_to_database(meal, created_by)
+                        # Save recipe to database - commented out to prevent auto-save during meal plan generation
+                        # saved_recipe = self._save_recipe_to_database(meal, created_by)
                         
                         meal_type = meal_types[i] if i < len(meal_types) else 'snack'
                         meal_time = meal_times[i] if i < len(meal_times) else '15:00'

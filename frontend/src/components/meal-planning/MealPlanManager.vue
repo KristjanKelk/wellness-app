@@ -389,7 +389,7 @@ export default {
           type: 'success',
           icon: 'fas fa-check-circle',
           title: 'Meal Plan Generated Successfully!',
-          message: 'Your personalized AI meal plan is ready to view. All recipes have been saved to your recipe library.'
+          message: 'Your personalized AI meal plan is ready to view.'
         }
 
         // Add to meal plans list
@@ -494,7 +494,7 @@ export default {
           type: 'success',
           icon: 'fas fa-check-circle',
           title: 'New Meal Plan Generated!',
-          message: 'Your fresh AI meal plan is ready. New recipes have been added to your library.'
+          message: 'Your fresh AI meal plan is ready.'
         }
 
         this.showSuccess('New AI meal plan generated!')
