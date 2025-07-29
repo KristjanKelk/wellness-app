@@ -846,27 +846,66 @@ class EnhancedSpoonacularService:
             'calories': 0,
             'protein': 0,
             'carbs': 0,
-            'fat': 0
+            'fat': 0,
+            'fiber': 0  # Add fiber support
         }
 
         # Try to get nutrition from different possible locations
         if 'nutrition' in meal:
             nutr_data = meal['nutrition']
             if isinstance(nutr_data, dict):
+                # Direct nutrition values (sometimes available)
                 nutrition['calories'] = nutr_data.get('calories', 0)
                 
                 # Look for nutrients in different formats
                 nutrients = nutr_data.get('nutrients', [])
                 if isinstance(nutrients, list):
                     for nutrient in nutrients:
-                        name = nutrient.get('name', '').lower()
-                        amount = nutrient.get('amount', 0)
-                        
-                        if 'protein' in name:
-                            nutrition['protein'] = amount
-                        elif 'carbohydrate' in name or 'carbs' in name:
-                            nutrition['carbs'] = amount
-                        elif 'fat' in name and 'saturated' not in name:
-                            nutrition['fat'] = amount
+                        if isinstance(nutrient, dict):
+                            name = nutrient.get('name', '').lower()
+                            amount = nutrient.get('amount', 0)
+                            
+                            # Map nutrient names to our nutrition structure
+                            if 'calorie' in name or name == 'energy':
+                                nutrition['calories'] = amount
+                            elif 'protein' in name:
+                                nutrition['protein'] = amount
+                            elif 'carbohydrate' in name or 'carbs' in name or name == 'net carbohydrates':
+                                nutrition['carbs'] = amount
+                            elif 'fat' in name and 'saturated' not in name and 'trans' not in name:
+                                nutrition['fat'] = amount
+                            elif 'fiber' in name or name == 'dietary fiber':
+                                nutrition['fiber'] = amount
+
+        # Fallback: try to extract from other locations in the meal data
+        if nutrition['calories'] == 0:
+            # Sometimes calories are directly in the meal data
+            if 'calories' in meal:
+                nutrition['calories'] = meal.get('calories', 0)
+            
+            # Or in summary/analyzed recipe data
+            if 'summary' in meal and isinstance(meal['summary'], str):
+                import re
+                calories_match = re.search(r'(\d+)\s*calories', meal['summary'])
+                if calories_match:
+                    nutrition['calories'] = int(calories_match.group(1))
+
+        # Convert string values with units to numbers (e.g., "25g" -> 25)
+        for key in nutrition:
+            if isinstance(nutrition[key], str):
+                import re
+                # Extract numbers from strings like "25g", "1.5oz", etc.
+                match = re.search(r'(\d+\.?\d*)', str(nutrition[key]))
+                if match:
+                    nutrition[key] = float(match.group(1))
+                else:
+                    nutrition[key] = 0
+
+        # Ensure all values are numeric
+        for key in nutrition:
+            try:
+                nutrition[key] = float(nutrition[key]) if nutrition[key] else 0
+            except (ValueError, TypeError):
+                nutrition[key] = 0
 
         return nutrition
