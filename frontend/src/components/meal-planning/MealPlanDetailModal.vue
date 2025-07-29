@@ -197,16 +197,16 @@
                     </div>
 
                     <!-- Instructions -->
-                    <div class="instructions-section" v-if="meal.recipe.instructions && meal.recipe.instructions.length">
+                    <div class="instructions-section" v-if="normalizedInstructions(meal).length">
                       <h6>Instructions</h6>
                       <div class="instructions-list">
                         <div 
-                          v-for="(instruction, idx) in meal.recipe.instructions" 
+                          v-for="(instruction, idx) in normalizedInstructions(meal)" 
                           :key="idx"
                           class="instruction-item"
                         >
-                          <span class="instruction-number">{{ idx + 1 }}</span>
-                          <span class="instruction-text">{{ instruction }}</span>
+                          <span class="instruction-number">{{ instruction.number }}</span>
+                          <span class="instruction-text">{{ instruction.step }}</span>
                         </div>
                       </div>
                     </div>
@@ -311,6 +311,48 @@ export default {
   data() {
     return {
       savingRecipe: null // Track which recipe is being saved
+    }
+  },
+  computed: {
+    // Add computed property to normalize instructions
+    normalizedInstructions() {
+      return (meal) => {
+        const instr = meal?.recipe?.instructions || meal?.instructions || []
+        
+        // Handle empty instructions
+        if (!instr || instr.length === 0) {
+          return []
+        }
+        
+        // If it's already an array of objects with step property, extract the step text
+        if (instr.length && typeof instr[0] === 'object' && instr[0].step) {
+          return instr.map((stepObj, i) => ({
+            number: stepObj.number || i + 1,
+            step: stepObj.step,
+            description: stepObj.step
+          }))
+        }
+        
+        // If it's an array of strings, convert to objects
+        if (instr.length && typeof instr[0] === 'string') {
+          return instr.map((stepText, i) => ({
+            number: i + 1,
+            step: stepText,
+            description: stepText
+          }))
+        }
+        
+        // If it's an array of objects without step property, try to extract the step text
+        if (instr.length && typeof instr[0] === 'object') {
+          return instr.map((stepObj, i) => ({
+            number: stepObj.number || i + 1,
+            step: stepObj.step || stepObj.description || stepObj.instruction || `Step ${i + 1}`,
+            description: stepObj.step || stepObj.description || stepObj.instruction || `Step ${i + 1}`
+          }))
+        }
+        
+        return []
+      }
     }
   },
   mounted() {
