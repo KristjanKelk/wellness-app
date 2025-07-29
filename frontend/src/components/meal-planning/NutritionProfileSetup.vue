@@ -3,8 +3,174 @@
   <div class="nutrition-profile-setup">
     <div class="profile-card">
       <div class="card-header">
-        <h2>Your Nutrition Profile</h2>
-        <p>Set up your dietary preferences and nutrition goals</p>
+        <h2>🎯 Your Personalized Nutrition Profile</h2>
+        <p>Let AI help you create the perfect nutrition plan tailored to your goals</p>
+        
+        <!-- AI Quick Setup Button -->
+        <button 
+          v-if="!hasExistingProfile" 
+          @click="showAIWizard = true"
+          class="ai-wizard-btn"
+          type="button"
+        >
+          <i class="fas fa-magic"></i>
+          Generate with AI
+        </button>
+      </div>
+
+      <!-- AI Wizard Modal -->
+      <div v-if="showAIWizard" class="ai-wizard-overlay" @click="showAIWizard = false">
+        <div class="ai-wizard-modal" @click.stop>
+          <div class="ai-wizard-header">
+            <h3>🤖 AI Nutrition Profile Generator</h3>
+            <button @click="showAIWizard = false" class="close-btn">&times;</button>
+          </div>
+          
+          <div class="ai-wizard-content">
+            <div class="ai-step" v-if="aiStep === 1">
+              <h4>Tell me about yourself</h4>
+              <div class="form-grid">
+                <div class="form-group">
+                  <label>Age</label>
+                  <input v-model.number="aiProfile.age" type="number" min="13" max="100" class="form-input" />
+                </div>
+                <div class="form-group">
+                  <label>Gender</label>
+                  <select v-model="aiProfile.gender" class="form-select">
+                    <option value="">Select...</option>
+                    <option value="male">Male</option>
+                    <option value="female">Female</option>
+                    <option value="other">Other</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label>Height (cm)</label>
+                  <input v-model.number="aiProfile.height" type="number" min="100" max="250" class="form-input" />
+                </div>
+                <div class="form-group">
+                  <label>Weight (kg)</label>
+                  <input v-model.number="aiProfile.weight" type="number" min="30" max="300" class="form-input" />
+                </div>
+              </div>
+            </div>
+
+            <div class="ai-step" v-if="aiStep === 2">
+              <h4>What's your primary goal?</h4>
+              <div class="goal-options">
+                <button 
+                  v-for="goal in goalOptions" 
+                  :key="goal.value"
+                  @click="aiProfile.goal = goal.value"
+                  :class="['goal-option', { active: aiProfile.goal === goal.value }]"
+                >
+                  <div class="goal-icon">{{ goal.icon }}</div>
+                  <div class="goal-text">
+                    <h5>{{ goal.label }}</h5>
+                    <p>{{ goal.description }}</p>
+                  </div>
+                </button>
+              </div>
+            </div>
+
+            <div class="ai-step" v-if="aiStep === 3">
+              <h4>Activity Level</h4>
+              <div class="activity-options">
+                <button 
+                  v-for="activity in activityOptions" 
+                  :key="activity.value"
+                  @click="aiProfile.activity = activity.value"
+                  :class="['activity-option', { active: aiProfile.activity === activity.value }]"
+                >
+                  <div class="activity-icon">{{ activity.icon }}</div>
+                  <div class="activity-text">
+                    <h5>{{ activity.label }}</h5>
+                    <p>{{ activity.description }}</p>
+                  </div>
+                </button>
+              </div>
+            </div>
+
+            <div class="ai-step" v-if="aiStep === 4">
+              <h4>Dietary Preferences</h4>
+              <div class="dietary-preferences">
+                <button 
+                  v-for="diet in popularDiets" 
+                  :key="diet.value"
+                  @click="toggleDiet(diet.value)"
+                  :class="['diet-option', { active: aiProfile.diets.includes(diet.value) }]"
+                >
+                  <span class="diet-emoji">{{ diet.emoji }}</span>
+                  <span>{{ diet.label }}</span>
+                </button>
+              </div>
+            </div>
+
+            <div class="ai-step" v-if="aiStep === 5">
+              <div class="generating-profile" v-if="generatingProfile">
+                <div class="spinner"></div>
+                <h4>🧠 AI is analyzing your preferences...</h4>
+                <p>Creating your personalized nutrition profile</p>
+              </div>
+              
+              <div v-else class="profile-preview">
+                <h4>✨ Your AI-Generated Profile</h4>
+                <div class="profile-summary">
+                  <div class="macro-preview">
+                    <div class="macro-item">
+                      <span class="macro-label">Daily Calories</span>
+                      <span class="macro-value">{{ aiGeneratedProfile.calorie_target }}</span>
+                    </div>
+                    <div class="macro-item">
+                      <span class="macro-label">Protein</span>
+                      <span class="macro-value">{{ aiGeneratedProfile.protein_target }}g</span>
+                    </div>
+                    <div class="macro-item">
+                      <span class="macro-label">Carbs</span>
+                      <span class="macro-value">{{ aiGeneratedProfile.carb_target }}g</span>
+                    </div>
+                    <div class="macro-item">
+                      <span class="macro-label">Fat</span>
+                      <span class="macro-value">{{ aiGeneratedProfile.fat_target }}g</span>
+                    </div>
+                  </div>
+                  
+                  <div class="meal-plan-preview">
+                    <h5>Recommended Meal Structure</h5>
+                    <p>{{ aiGeneratedProfile.meals_per_day }} meals per day</p>
+                    <p>{{ aiGeneratedProfile.snacks_per_day || 0 }} snacks per day</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="ai-wizard-footer">
+            <button 
+              v-if="aiStep > 1" 
+              @click="aiStep--" 
+              class="btn-secondary"
+            >
+              Back
+            </button>
+            
+            <button 
+              v-if="aiStep < 5" 
+              @click="nextAIStep" 
+              class="btn-primary"
+              :disabled="!canProceedToNextStep"
+            >
+              Next
+            </button>
+            
+            <button 
+              v-if="aiStep === 5 && !generatingProfile" 
+              @click="applyAIProfile" 
+              class="btn-success"
+            >
+              Apply This Profile
+            </button>
+          </div>
+        </div>
       </div>
 
       <!-- Validation Errors -->
@@ -23,61 +189,119 @@
       </div>
 
       <form v-else @submit.prevent="saveProfile" class="profile-form">
-        <!-- Nutrition Targets -->
+        <!-- Enhanced Nutrition Targets with Visual Indicators -->
         <div class="form-section">
-          <h3>Daily Nutrition Targets</h3>
+          <h3>🎯 Daily Nutrition Targets</h3>
           <div class="targets-grid">
-            <div class="form-group">
+            <div class="form-group enhanced-input">
               <label for="calorie_target">Daily Calories</label>
-              <input
-                id="calorie_target"
-                v-model.number="formData.calorie_target"
-                type="number"
-                min="1000"
-                max="5000"
-                class="form-input"
-                required
-              />
-              <span class="form-help">Recommended: 1800-2500 kcal</span>
+              <div class="input-wrapper">
+                <input
+                  id="calorie_target"
+                  v-model.number="formData.calorie_target"
+                  type="number"
+                  min="1000"
+                  max="5000"
+                  class="form-input"
+                  required
+                />
+                <div class="input-hint">
+                  <i class="fas fa-fire"></i>
+                  <span>{{ getCalorieRecommendation() }}</span>
+                </div>
+              </div>
             </div>
 
-            <div class="form-group">
+            <div class="form-group enhanced-input">
               <label for="protein_target">Protein (g)</label>
-              <input
-                id="protein_target"
-                v-model.number="formData.protein_target"
-                type="number"
-                min="0"
-                max="500"
-                class="form-input"
-                required
-              />
+              <div class="input-wrapper">
+                <input
+                  id="protein_target"
+                  v-model.number="formData.protein_target"
+                  type="number"
+                  min="0"
+                  max="500"
+                  class="form-input"
+                  required
+                />
+                <div class="input-hint">
+                  <i class="fas fa-dumbbell"></i>
+                  <span>{{ (formData.protein_target / formData.calorie_target * 100 * 4).toFixed(0) }}% of calories</span>
+                </div>
+              </div>
             </div>
 
-            <div class="form-group">
+            <div class="form-group enhanced-input">
               <label for="carb_target">Carbs (g)</label>
-              <input
-                id="carb_target"
-                v-model.number="formData.carb_target"
-                type="number"
-                min="0"
-                max="1000"
-                class="form-input"
-                required
-              />
+              <div class="input-wrapper">
+                <input
+                  id="carb_target"
+                  v-model.number="formData.carb_target"
+                  type="number"
+                  min="0"
+                  max="1000"
+                  class="form-input"
+                  required
+                />
+                <div class="input-hint">
+                  <i class="fas fa-bread-slice"></i>
+                  <span>{{ (formData.carb_target / formData.calorie_target * 100 * 4).toFixed(0) }}% of calories</span>
+                </div>
+              </div>
             </div>
 
-            <div class="form-group">
+            <div class="form-group enhanced-input">
               <label for="fat_target">Fat (g)</label>
-              <input
-                id="fat_target"
-                v-model.number="formData.fat_target"
-                type="number"
-                min="0"
-                max="300"
-                class="form-input"
-                required
-              />
+              <div class="input-wrapper">
+                <input
+                  id="fat_target"
+                  v-model.number="formData.fat_target"
+                  type="number"
+                  min="0"
+                  max="300"
+                  class="form-input"
+                  required
+                />
+                <div class="input-hint">
+                  <i class="fas fa-oil-can"></i>
+                  <span>{{ (formData.fat_target / formData.calorie_target * 100 * 9).toFixed(0) }}% of calories</span>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <!-- Macro Distribution Visualization -->
+          <div class="macro-distribution">
+            <h4>Macronutrient Distribution</h4>
+            <div class="macro-chart">
+              <div class="macro-bar">
+                <div 
+                  class="macro-segment protein" 
+                  :style="{ width: proteinPercentage + '%' }"
+                ></div>
+                <div 
+                  class="macro-segment carbs" 
+                  :style="{ width: carbPercentage + '%' }"
+                ></div>
+                <div 
+                  class="macro-segment fat" 
+                  :style="{ width: fatPercentage + '%' }"
+                ></div>
+              </div>
+              <div class="macro-legend">
+                <div class="legend-item">
+                  <span class="legend-color protein"></span>
+                  <span>Protein {{ proteinPercentage }}%</span>
+                </div>
+                <div class="legend-item">
+                  <span class="legend-color carbs"></span>
+                  <span>Carbs {{ carbPercentage }}%</span>
+                </div>
+                <div class="legend-item">
+                  <span class="legend-color fat"></span>
+                  <span>Fat {{ fatPercentage }}%</span>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -324,12 +548,77 @@ export default {
         { value: 'korean', label: 'Korean' },
         { value: 'greek', label: 'Greek' },
         { value: 'spanish', label: 'Spanish' }
-      ]
+      ],
+      aiStep: 1,
+      showAIWizard: false,
+      aiProfile: {
+        age: null,
+        gender: '',
+        height: null,
+        weight: null,
+        goal: '',
+        activity: '',
+        diets: []
+      },
+      goalOptions: [
+        { value: 'weight_loss', label: 'Weight Loss', icon: '🔥', description: 'Lose weight by burning more calories than you consume' },
+        { value: 'muscle_gain', label: 'Muscle Gain', icon: '💪', description: 'Gain muscle mass while maintaining a healthy weight' },
+        { value: 'maintenance', label: 'Maintenance', icon: '⚖️', description: 'Maintain your current weight and body composition' },
+        { value: 'performance', label: 'Performance', icon: '⚽️', description: 'Optimize for athletic performance' }
+      ],
+      activityOptions: [
+        { value: 'sedentary', label: 'Sedentary (little or no exercise)', icon: '💺' },
+        { value: 'light', label: 'Lightly Active (exercise 1-3 days/week)', icon: '🏃' },
+        { value: 'moderate', label: 'Moderately Active (exercise 3-5 days/week)', icon: '🏃‍♂️' },
+        { value: 'very_active', label: 'Very Active (exercise 6-7 days/week)', icon: '🏃‍♂️' },
+        { value: 'extra_active', label: 'Extra Active (very intense exercise, physical job, or 2x training)', icon: '💪' }
+      ],
+      popularDiets: [
+        { value: 'keto', label: 'Ketogenic', emoji: '🧘‍♂️' },
+        { value: 'paleo', label: 'Paleo', emoji: '🥑' },
+        { value: 'mediterranean', label: 'Mediterranean', emoji: '🌊' },
+        { value: 'low_carb', label: 'Low Carb', emoji: '🍎' },
+        { value: 'high_protein', label: 'High Protein', emoji: '💪' },
+        { value: 'vegan', label: 'Vegan', emoji: '🌱' },
+        { value: 'vegetarian', label: 'Vegetarian', emoji: '🥦' },
+        { value: 'gluten_free', label: 'Gluten Free', emoji: '🌾' },
+        { value: 'dairy_free', label: 'Dairy Free', emoji: '🥛' },
+        { value: 'low_sodium', label: 'Low Sodium', emoji: '🧂' }
+      ],
+      aiGeneratedProfile: null,
+      generatingProfile: false,
+      hasExistingProfile: false
     }
   },
   computed: {
     hasValidationErrors() {
       return this.validationErrors.length > 0 || this.dietaryConflicts.length > 0
+    },
+    proteinPercentage() {
+      if (this.formData.calorie_target === 0) return 0;
+      return Math.round((this.formData.protein_target * 4 / this.formData.calorie_target) * 100);
+    },
+    carbPercentage() {
+      if (this.formData.calorie_target === 0) return 0;
+      return Math.round((this.formData.carb_target * 4 / this.formData.calorie_target) * 100);
+    },
+    fatPercentage() {
+      if (this.formData.calorie_target === 0) return 0;
+      return Math.round((this.formData.fat_target * 9 / this.formData.calorie_target) * 100);
+    },
+    canProceedToNextStep() {
+      switch (this.aiStep) {
+        case 1:
+          return this.aiProfile.age && this.aiProfile.gender && this.aiProfile.height && this.aiProfile.weight;
+        case 2:
+          return this.aiProfile.goal;
+        case 3:
+          return this.aiProfile.activity;
+        case 4:
+          return true; // Optional step
+        default:
+          return true;
+      }
     }
   },
   watch: {
@@ -343,6 +632,9 @@ export default {
             this.dislikedIngredientsInput = newProfile.disliked_ingredients.join(', ')
           }
           this.checkDietaryConflicts()
+          this.hasExistingProfile = true;
+        } else {
+          this.hasExistingProfile = false;
         }
       }
     }
@@ -498,6 +790,159 @@ export default {
 
       // Validate after auto-calculation
       this.validateForm()
+    },
+
+    async applyAIProfile() {
+      try {
+        // Apply the AI-generated profile to the form
+        this.formData = { ...this.formData, ...this.aiGeneratedProfile }
+        this.hasExistingProfile = true
+        this.showAIWizard = false
+        
+        // Save the profile automatically
+        await this.saveProfile()
+        
+        this.$toast?.success?.('🎉 AI-generated nutrition profile applied successfully!')
+      } catch (error) {
+        console.error('Error applying AI profile:', error)
+        this.$toast?.error?.('Failed to apply AI profile. Please try manually adjusting your settings.')
+      }
+    },
+
+    async nextAIStep() {
+      if (this.aiStep === 4) {
+        // Generate AI profile when moving from step 4 to 5
+        this.generatingProfile = true
+        this.aiStep++
+        
+        try {
+          // Call AI service to generate nutrition profile
+          const response = await mealPlanningApi.generateNutritionProfile({
+            user_data: {
+              age: this.aiProfile.age,
+              gender: this.aiProfile.gender,
+              height: this.aiProfile.height,
+              weight: this.aiProfile.weight
+            },
+            goals: {
+              primary_goal: this.aiProfile.goal,
+              activity_level: this.aiProfile.activity
+            },
+            preferences: {
+              dietary_preferences: this.aiProfile.diets
+            }
+          })
+          
+          this.aiGeneratedProfile = response.data
+          
+          // Auto-apply after 2 seconds for better UX
+          setTimeout(() => {
+            this.generatingProfile = false
+          }, 2000)
+          
+        } catch (error) {
+          console.error('Error generating AI profile:', error)
+          // Fallback to manual calculation
+          this.aiGeneratedProfile = this.calculateAIProfile()
+          this.generatingProfile = false
+        }
+      } else if (this.aiStep < 5) {
+        this.aiStep++
+      }
+    },
+
+    calculateAIProfile() {
+      // Fallback calculation if AI service fails
+      const { age, gender, height, weight, goal, activity } = this.aiProfile
+      
+      // Calculate BMR using Mifflin-St Jeor Equation
+      let bmr
+      if (gender === 'male') {
+        bmr = 10 * weight + 6.25 * height - 5 * age + 5
+      } else {
+        bmr = 10 * weight + 6.25 * height - 5 * age - 161
+      }
+      
+      // Activity multipliers
+      const activityMultipliers = {
+        sedentary: 1.2,
+        light: 1.375,
+        moderate: 1.55,
+        very_active: 1.725,
+        extra_active: 1.9
+      }
+      
+      let tdee = bmr * (activityMultipliers[activity] || 1.2)
+      
+      // Adjust for goals
+      if (goal === 'weight_loss') {
+        tdee -= 500 // 1 lb per week
+      } else if (goal === 'muscle_gain') {
+        tdee += 300 // Moderate surplus
+      }
+      
+      // Calculate macros based on diet preferences
+      let proteinRatio = 0.25
+      let carbRatio = 0.45
+      let fatRatio = 0.30
+      
+      if (this.aiProfile.diets.includes('keto')) {
+        proteinRatio = 0.25
+        carbRatio = 0.05
+        fatRatio = 0.70
+      } else if (this.aiProfile.diets.includes('high_protein')) {
+        proteinRatio = 0.35
+        carbRatio = 0.40
+        fatRatio = 0.25
+      } else if (this.aiProfile.diets.includes('low_carb')) {
+        proteinRatio = 0.30
+        carbRatio = 0.20
+        fatRatio = 0.50
+      }
+      
+      return {
+        calorie_target: Math.round(tdee),
+        protein_target: Math.round(tdee * proteinRatio / 4),
+        carb_target: Math.round(tdee * carbRatio / 4),
+        fat_target: Math.round(tdee * fatRatio / 9),
+        meals_per_day: goal === 'muscle_gain' ? 4 : 3,
+        snacks_per_day: goal === 'muscle_gain' ? 2 : 1,
+        dietary_preferences: this.aiProfile.diets
+      }
+    },
+
+    getCalorieRecommendation() {
+      const calories = this.formData.calorie_target
+      if (calories < 1200) return 'Very Low (may be too restrictive)'
+      if (calories < 1800) return 'Low (weight loss focused)'
+      if (calories < 2500) return 'Moderate (maintenance/slow change)'
+      if (calories < 3000) return 'High (muscle gain/active lifestyle)'
+      return 'Very High (intensive training)'
+    },
+
+    toggleDiet(diet) {
+      const index = this.aiProfile.diets.indexOf(diet);
+      if (index > -1) {
+        this.aiProfile.diets.splice(index, 1);
+      } else {
+        this.aiProfile.diets.push(diet);
+      }
+    },
+
+    canProceedToNextStep() {
+      if (this.aiStep === 1) {
+        return this.aiProfile.age && this.aiProfile.gender && this.aiProfile.height && this.aiProfile.weight;
+      }
+      if (this.aiStep === 2) {
+        return this.aiProfile.goal;
+      }
+      if (this.aiStep === 3) {
+        return this.aiProfile.activity;
+      }
+      if (this.aiStep === 4) {
+        return this.aiProfile.diets.length > 0;
+      }
+      return true;
     }
   }
 }
@@ -804,4 +1249,332 @@ export default {
     }
   }
 }
+
+.ai-wizard-btn {
+  background: $secondary;
+  color: $white;
+  padding: $spacing-2 $spacing-4;
+  border-radius: $border-radius;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: $spacing-2;
+  margin-top: $spacing-4;
+  box-shadow: $shadow-sm;
+
+  &:hover {
+    background: darken($secondary, 10%);
+  }
+
+  i {
+    font-size: 1rem;
+  }
+}
+
+.ai-wizard-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba($black, 0.7);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.ai-wizard-modal {
+  background: $white;
+  border-radius: $border-radius-lg;
+  box-shadow: $shadow-lg;
+  width: 90%;
+  max-width: 600px;
+  max-height: 90%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.ai-wizard-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: $spacing-4;
+  background: $primary;
+  color: $white;
+  border-bottom: 1px solid darken($primary, 10%);
+
+  h3 {
+    margin: 0;
+    font-size: 1.5rem;
+  }
+
+  .close-btn {
+    background: none;
+    border: none;
+    color: $white;
+    font-size: 1.5rem;
+    cursor: pointer;
+    padding: $spacing-1;
+    line-height: 1;
+  }
+}
+
+.ai-wizard-content {
+  flex-grow: 1;
+  padding: $spacing-4;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.ai-step {
+  display: none;
+  opacity: 0;
+  transform: translateY(20px);
+  transition: opacity 0.3s ease-out, transform 0.3s ease-out;
+
+  &.active {
+    display: block;
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  h4 {
+    margin-bottom: $spacing-3;
+    color: $primary-dark;
+  }
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: $spacing-4;
+}
+
+.goal-options, .activity-options, .dietary-preferences {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: $spacing-3;
+}
+
+.goal-option, .activity-option, .diet-option {
+  background: $gray-lightest;
+  border: 1px solid $gray-lighter;
+  border-radius: $border-radius;
+  padding: $spacing-3;
+  display: flex;
+  align-items: center;
+  gap: $spacing-2;
+  cursor: pointer;
+  transition: all 0.2s ease;
+
+  &:hover {
+    background: $gray-lighter;
+    border-color: $primary;
+  }
+
+  &.active {
+    background: $primary;
+    color: $white;
+    border-color: $primary;
+  }
+}
+
+.goal-icon, .activity-icon {
+  font-size: 1.5rem;
+}
+
+.goal-text, .activity-text {
+  h5 {
+    margin: 0 0 $spacing-1 0;
+    font-size: 1rem;
+  }
+
+  p {
+    margin: 0;
+    font-size: 0.8rem;
+    color: $gray;
+  }
+}
+
+.diet-emoji {
+  font-size: 1.5rem;
+}
+
+.generating-profile {
+  text-align: center;
+  padding: $spacing-6;
+  color: $gray;
+
+  .spinner {
+    width: 40px;
+    height: 40px;
+    border: 4px solid $gray-lighter;
+    border-left: 4px solid $primary;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin: 0 auto $spacing-3;
+  }
+
+  h4 {
+    margin: 0 0 $spacing-2 0;
+    font-size: 1.2rem;
+  }
+
+  p {
+    font-size: 0.9rem;
+  }
+}
+
+.profile-preview {
+  padding: $spacing-4;
+  background: $gray-lightest;
+  border-radius: $border-radius;
+  margin-top: $spacing-4;
+
+  h4 {
+    margin-bottom: $spacing-3;
+    color: $primary-dark;
+  }
+
+  .profile-summary {
+    display: flex;
+    flex-direction: column;
+    gap: $spacing-3;
+  }
+
+  .macro-preview {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: $spacing-2;
+    text-align: center;
+
+    .macro-item {
+      .macro-label {
+        display: block;
+        font-size: 0.8rem;
+        color: $gray;
+        margin-bottom: $spacing-1;
+      }
+      .macro-value {
+        font-size: 1.8rem;
+        font-weight: bold;
+        color: $primary;
+      }
+    }
+  }
+
+  .meal-plan-preview {
+    margin-top: $spacing-3;
+    padding-top: $spacing-3;
+    border-top: 1px dashed $gray-lighter;
+
+    h5 {
+      margin-bottom: $spacing-2;
+      color: $primary-dark;
+    }
+
+    p {
+      margin: 0;
+      font-size: 0.9rem;
+      color: $gray;
+    }
+  }
+}
+
+ .enhanced-input {
+   .input-wrapper {
+     position: relative;
+   }
+   
+   .input-hint {
+     display: flex;
+     align-items: center;
+     gap: $spacing-1;
+     margin-top: $spacing-1;
+     font-size: 0.8rem;
+     color: $gray;
+     
+     i {
+       color: $primary;
+     }
+   }
+ }
+
+ .macro-distribution {
+   margin-top: $spacing-6;
+   padding-top: $spacing-4;
+   border-top: 1px dashed $gray-lighter;
+ 
+   h4 {
+     margin-bottom: $spacing-3;
+     color: $primary-dark;
+   }
+ 
+   .macro-chart {
+     position: relative;
+     height: 20px;
+     background: $gray-lightest;
+     border-radius: $border-radius;
+     overflow: hidden;
+     margin-bottom: $spacing-2;
+   }
+ 
+   .macro-bar {
+     position: absolute;
+     top: 0;
+     left: 0;
+     height: 100%;
+     width: 100%;
+     border-radius: $border-radius;
+     display: flex;
+   }
+ 
+   .macro-segment {
+     height: 100%;
+     transition: width 0.3s ease-in-out;
+ 
+     &.protein {
+       background: #e74c3c;
+     }
+     &.carbs {
+       background: #3498db;
+     }
+     &.fat {
+       background: #f39c12;
+     }
+   }
+ 
+   .macro-legend {
+     display: flex;
+     justify-content: space-around;
+     font-size: 0.8rem;
+     color: $gray;
+ 
+     .legend-item {
+       display: flex;
+       align-items: center;
+       gap: $spacing-1;
+ 
+       .legend-color {
+         display: inline-block;
+         width: 10px;
+         height: 10px;
+         border-radius: 50%;
+         
+         &.protein {
+           background: #e74c3c;
+         }
+         &.carbs {
+           background: #3498db;
+         }
+         &.fat {
+           background: #f39c12;
+         }
+       }
+     }
+   }
+ }
 </style>

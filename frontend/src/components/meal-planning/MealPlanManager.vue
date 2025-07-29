@@ -332,8 +332,12 @@ export default {
     // Helper method to count meals in a plan based on the new structure
     getMealCount(plan) {
       if (!plan?.meal_plan_data?.meals) {
-        console.log('getMealCount: No meal_plan_data.meals found for plan', plan?.id)
         return 'N/A'
+      }
+      
+      // Cache the meal count to prevent repeated calculations
+      if (plan._cachedMealCount !== undefined) {
+        return plan._cachedMealCount
       }
       
       let totalMeals = 0
@@ -343,8 +347,9 @@ export default {
         }
       })
       
-      console.log(`getMealCount: Plan ${plan.id} has ${totalMeals} total meals`)
-      return totalMeals || 'N/A'
+      const result = totalMeals || 'N/A'
+      plan._cachedMealCount = result
+      return result
     },
 
     async generateMealPlan() {

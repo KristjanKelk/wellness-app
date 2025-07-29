@@ -275,6 +275,16 @@ export const mealPlanningApi = {
     return api.post('/nutrition-profile/calculate_targets/')
   },
 
+  // AI-powered nutrition profile generation
+  async generateNutritionProfile(profileData) {
+    try {
+      return await api.post('/nutrition-profile/ai_generate/', profileData)
+    } catch (error) {
+      console.error('Error generating AI nutrition profile:', error)
+      throw error
+    }
+  },
+
   // Enhanced Meal Plan endpoints with AI features and improved pagination handling
   getMealPlans(params = {}) {
     const cleanParams = {
