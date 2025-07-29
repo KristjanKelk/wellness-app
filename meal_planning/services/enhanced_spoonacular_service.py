@@ -569,17 +569,19 @@ class EnhancedSpoonacularService:
 
         return self._make_request('recipes/random', params)
 
-    def create_personalized_meal_plan(self, nutrition_profile, days: int = 7) -> Dict:
+    def create_personalized_meal_plan(self, nutrition_profile, days: int = 7, generation_options: Dict = None) -> Dict:
         """
         Create a personalized meal plan based on user's nutrition profile
         
         Args:
             nutrition_profile: User's nutrition profile
             days: Number of days to plan for
+            generation_options: Optional generation parameters (max_cook_time, etc.)
         
         Returns:
             Personalized meal plan
         """
+        generation_options = generation_options or {}
         # Convert nutrition profile to Spoonacular parameters
         diet_mapping = {
             'vegetarian': 'vegetarian',
@@ -623,23 +625,105 @@ class EnhancedSpoonacularService:
         if nutrition_profile.disliked_ingredients:
             exclusions.extend(nutrition_profile.disliked_ingredients)
 
-        # Generate meal plan
+        # For now, use recipe search instead of meal plan generator to get better control over filters
+        # This gives us more control over cuisine and cooking time
         if days == 1:
-            meal_plan = self.generate_meal_plan(
-                time_frame="day",
-                target_calories=nutrition_profile.calorie_target,
-                diet=diet or "",
-                exclude=','.join(exclusions) if exclusions else ""
+            meal_plan = self._generate_custom_meal_plan(
+                nutrition_profile=nutrition_profile,
+                days=1,
+                diet=diet,
+                exclusions=exclusions,
+                generation_options=generation_options
             )
         else:
-            meal_plan = self.generate_meal_plan(
-                time_frame="week",
-                target_calories=nutrition_profile.calorie_target,
-                diet=diet or "",
-                exclude=','.join(exclusions) if exclusions else ""
+            meal_plan = self._generate_custom_meal_plan(
+                nutrition_profile=nutrition_profile,
+                days=days,
+                diet=diet,
+                exclusions=exclusions,
+                generation_options=generation_options
             )
 
         return meal_plan
+
+    def _generate_custom_meal_plan(self, nutrition_profile, days: int, diet: str, exclusions: list, generation_options: Dict) -> Dict:
+        """
+        Generate a custom meal plan using recipe search with full filter control
+        """
+        import random
+        from datetime import date, timedelta
+        
+        meal_types = ['breakfast', 'lunch', 'dinner']
+        meal_type_queries = {
+            'breakfast': ['breakfast', 'morning meal', 'brunch'],
+            'lunch': ['lunch', 'salad', 'soup', 'sandwich'],
+            'dinner': ['dinner', 'main course', 'entree']
+        }
+        
+        # Calculate calories per meal
+        daily_calories = nutrition_profile.calorie_target
+        calories_per_meal = daily_calories // len(meal_types)
+        
+        meals = []
+        start_date = date.today()
+        
+        for day in range(days):
+            current_date = start_date + timedelta(days=day)
+            
+            for meal_type in meal_types:
+                # Build search filters
+                search_filters = {
+                    'number': 5,  # Get multiple options
+                    'addRecipeInformation': True,
+                    'addRecipeNutrition': True,
+                    'minCalories': max(calories_per_meal - 200, 100),
+                    'maxCalories': calories_per_meal + 200,
+                }
+                
+                # Add diet filter
+                if diet:
+                    search_filters['diet'] = diet
+                
+                # Add exclusions
+                if exclusions:
+                    search_filters['intolerances'] = ','.join(exclusions)
+                
+                # Add cuisine filter if specified
+                if nutrition_profile.cuisine_preferences:
+                    search_filters['cuisine'] = ','.join(nutrition_profile.cuisine_preferences)
+                
+                # Add max cooking time filter if specified
+                if generation_options.get('max_cook_time'):
+                    search_filters['maxReadyTime'] = generation_options['max_cook_time']
+                
+                # Search for recipes
+                query = random.choice(meal_type_queries[meal_type])
+                response = self.search_recipes(query, **search_filters)
+                
+                if response and response.get('results'):
+                    # Pick a random recipe from results
+                    recipe = random.choice(response['results'])
+                    
+                    # Add meal type and time info
+                    recipe['meal_type'] = meal_type
+                    recipe['time'] = {
+                        'breakfast': '08:00',
+                        'lunch': '12:30', 
+                        'dinner': '19:00'
+                    }[meal_type]
+                    
+                    meals.append(recipe)
+        
+        # Format as meal plan
+        return {
+            'meals': meals,
+            'nutrients': {
+                'calories': daily_calories * days,
+                'protein': 0,  # Would need to calculate from individual meals
+                'carbs': 0,
+                'fat': 0
+            }
+        }
 
     def normalize_meal_plan_data(self, spoonacular_data: Dict, time_frame: str = "day", created_by=None) -> Dict:
         """

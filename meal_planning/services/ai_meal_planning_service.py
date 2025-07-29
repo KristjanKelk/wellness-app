@@ -54,11 +54,38 @@ class AIMealPlanningService:
             if hasattr(meal_plan, 'meal_plan_data') and meal_plan.meal_plan_data:
                 if 'meals' in meal_plan.meal_plan_data:
                     if day_key in meal_plan.meal_plan_data['meals']:
-                        # Replace the meal with the new recipe
+                        # Find and replace only the specific meal type
                         new_recipe = recipes[0]
-                        meal_plan.meal_plan_data['meals'][day_key] = [new_recipe]
+                        
+                        # Ensure the new recipe has proper meal structure
+                        new_recipe.update({
+                            'meal_type': actual_meal_type,
+                            'time': {
+                                'breakfast': '08:00',
+                                'lunch': '12:30',
+                                'dinner': '19:00'
+                            }.get(actual_meal_type, '12:00'),
+                            'cuisine': new_recipe.get('cuisines', ['International'])[0] if new_recipe.get('cuisines') else 'International',
+                            'target_calories': new_recipe.get('nutrition', {}).get('nutrients', [{}])[0].get('amount', 0) if new_recipe.get('nutrition') else 0
+                        })
+                        
+                        # Get the current meals for the day
+                        current_meals = meal_plan.meal_plan_data['meals'][day_key]
+                        
+                        # Find and replace the specific meal type
+                        meal_updated = False
+                        for i, meal in enumerate(current_meals):
+                            if meal.get('meal_type') == actual_meal_type:
+                                current_meals[i] = new_recipe
+                                meal_updated = True
+                                break
+                        
+                        # If meal type not found, add it
+                        if not meal_updated:
+                            current_meals.append(new_recipe)
+                        
                         meal_plan.save()
-                        logger.info(f"Successfully regenerated meal for {day_key}")
+                        logger.info(f"Successfully regenerated {actual_meal_type} meal for {day_key}")
             
             return meal_plan
             
@@ -167,6 +194,16 @@ class AIMealPlanningService:
                 
                 if intolerances:
                     search_filters['intolerances'] = ','.join(intolerances)
+            
+            # Add cuisine preferences
+            if nutrition_profile.cuisine_preferences:
+                search_filters['cuisine'] = ','.join(nutrition_profile.cuisine_preferences)
+            
+            # Add calorie constraints
+            if nutrition_profile.calorie_target:
+                calories_per_meal = nutrition_profile.calorie_target // 3
+                search_filters['minCalories'] = max(calories_per_meal - 200, 100)
+                search_filters['maxCalories'] = calories_per_meal + 200
             
             # Search for recipes using the correct method signature with meal type as query
             meal_query = random.choice(recipe_types) if recipe_types else ""

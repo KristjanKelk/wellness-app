@@ -821,15 +821,45 @@ class MealPlanViewSet(viewsets.ModelViewSet):
             else:
                 start_date_obj = start_date
 
+            # Apply filters from request data
+            target_calories = plan_data.get('target_calories')
+            cuisine_preferences = plan_data.get('cuisine_preferences', [])
+            max_cook_time = plan_data.get('max_cook_time')
+            
+            # Update nutrition profile temporarily with form overrides
+            if target_calories:
+                # Create a copy of the profile with updated calories
+                from copy import deepcopy
+                temp_profile = deepcopy(nutrition_profile)
+                temp_profile.calorie_target = target_calories
+                nutrition_profile = temp_profile
+            
+            if cuisine_preferences:
+                # Create a copy of the profile with updated cuisine preferences
+                from copy import deepcopy
+                if not hasattr(nutrition_profile, '__dict__'):
+                    temp_profile = deepcopy(nutrition_profile)
+                else:
+                    temp_profile = nutrition_profile
+                temp_profile.cuisine_preferences = cuisine_preferences
+                nutrition_profile = temp_profile
+
             # Use the enhanced AI meal planning service
             ai_meal_service = AIEnhancedMealService()
-            nutrition_profile = get_object_or_404(NutritionProfile, user=request.user)
             
             # Determine number of days based on plan type
             days = 1 if plan_type == 'daily' else 7
             
-            # Generate the meal plan
-            meal_plan_data = ai_meal_service.generate_smart_meal_plan(nutrition_profile, days)
+            # Generate the meal plan with custom filters
+            generation_options = {}
+            if max_cook_time:
+                generation_options['max_cook_time'] = max_cook_time
+                
+            meal_plan_data = ai_meal_service.generate_smart_meal_plan(
+                nutrition_profile, 
+                days, 
+                generation_options=generation_options
+            )
             
             # Create a MealPlan object
             end_date = start_date_obj
