@@ -47,10 +47,6 @@
           />
         </div>
 
-        <div v-if="activeTab === 'spoonacular'" class="tab-panel">
-          <spoonacular-integration />
-        </div>
-
       <div v-if="activeTab === 'analytics'" class="tab-panel">
         <coming-soon-card
           title="Nutrition Analytics"
@@ -73,7 +69,6 @@
 import RecipeBrowser from '../components/meal-planning/RecipeBrowser.vue'
 import NutritionProfileSetup from '../components/meal-planning/NutritionProfileSetup.vue'
 import MealPlanManager from '../components/meal-planning/MealPlanManager.vue'
-import SpoonacularIntegration from '../components/meal-planning/SpoonacularIntegration.vue'
 import ComingSoonCard from '../components/meal-planning/ComingSoonCard.vue'
 import RecipeDetailModal from '../components/meal-planning/RecipeDetailModal.vue'
 import { mealPlanningApi } from '@/services/mealPlanningApi'
@@ -84,7 +79,6 @@ export default {
     RecipeBrowser,
     NutritionProfileSetup,
     MealPlanManager,
-    SpoonacularIntegration,
     ComingSoonCard,
     RecipeDetailModal
   },
@@ -95,7 +89,6 @@ export default {
         { id: 'recipes', name: 'My Recipes', icon: 'fas fa-utensils' },
         { id: 'profile', name: 'Nutrition Profile', icon: 'fas fa-user-cog' },
         { id: 'meal-plans', name: 'Meal Plans', icon: 'fas fa-calendar-alt' },
-        { id: 'spoonacular', name: 'Spoonacular', icon: 'fas fa-link' },
         { id: 'analytics', name: 'Analytics', icon: 'fas fa-chart-line' }
       ],
       recipes: [],

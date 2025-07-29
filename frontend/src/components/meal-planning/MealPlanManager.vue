@@ -268,6 +268,10 @@ export default {
     loading: {
       type: Boolean,
       default: false
+    },
+    nutritionProfile: {
+      type: Object,
+      default: null
     }
   },
   emits: ['meal-plan-generated'],
@@ -361,7 +365,12 @@ export default {
 
         // Clean up form data
         if (!planData.target_calories) {
-          delete planData.target_calories
+          // Use nutrition profile's calorie target if no override specified
+          if (this.nutritionProfile?.calorie_target) {
+            planData.target_calories = this.nutritionProfile.calorie_target
+          } else {
+            delete planData.target_calories
+          }
         }
         if (!planData.max_cook_time) {
           delete planData.max_cook_time
