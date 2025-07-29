@@ -653,16 +653,55 @@ class EnhancedSpoonacularService:
         import random
         from datetime import date, timedelta
         
-        meal_types = ['breakfast', 'lunch', 'dinner']
+        # Use meals_per_day from nutrition profile
+        meals_per_day = getattr(nutrition_profile, 'meals_per_day', 3)
+        snacks_per_day = getattr(nutrition_profile, 'snacks_per_day', 0)
+        
+        # Generate meal types based on meals_per_day
+        if meals_per_day >= 3:
+            meal_types = ['breakfast', 'lunch', 'dinner']
+        else:
+            meal_types = ['breakfast', 'dinner'] if meals_per_day == 2 else ['lunch']
+            
+        # Add additional meals if meals_per_day > 3
+        if meals_per_day > 3:
+            additional_meals = meals_per_day - 3
+            for i in range(additional_meals):
+                meal_types.append(f'meal_{i+4}')  # meal_4, meal_5, etc.
+        
+        # Add snacks if specified
+        total_eating_occasions = meals_per_day + snacks_per_day
+        snack_types = []
+        if snacks_per_day > 0:
+            for i in range(snacks_per_day):
+                snack_types.append(f'snack_{i+1}')
+        
+        all_meal_types = meal_types + snack_types
+        
         meal_type_queries = {
             'breakfast': ['breakfast', 'morning meal', 'brunch'],
             'lunch': ['lunch', 'salad', 'soup', 'sandwich'],
-            'dinner': ['dinner', 'main course', 'entree']
+            'dinner': ['dinner', 'main course', 'entree'],
+            'meal_4': ['main course', 'entree', 'lunch'],  # Mid-afternoon meal
+            'meal_5': ['dinner', 'main course', 'light meal'],  # Evening meal
+            'meal_6': ['main course', 'light meal'],  # Late evening meal
+            'snack_1': ['snack', 'light meal', 'appetizer'],
+            'snack_2': ['snack', 'light meal', 'appetizer'],
+            'snack_3': ['snack', 'light meal', 'appetizer']
         }
         
-        # Calculate calories per meal
+        # Calculate calories per meal/snack
         daily_calories = nutrition_profile.calorie_target
-        calories_per_meal = daily_calories // len(meal_types)
+        
+        # Distribute calories: 80% for main meals, 20% for snacks
+        if snacks_per_day > 0:
+            main_meal_calories = int(daily_calories * 0.8)
+            snack_calories = int(daily_calories * 0.2)
+            calories_per_meal = main_meal_calories // meals_per_day
+            calories_per_snack = snack_calories // snacks_per_day if snacks_per_day > 0 else 0
+        else:
+            calories_per_meal = daily_calories // meals_per_day
+            calories_per_snack = 0
         
         meals = []
         start_date = date.today()
@@ -670,14 +709,18 @@ class EnhancedSpoonacularService:
         for day in range(days):
             current_date = start_date + timedelta(days=day)
             
-            for meal_type in meal_types:
+            for meal_type in all_meal_types:
+                # Determine if this is a meal or snack and set calorie target accordingly
+                is_snack = meal_type.startswith('snack_')
+                target_calories = calories_per_snack if is_snack else calories_per_meal
+                
                 # Build search filters
                 search_filters = {
                     'number': 5,  # Get multiple options
                     'addRecipeInformation': True,
                     'addRecipeNutrition': True,
-                    'minCalories': max(calories_per_meal - 200, 100),
-                    'maxCalories': calories_per_meal + 200,
+                    'minCalories': max(target_calories - (100 if is_snack else 200), 50 if is_snack else 100),
+                    'maxCalories': target_calories + (100 if is_snack else 200),
                 }
                 
                 # Add diet filter
@@ -706,11 +749,33 @@ class EnhancedSpoonacularService:
                     
                     # Add meal type and time info
                     recipe['meal_type'] = meal_type
-                    recipe['time'] = {
-                        'breakfast': '08:00',
-                        'lunch': '12:30', 
-                        'dinner': '19:00'
-                    }[meal_type]
+                    
+                    # Get meal times from nutrition profile
+                    breakfast_time = getattr(nutrition_profile, 'breakfast_time', '08:00:00')
+                    lunch_time = getattr(nutrition_profile, 'lunch_time', '12:30:00')
+                    dinner_time = getattr(nutrition_profile, 'dinner_time', '19:00:00')
+                    
+                    # Convert time format if needed (remove seconds)
+                    if len(str(breakfast_time)) > 5:
+                        breakfast_time = str(breakfast_time)[:5]
+                    if len(str(lunch_time)) > 5:
+                        lunch_time = str(lunch_time)[:5]
+                    if len(str(dinner_time)) > 5:
+                        dinner_time = str(dinner_time)[:5]
+                    
+                    time_mapping = {
+                        'breakfast': breakfast_time,
+                        'lunch': lunch_time,
+                        'dinner': dinner_time,
+                        'meal_4': '15:00',  # Mid-afternoon
+                        'meal_5': '17:30',  # Early evening
+                        'meal_6': '21:00',  # Late evening
+                        'snack_1': '10:00',  # Morning snack
+                        'snack_2': '15:30',  # Afternoon snack
+                        'snack_3': '20:30'   # Evening snack
+                    }
+                    
+                    recipe['time'] = time_mapping.get(meal_type, '12:00')
                     
                     meals.append(recipe)
         
@@ -763,8 +828,6 @@ class EnhancedSpoonacularService:
 
         # Create a list to hold all meals for the day
         daily_meals = []
-        meal_types = ['breakfast', 'lunch', 'dinner']  # Maintain order
-        meal_times = ['08:00', '12:30', '19:00']  # Default times for each meal type
         
         meals_data = data.get('meals', [])
         
@@ -790,9 +853,9 @@ class EnhancedSpoonacularService:
             # Save recipe to database with detailed information
             saved_recipe = self._save_recipe_to_database(detailed_meal, created_by)
             
-            # Determine meal type and time based on position in meals array
-            meal_type = meal_types[i] if i < len(meal_types) else 'snack'
-            meal_time = meal_times[i] if i < len(meal_times) else '15:00'
+            # Use meal type and time from the meal data (already set in generate_custom_meal_plan)
+            meal_type = meal.get('meal_type', f'meal_{i+1}')
+            meal_time = meal.get('time', '12:00')
             
             meal_data = {
                 'meal_type': meal_type,
