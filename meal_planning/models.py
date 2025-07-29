@@ -140,18 +140,105 @@ class NutritionProfile(models.Model):
             activity_multiplier = self._get_activity_multiplier(health_profile.activity_level)
             maintenance_calories = bmr * activity_multiplier
 
-            # Adjust for goals
+            # Adjust for goals with more sophisticated logic
             if health_profile.fitness_goal == 'weight_loss':
                 self.calorie_target = int(maintenance_calories * 0.85)  # 15% deficit
-            elif health_profile.fitness_goal == 'weight_gain':
+                # Higher protein for muscle preservation during weight loss
+                self.protein_target = max(self.calorie_target * 0.30 / 4, float(health_profile.weight_kg or 70) * 1.2)
+                self.carb_target = self.calorie_target * 0.35 / 4  # Lower carbs
+                self.fat_target = self.calorie_target * 0.35 / 9  # Higher healthy fats
+            elif health_profile.fitness_goal == 'muscle_gain':
                 self.calorie_target = int(maintenance_calories * 1.15)  # 15% surplus
-            else:
+                # High protein for muscle building
+                self.protein_target = max(self.calorie_target * 0.25 / 4, float(health_profile.weight_kg or 70) * 1.6)
+                self.carb_target = self.calorie_target * 0.50 / 4  # Higher carbs for energy
+                self.fat_target = self.calorie_target * 0.25 / 9
+            elif health_profile.fitness_goal == 'endurance':
+                self.calorie_target = int(maintenance_calories * 1.10)  # Moderate surplus
+                # Moderate protein, high carbs for endurance
+                self.protein_target = self.calorie_target * 0.20 / 4
+                self.carb_target = self.calorie_target * 0.60 / 4  # High carbs
+                self.fat_target = self.calorie_target * 0.20 / 9
+            else:  # general_fitness, flexibility
                 self.calorie_target = int(maintenance_calories)
+                # Balanced approach
+                self.protein_target = self.calorie_target * 0.25 / 4
+                self.carb_target = self.calorie_target * 0.45 / 4
+                self.fat_target = self.calorie_target * 0.30 / 9
 
-            # Calculate macros (example ratios, can be customized)
-            self.protein_target = self.calorie_target * 0.25 / 4  # 25% protein
-            self.carb_target = self.calorie_target * 0.45 / 4  # 45% carbs
-            self.fat_target = self.calorie_target * 0.30 / 9  # 30% fats
+    def get_goal_based_preferences(self):
+        """Get dietary preferences based on fitness goals"""
+        health_profile = getattr(self.user, 'health_profile', None)
+        if not health_profile:
+            return {}
+        
+        goal_preferences = {
+            'weight_loss': {
+                'emphasized_foods': ['lean_protein', 'vegetables', 'fruits', 'whole_grains'],
+                'limited_foods': ['refined_sugars', 'processed_foods', 'high_fat_dairy'],
+                'meal_timing': 'regular_intervals',
+                'portion_control': 'strict'
+            },
+            'muscle_gain': {
+                'emphasized_foods': ['protein_rich', 'complex_carbs', 'healthy_fats', 'dairy'],
+                'limited_foods': ['empty_calories', 'excessive_cardio_foods'],
+                'meal_timing': 'frequent_meals',
+                'portion_control': 'generous'
+            },
+            'endurance': {
+                'emphasized_foods': ['complex_carbs', 'lean_protein', 'antioxidant_rich'],
+                'limited_foods': ['high_fat_foods', 'fiber_heavy_pre_workout'],
+                'meal_timing': 'pre_post_workout_focus',
+                'portion_control': 'moderate'
+            },
+            'general_fitness': {
+                'emphasized_foods': ['balanced_nutrition', 'variety', 'whole_foods'],
+                'limited_foods': ['processed_foods', 'excessive_sweets'],
+                'meal_timing': 'flexible',
+                'portion_control': 'moderate'
+            }
+        }
+        
+        return goal_preferences.get(health_profile.fitness_goal, goal_preferences['general_fitness'])
+
+    def get_ai_generation_context(self):
+        """Get comprehensive context for AI nutrition profile generation"""
+        health_profile = getattr(self.user, 'health_profile', None)
+        
+        context = {
+            'user_info': {
+                'age': health_profile.age if health_profile else None,
+                'gender': health_profile.get_gender_display() if health_profile else None,
+                'weight_kg': float(health_profile.weight_kg) if health_profile and health_profile.weight_kg else None,
+                'height_cm': float(health_profile.height_cm) if health_profile and health_profile.height_cm else None,
+                'bmi': health_profile.calculate_bmi() if health_profile else None,
+                'activity_level': health_profile.get_activity_level_display() if health_profile else None,
+                'fitness_goal': health_profile.get_fitness_goal_display() if health_profile else None,
+                'target_weight_kg': float(health_profile.target_weight_kg) if health_profile and health_profile.target_weight_kg else None,
+            },
+            'current_targets': {
+                'calories': self.calorie_target,
+                'protein': self.protein_target,
+                'carbs': self.carb_target,
+                'fat': self.fat_target,
+            },
+            'preferences': {
+                'dietary_preferences': self.dietary_preferences,
+                'allergies_intolerances': self.allergies_intolerances,
+                'cuisine_preferences': self.cuisine_preferences,
+                'disliked_ingredients': self.disliked_ingredients,
+            },
+            'meal_schedule': {
+                'meals_per_day': self.meals_per_day,
+                'snacks_per_day': self.snacks_per_day,
+                'breakfast_time': self.breakfast_time.strftime('%H:%M'),
+                'lunch_time': self.lunch_time.strftime('%H:%M'),
+                'dinner_time': self.dinner_time.strftime('%H:%M'),
+                'timezone': self.timezone,
+            }
+        }
+        
+        return context
 
     def _calculate_bmr(self, health_profile):
         """Calculate Basal Metabolic Rate using Mifflin-St Jeor Equation"""
