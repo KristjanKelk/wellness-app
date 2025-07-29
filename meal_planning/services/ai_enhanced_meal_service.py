@@ -23,13 +23,14 @@ class AIEnhancedMealService:
         self.spoonacular_service = EnhancedSpoonacularService()
         openai.api_key = config('OPENAI_API_KEY')
 
-    def generate_smart_meal_plan(self, nutrition_profile: NutritionProfile, days: int = 7) -> Dict:
+    def generate_smart_meal_plan(self, nutrition_profile: NutritionProfile, days: int = 7, generation_options: Dict = None) -> Dict:
         """
         Generate an intelligent meal plan using Spoonacular + AI analysis
         
         Args:
             nutrition_profile: User's nutrition profile
             days: Number of days to plan for
+            generation_options: Optional generation parameters (max_cook_time, etc.)
         
         Returns:
             Complete meal plan with AI insights
@@ -39,7 +40,7 @@ class AIEnhancedMealService:
             logger.info(f"Generating {days}-day meal plan for user {nutrition_profile.user.id}")
             
             spoonacular_meal_plan = self.spoonacular_service.create_personalized_meal_plan(
-                nutrition_profile, days
+                nutrition_profile, days, generation_options or {}
             )
             
             # Step 2: Normalize the data and save recipes to database

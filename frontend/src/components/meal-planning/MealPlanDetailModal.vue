@@ -126,33 +126,37 @@
                         <i class="fas fa-clock"></i>
                         {{ getMealTime(meal) }}
                       </span>
-                      <span class="meal-cuisine" v-if="meal.recipe?.cuisine">
+                      <span class="meal-cuisine" v-if="meal.recipe?.cuisine || meal.cuisine">
                         <i class="fas fa-globe"></i>
-                        {{ meal.recipe.cuisine }}
+                        {{ meal.recipe?.cuisine || meal.cuisine }}
                       </span>
                     </div>
                   </div>
 
                   <!-- Recipe Details -->
-                  <div class="recipe-details" v-if="meal.recipe">
+                  <div class="recipe-details" v-if="meal.recipe || getMealRecipe(meal)">
                     <!-- Cooking Information -->
-                    <div class="cooking-info" v-if="meal.recipe.prep_time || meal.recipe.cook_time || meal.recipe.total_time">
+                    <div class="cooking-info" v-if="getMealRecipe(meal).readyInMinutes || getMealRecipe(meal).prep_time || getMealRecipe(meal).cook_time || getMealRecipe(meal).total_time">
                       <div class="time-info">
-                        <span v-if="meal.recipe.prep_time" class="time-item">
-                          <i class="fas fa-cut"></i>
-                          Prep: {{ meal.recipe.prep_time }}min
-                        </span>
-                        <span v-if="meal.recipe.cook_time" class="time-item">
-                          <i class="fas fa-fire"></i>
-                          Cook: {{ meal.recipe.cook_time }}min
-                        </span>
-                        <span v-if="meal.recipe.total_time" class="time-item">
+                        <span v-if="getMealRecipe(meal).readyInMinutes" class="time-item">
                           <i class="fas fa-hourglass-half"></i>
-                          Total: {{ meal.recipe.total_time }}min
+                          Ready: {{ getMealRecipe(meal).readyInMinutes }}min
                         </span>
-                        <span v-if="meal.recipe.servings" class="time-item">
+                        <span v-if="getMealRecipe(meal).prep_time" class="time-item">
+                          <i class="fas fa-cut"></i>
+                          Prep: {{ getMealRecipe(meal).prep_time }}min
+                        </span>
+                        <span v-if="getMealRecipe(meal).cook_time" class="time-item">
+                          <i class="fas fa-fire"></i>
+                          Cook: {{ getMealRecipe(meal).cook_time }}min
+                        </span>
+                        <span v-if="getMealRecipe(meal).total_time" class="time-item">
+                          <i class="fas fa-hourglass-half"></i>
+                          Total: {{ getMealRecipe(meal).total_time }}min
+                        </span>
+                        <span v-if="getMealRecipe(meal).servings" class="time-item">
                           <i class="fas fa-users"></i>
-                          Serves: {{ meal.recipe.servings }}
+                          Serves: {{ getMealRecipe(meal).servings }}
                         </span>
                       </div>
                     </div>
@@ -163,35 +167,35 @@
                       <div class="nutrition-details">
                         <div class="nutrition-item">
                           <span class="nutrition-label">Calories:</span>
-                          <span class="nutrition-value">{{ getNutritionValue(meal.recipe, 'calories') }}</span>
+                          <span class="nutrition-value">{{ getNutritionValue(getMealRecipe(meal), 'calories') }}</span>
                         </div>
                         <div class="nutrition-item">
                           <span class="nutrition-label">Protein:</span>
-                          <span class="nutrition-value">{{ getNutritionValue(meal.recipe, 'protein') }}g</span>
+                          <span class="nutrition-value">{{ getNutritionValue(getMealRecipe(meal), 'protein') }}g</span>
                         </div>
                         <div class="nutrition-item">
                           <span class="nutrition-label">Carbs:</span>
-                          <span class="nutrition-value">{{ getNutritionValue(meal.recipe, 'carbs') }}g</span>
+                          <span class="nutrition-value">{{ getNutritionValue(getMealRecipe(meal), 'carbs') }}g</span>
                         </div>
                         <div class="nutrition-item">
                           <span class="nutrition-label">Fat:</span>
-                          <span class="nutrition-value">{{ getNutritionValue(meal.recipe, 'fat') }}g</span>
+                          <span class="nutrition-value">{{ getNutritionValue(getMealRecipe(meal), 'fat') }}g</span>
                         </div>
                       </div>
                     </div>
 
                     <!-- Ingredients -->
-                    <div class="ingredients-section" v-if="meal.recipe.ingredients && meal.recipe.ingredients.length">
+                    <div class="ingredients-section" v-if="getMealIngredients(meal).length">
                       <h6>Ingredients</h6>
                       <div class="ingredients-list">
                         <div 
-                          v-for="(ingredient, idx) in meal.recipe.ingredients" 
+                          v-for="(ingredient, idx) in getMealIngredients(meal)" 
                           :key="idx"
                           class="ingredient-item"
                         >
-                          <span class="ingredient-quantity">{{ ingredient.quantity }}</span>
-                          <span class="ingredient-unit">{{ ingredient.unit }}</span>
-                          <span class="ingredient-name">{{ ingredient.name }}</span>
+                          <span class="ingredient-quantity">{{ ingredient.quantity || ingredient.amount || '' }}</span>
+                          <span class="ingredient-unit">{{ ingredient.unit || '' }}</span>
+                          <span class="ingredient-name">{{ ingredient.name || ingredient.original || ingredient.text }}</span>
                         </div>
                       </div>
                     </div>
@@ -471,6 +475,15 @@ export default {
     getMealTitle(meal) {
       console.log('getMealTitle called for meal:', meal)
       
+      // Handle direct recipe objects (after regeneration)
+      if (meal?.title) {
+        return meal.title
+      }
+      
+      if (meal?.name) {
+        return meal.name
+      }
+      
       // If we have a recipe with a title, use that
       if (meal?.recipe?.title) {
         return meal.recipe.title
@@ -481,19 +494,10 @@ export default {
         return meal.recipe.name
       }
       
-      // Handle direct meal objects (for backwards compatibility)
-      if (meal?.title) {
-        return meal.title
-      }
-      
-      if (meal?.name) {
-        return meal.name
-      }
-      
       // Fallback to meal type
       const mealType = this.formatMealType(meal?.meal_type)
       console.log('getMealTitle fallback to meal type:', mealType)
-      return mealType
+      return mealType || 'Meal'
     },
 
     inferMealTypeFromTime(date) {
@@ -527,14 +531,34 @@ export default {
       const mealType = meal?.meal_type?.toLowerCase()
       const defaultTimes = {
         'breakfast': '08:00',
-        'lunch': '12:00',
-        'dinner': '18:00',
+        'lunch': '12:30',
+        'dinner': '19:00',
         'snack': '15:00'
       }
       
       const defaultTime = defaultTimes[mealType] || '12:00'
       console.log('getMealTime using default time:', defaultTime, 'for meal type:', mealType)
       return defaultTime
+    },
+
+    getMealRecipe(meal) {
+      // Return the recipe object, handling both wrapped and direct structures
+      return meal?.recipe || meal || {}
+    },
+
+    getMealIngredients(meal) {
+      const recipe = this.getMealRecipe(meal)
+      
+      // Handle different ingredient structures
+      if (recipe.ingredients && Array.isArray(recipe.ingredients)) {
+        return recipe.ingredients
+      }
+      
+      if (recipe.extendedIngredients && Array.isArray(recipe.extendedIngredients)) {
+        return recipe.extendedIngredients
+      }
+      
+      return []
     },
 
     getMealTypeClass(type) {
