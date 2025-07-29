@@ -261,19 +261,8 @@ export default {
       console.log('New meal plan generated:', mealPlan)
       
       // Show success message
-      this.$toast?.success?.('Meal plan generated successfully! New recipes have been added to your library.') ||
-      alert('Meal plan generated successfully! New recipes have been added to your library.')
-      
-      // Reload recipes since new recipes might have been saved from the meal plan
-      await this.loadRecipes()
-      
-      // If we're on the recipes tab, highlight that new recipes were added
-      if (this.activeTab === 'recipes') {
-        // Add a temporary highlight or show a notification
-        this.$nextTick(() => {
-          console.log('Recipes refreshed after meal plan generation')
-        })
-      }
+      this.$toast?.success?.('Meal plan generated successfully!') ||
+      alert('Meal plan generated successfully!')
     }
   }
 }

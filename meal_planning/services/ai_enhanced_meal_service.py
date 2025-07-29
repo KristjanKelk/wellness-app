@@ -681,16 +681,233 @@ class AIEnhancedMealService:
         """Generate a basic meal plan when Spoonacular is unavailable"""
         logger.info("Generating fallback meal plan")
         
-        # Simple fallback - you could implement a basic meal plan here
-        # or use cached/default recipes
+        # Create basic meals for each day
+        from datetime import date, timedelta
+        
+        # Basic meal templates
+        basic_meals = {
+            'breakfast': [
+                {
+                    'id': 'fallback_breakfast_1',
+                    'title': 'Healthy Oatmeal with Berries',
+                    'meal_type': 'breakfast',
+                    'time': '08:00',
+                    'calories_per_serving': 350,
+                    'protein_per_serving': 12,
+                    'carbs_per_serving': 65,
+                    'fat_per_serving': 8,
+                    'servings': 1,
+                    'readyInMinutes': 10,
+                    'image': '',
+                    'summary': 'A nutritious breakfast with oats, fresh berries, and a drizzle of honey.',
+                    'ingredients_data': [
+                        {'original': '1 cup rolled oats'},
+                        {'original': '1 cup milk or almond milk'},
+                        {'original': '1/2 cup mixed berries'},
+                        {'original': '1 tbsp honey'},
+                        {'original': '1 tbsp chopped nuts'}
+                    ],
+                    'instructions': [
+                        {'step': 'Cook oats with milk according to package directions'},
+                        {'step': 'Top with berries, honey, and nuts'},
+                        {'step': 'Serve warm'}
+                    ]
+                },
+                {
+                    'id': 'fallback_breakfast_2',
+                    'title': 'Scrambled Eggs with Toast',
+                    'meal_type': 'breakfast',
+                    'time': '08:00',
+                    'calories_per_serving': 320,
+                    'protein_per_serving': 18,
+                    'carbs_per_serving': 25,
+                    'fat_per_serving': 16,
+                    'servings': 1,
+                    'readyInMinutes': 8,
+                    'image': '',
+                    'summary': 'Classic protein-rich breakfast with scrambled eggs and whole grain toast.',
+                    'ingredients_data': [
+                        {'original': '2 large eggs'},
+                        {'original': '2 slices whole grain bread'},
+                        {'original': '1 tbsp butter'},
+                        {'original': 'Salt and pepper to taste'},
+                        {'original': '1 tbsp milk'}
+                    ],
+                    'instructions': [
+                        {'step': 'Whisk eggs with milk, salt, and pepper'},
+                        {'step': 'Heat butter in pan and scramble eggs'},
+                        {'step': 'Toast bread and serve alongside eggs'}
+                    ]
+                }
+            ],
+            'lunch': [
+                {
+                    'id': 'fallback_lunch_1',
+                    'title': 'Mediterranean Quinoa Bowl',
+                    'meal_type': 'lunch',
+                    'time': '12:30',
+                    'calories_per_serving': 450,
+                    'protein_per_serving': 16,
+                    'carbs_per_serving': 58,
+                    'fat_per_serving': 18,
+                    'servings': 1,
+                    'readyInMinutes': 15,
+                    'image': '',
+                    'summary': 'A healthy bowl with quinoa, vegetables, and Mediterranean flavors.',
+                    'ingredients_data': [
+                        {'original': '1 cup cooked quinoa'},
+                        {'original': '1/4 cup cucumber, diced'},
+                        {'original': '1/4 cup cherry tomatoes'},
+                        {'original': '2 tbsp feta cheese'},
+                        {'original': '2 tbsp olive oil'},
+                        {'original': '1 tbsp lemon juice'}
+                    ],
+                    'instructions': [
+                        {'step': 'Cook quinoa according to package directions'},
+                        {'step': 'Dice cucumber and halve cherry tomatoes'},
+                        {'step': 'Mix olive oil and lemon juice for dressing'},
+                        {'step': 'Combine all ingredients and serve'}
+                    ]
+                },
+                {
+                    'id': 'fallback_lunch_2',
+                    'title': 'Grilled Chicken Salad',
+                    'meal_type': 'lunch',
+                    'time': '12:30',
+                    'calories_per_serving': 380,
+                    'protein_per_serving': 32,
+                    'carbs_per_serving': 15,
+                    'fat_per_serving': 22,
+                    'servings': 1,
+                    'readyInMinutes': 20,
+                    'image': '',
+                    'summary': 'Protein-packed salad with grilled chicken and fresh vegetables.',
+                    'ingredients_data': [
+                        {'original': '4 oz grilled chicken breast'},
+                        {'original': '2 cups mixed greens'},
+                        {'original': '1/4 cup cherry tomatoes'},
+                        {'original': '1/4 avocado, sliced'},
+                        {'original': '2 tbsp olive oil vinaigrette'}
+                    ],
+                    'instructions': [
+                        {'step': 'Grill chicken breast until cooked through'},
+                        {'step': 'Arrange mixed greens in bowl'},
+                        {'step': 'Top with sliced chicken, tomatoes, and avocado'},
+                        {'step': 'Drizzle with vinaigrette and serve'}
+                    ]
+                }
+            ],
+            'dinner': [
+                {
+                    'id': 'fallback_dinner_1',
+                    'title': 'Baked Salmon with Vegetables',
+                    'meal_type': 'dinner',
+                    'time': '19:00',
+                    'calories_per_serving': 520,
+                    'protein_per_serving': 35,
+                    'carbs_per_serving': 25,
+                    'fat_per_serving': 28,
+                    'servings': 1,
+                    'readyInMinutes': 25,
+                    'image': '',
+                    'summary': 'Healthy dinner with omega-3 rich salmon and roasted vegetables.',
+                    'ingredients_data': [
+                        {'original': '5 oz salmon fillet'},
+                        {'original': '1 cup broccoli florets'},
+                        {'original': '1/2 cup sweet potato, cubed'},
+                        {'original': '2 tbsp olive oil'},
+                        {'original': 'Salt, pepper, and herbs to taste'}
+                    ],
+                    'instructions': [
+                        {'step': 'Preheat oven to 400°F'},
+                        {'step': 'Toss vegetables with 1 tbsp olive oil'},
+                        {'step': 'Place salmon and vegetables on baking sheet'},
+                        {'step': 'Bake for 15-20 minutes until salmon flakes easily'}
+                    ]
+                },
+                {
+                    'id': 'fallback_dinner_2',
+                    'title': 'Lean Beef Stir-Fry',
+                    'meal_type': 'dinner',
+                    'time': '19:00',
+                    'calories_per_serving': 480,
+                    'protein_per_serving': 30,
+                    'carbs_per_serving': 35,
+                    'fat_per_serving': 22,
+                    'servings': 1,
+                    'readyInMinutes': 15,
+                    'image': '',
+                    'summary': 'Quick and nutritious stir-fry with lean beef and colorful vegetables.',
+                    'ingredients_data': [
+                        {'original': '4 oz lean beef strips'},
+                        {'original': '1 cup mixed stir-fry vegetables'},
+                        {'original': '1/2 cup brown rice, cooked'},
+                        {'original': '1 tbsp olive oil'},
+                        {'original': '2 tbsp low-sodium soy sauce'}
+                    ],
+                    'instructions': [
+                        {'step': 'Heat oil in wok or large pan'},
+                        {'step': 'Stir-fry beef until browned'},
+                        {'step': 'Add vegetables and cook until tender-crisp'},
+                        {'step': 'Add soy sauce and serve over brown rice'}
+                    ]
+                }
+            ]
+        }
+        
+        # Generate meals for each day
+        import random
+        meals_by_day = {}
+        start_date = date.today()
+        
+        for day_offset in range(days):
+            current_date = start_date + timedelta(days=day_offset)
+            date_str = current_date.isoformat()
+            
+            daily_meals = []
+            
+            # Select random meals for each meal type
+            for meal_type in ['breakfast', 'lunch', 'dinner']:
+                if meal_type in basic_meals:
+                    selected_meal = random.choice(basic_meals[meal_type]).copy()
+                    daily_meals.append(selected_meal)
+            
+            meals_by_day[date_str] = daily_meals
+        
+        # Calculate basic nutrition totals
+        total_calories = 0
+        total_protein = 0
+        total_carbs = 0
+        total_fat = 0
+        
+        for day_meals in meals_by_day.values():
+            for meal in day_meals:
+                total_calories += meal.get('calories_per_serving', 0)
+                total_protein += meal.get('protein_per_serving', 0)
+                total_carbs += meal.get('carbs_per_serving', 0)
+                total_fat += meal.get('fat_per_serving', 0)
+        
         return {
             'status': 'fallback',
             'message': 'Generated basic meal plan due to API limitations',
             'days': days,
-            'meals': {},
+            'meals': meals_by_day,
+            'nutrition': {
+                'calories': total_calories,
+                'protein': total_protein,
+                'carbs': total_carbs,
+                'fat': total_fat
+            },
             'ai_insights': {
-                'summary': 'Basic meal plan generated. Please try again later for enhanced features.',
-                'recommendations': ['Ensure you eat balanced meals', 'Stay hydrated', 'Include variety in your diet']
+                'final_optimization': 'Basic meal plan generated. Try regenerating for enhanced AI features.',
+                'generation_method': 'fallback'
+            },
+            'nutritional_analysis': 'Basic nutritional balance provided. Regenerate for detailed analysis.',
+            'scores': {
+                'balance_score': 7,
+                'variety_score': 6,
+                'preference_match_score': 6,
+                'overall_score': 6.3
             }
         }
 
