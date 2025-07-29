@@ -10,6 +10,7 @@ from .models import NutritionProfile, Recipe, Ingredient, MealPlan, UserRecipeRa
 from .services.ai_enhanced_meal_service import AIEnhancedMealService
 from .services.enhanced_spoonacular_service import EnhancedSpoonacularService, SpoonacularAPIError
 from .services.ai_meal_planning_service import AIMealPlanningService
+from .services.ai_nutrition_profile_service import AINutritionProfileService
 from .serializers import (
     NutritionProfileSerializer, RecipeSerializer, IngredientSerializer,
     MealPlanSerializer, UserRecipeRatingSerializer, NutritionLogSerializer
@@ -178,6 +179,182 @@ class NutritionProfileViewSet(viewsets.ModelViewSet):
             logger.error(f"Error calculating targets: {str(e)}")
             return Response(
                 {'error': 'Failed to calculate targets', 'details': str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    @action(detail=False, methods=['post'])
+    def generate_ai_profile(self, request):
+        """Generate AI-powered nutrition profile based on health profile and goals"""
+        try:
+            ai_service = AINutritionProfileService()
+            force_regenerate = request.data.get('force_regenerate', False)
+            
+            result = ai_service.generate_ai_nutrition_profile(
+                user=request.user,
+                force_regenerate=force_regenerate
+            )
+            
+            if result['status'] == 'success':
+                return Response({
+                    'message': result['message'],
+                    'profile': result['profile'],
+                    'ai_insights': result['ai_insights'],
+                    'status': 'success'
+                }, status=status.HTTP_200_OK)
+            elif result['status'] == 'existing':
+                return Response({
+                    'message': result['message'],
+                    'profile': result['profile'],
+                    'status': 'existing'
+                }, status=status.HTTP_200_OK)
+            elif result['status'] == 'fallback':
+                return Response({
+                    'message': result['message'],
+                    'profile': result['profile'],
+                    'status': 'fallback'
+                }, status=status.HTTP_200_OK)
+            else:
+                return Response({
+                    'error': result['message'],
+                    'status': 'error'
+                }, status=status.HTTP_400_BAD_REQUEST)
+                
+        except Exception as e:
+            logger.error(f"Error generating AI nutrition profile: {str(e)}")
+            return Response(
+                {'error': 'Failed to generate AI nutrition profile', 'details': str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    @action(detail=False, methods=['post'])
+    def update_with_progress(self, request):
+        """Update nutrition profile based on user progress and feedback"""
+        try:
+            profile = self.get_object()
+            ai_service = AINutritionProfileService()
+            
+            progress_data = {
+                'user_feedback': request.data.get('feedback', ''),
+                'goal_achievement': request.data.get('goal_achievement', {}),
+                'challenges': request.data.get('challenges', []),
+                'weight_change': request.data.get('weight_change'),
+                'energy_levels': request.data.get('energy_levels'),
+                'satisfaction': request.data.get('satisfaction')
+            }
+            
+            result = ai_service.update_profile_based_on_progress(profile, progress_data)
+            
+            if result['status'] == 'success':
+                # Refresh profile data
+                profile.refresh_from_db()
+                serializer = self.get_serializer(profile)
+                return Response({
+                    'message': result['message'],
+                    'profile': serializer.data,
+                    'status': 'success'
+                }, status=status.HTTP_200_OK)
+            else:
+                return Response({
+                    'error': result['message'],
+                    'status': 'error'
+                }, status=status.HTTP_400_BAD_REQUEST)
+                
+        except Exception as e:
+            logger.error(f"Error updating profile with progress: {str(e)}")
+            return Response(
+                {'error': 'Failed to update profile with progress', 'details': str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    @action(detail=False, methods=['post'])
+    def get_daily_insights(self, request):
+        """Get AI insights about daily nutrition intake"""
+        try:
+            profile = self.get_object()
+            ai_service = AINutritionProfileService()
+            
+            daily_intake = {
+                'calories': request.data.get('calories', 0),
+                'protein': request.data.get('protein', 0),
+                'carbs': request.data.get('carbs', 0),
+                'fat': request.data.get('fat', 0),
+                'meals': request.data.get('meals', []),
+                'date': request.data.get('date')
+            }
+            
+            insights = ai_service.get_nutrition_insights(profile, daily_intake)
+            
+            return Response({
+                'insights': insights['insights'],
+                'recommendations': insights.get('recommendations', []),
+                'status': 'success'
+            }, status=status.HTTP_200_OK)
+                
+        except Exception as e:
+            logger.error(f"Error getting daily insights: {str(e)}")
+            return Response(
+                {'error': 'Failed to get daily insights', 'details': str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    @action(detail=False, methods=['get'])
+    def ai_recommendations(self, request):
+        """Get AI recommendations from stored profile data"""
+        try:
+            profile = self.get_object()
+            
+            ai_recommendations = profile.advanced_preferences.get('ai_recommendations', {})
+            
+            if not ai_recommendations:
+                return Response({
+                    'message': 'No AI recommendations found. Generate an AI profile first.',
+                    'has_recommendations': False
+                }, status=status.HTTP_200_OK)
+            
+            return Response({
+                'recommendations': ai_recommendations,
+                'foods_to_emphasize': profile.advanced_preferences.get('foods_to_emphasize', []),
+                'foods_to_limit': profile.advanced_preferences.get('foods_to_limit', []),
+                'nutrition_strategy': profile.advanced_preferences.get('nutrition_strategy', ''),
+                'hydration_target': profile.advanced_preferences.get('hydration_target'),
+                'supplement_recommendations': profile.advanced_preferences.get('supplement_recommendations', []),
+                'progress_monitoring': profile.advanced_preferences.get('progress_monitoring', {}),
+                'has_recommendations': True,
+                'generated_at': ai_recommendations.get('generated_at'),
+                'ai_confidence': ai_recommendations.get('ai_confidence', 0)
+            }, status=status.HTTP_200_OK)
+                
+        except Exception as e:
+            logger.error(f"Error getting AI recommendations: {str(e)}")
+            return Response(
+                {'error': 'Failed to get AI recommendations', 'details': str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    @action(detail=False, methods=['get'])
+    def goal_based_preferences(self, request):
+        """Get goal-based dietary preferences and recommendations"""
+        try:
+            profile = self.get_object()
+            goal_preferences = profile.get_goal_based_preferences()
+            
+            # Get user's fitness goal from health profile
+            health_profile = getattr(request.user, 'health_profile', None)
+            fitness_goal = health_profile.fitness_goal if health_profile else 'general_fitness'
+            
+            return Response({
+                'fitness_goal': fitness_goal,
+                'goal_preferences': goal_preferences,
+                'emphasized_foods': goal_preferences.get('emphasized_foods', []),
+                'limited_foods': goal_preferences.get('limited_foods', []),
+                'meal_timing': goal_preferences.get('meal_timing', 'flexible'),
+                'portion_control': goal_preferences.get('portion_control', 'moderate')
+            }, status=status.HTTP_200_OK)
+                
+        except Exception as e:
+            logger.error(f"Error getting goal-based preferences: {str(e)}")
+            return Response(
+                {'error': 'Failed to get goal-based preferences', 'details': str(e)},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 

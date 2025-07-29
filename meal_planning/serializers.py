@@ -8,6 +8,11 @@ class NutritionProfileSerializer(serializers.ModelSerializer):
 
     # Add calculated fields
     macro_percentages = serializers.SerializerMethodField()
+    ai_generated = serializers.SerializerMethodField()
+    ai_insights = serializers.SerializerMethodField()
+    goal_based_preferences = serializers.SerializerMethodField()
+    fitness_goal = serializers.SerializerMethodField()
+    nutrition_strategy = serializers.SerializerMethodField()
 
     class Meta:
         model = NutritionProfile
@@ -16,10 +21,14 @@ class NutritionProfileSerializer(serializers.ModelSerializer):
             'dietary_preferences', 'allergies_intolerances', 'cuisine_preferences',
             'disliked_ingredients', 'meals_per_day', 'snacks_per_day',
             'breakfast_time', 'lunch_time', 'dinner_time', 'timezone',
-            'advanced_preferences', 'macro_percentages',
+            'advanced_preferences', 'macro_percentages', 'ai_generated', 'ai_insights',
+            'goal_based_preferences', 'fitness_goal', 'nutrition_strategy',
             'created_at', 'updated_at'
         ]
-        read_only_fields = ['id', 'created_at', 'updated_at', 'macro_percentages']
+        read_only_fields = [
+            'id', 'created_at', 'updated_at', 'macro_percentages', 'ai_generated',
+            'ai_insights', 'goal_based_preferences', 'fitness_goal', 'nutrition_strategy'
+        ]
 
     def get_macro_percentages(self, obj):
         """Calculate macronutrient percentages"""
@@ -32,6 +41,53 @@ class NutritionProfileSerializer(serializers.ModelSerializer):
             'carbs': round((obj.carb_target * 4 / total_calories) * 100),
             'fat': round((obj.fat_target * 9 / total_calories) * 100)
         }
+
+    def get_ai_generated(self, obj):
+        """Check if profile was AI-generated"""
+        return obj.advanced_preferences.get('ai_generated', False)
+
+    def get_ai_insights(self, obj):
+        """Get AI insights and recommendations"""
+        ai_recommendations = obj.advanced_preferences.get('ai_recommendations', {})
+        if not ai_recommendations:
+            return None
+        
+        return {
+            'foods_to_emphasize': obj.advanced_preferences.get('foods_to_emphasize', []),
+            'foods_to_limit': obj.advanced_preferences.get('foods_to_limit', []),
+            'hydration_target': obj.advanced_preferences.get('hydration_target'),
+            'supplement_recommendations': obj.advanced_preferences.get('supplement_recommendations', []),
+            'pre_workout_nutrition': obj.advanced_preferences.get('pre_workout_nutrition'),
+            'post_workout_nutrition': obj.advanced_preferences.get('post_workout_nutrition'),
+            'progress_monitoring': obj.advanced_preferences.get('progress_monitoring', {}),
+            'ai_confidence': ai_recommendations.get('ai_confidence', 0),
+            'generated_at': ai_recommendations.get('generated_at')
+        }
+
+    def get_goal_based_preferences(self, obj):
+        """Get goal-based dietary preferences"""
+        try:
+            return obj.get_goal_based_preferences()
+        except Exception:
+            return {}
+
+    def get_fitness_goal(self, obj):
+        """Get user's fitness goal from health profile"""
+        try:
+            health_profile = getattr(obj.user, 'health_profile', None)
+            if health_profile:
+                return {
+                    'goal': health_profile.fitness_goal,
+                    'goal_display': health_profile.get_fitness_goal_display(),
+                    'target_weight_kg': float(health_profile.target_weight_kg) if health_profile.target_weight_kg else None
+                }
+            return None
+        except Exception:
+            return None
+
+    def get_nutrition_strategy(self, obj):
+        """Get AI-generated nutrition strategy"""
+        return obj.advanced_preferences.get('nutrition_strategy', '')
 
     def validate(self, data):
         """Validate nutrition profile data"""
