@@ -299,12 +299,25 @@
         </button>
       </div>
     </div>
+
+    <!-- Recipe Detail Modal -->
+    <recipe-detail-modal
+      v-if="showRecipeModal && selectedRecipe"
+      :recipe="selectedRecipe"
+      @close="closeRecipeModal"
+      @recipe-saved="onRecipeSaved"
+    />
   </div>
 </template>
 
 <script>
+import RecipeDetailModal from './RecipeDetailModal.vue'
+
 export default {
   name: 'MealPlanDetailModal',
+  components: {
+    RecipeDetailModal
+  },
   props: {
     mealPlan: {
       type: Object,
@@ -314,7 +327,9 @@ export default {
   emits: ['close', 'regenerate-meal', 'get-alternatives', 'analyze-plan', 'delete-plan'],
   data() {
     return {
-      savingRecipe: null // Track which recipe is being saved
+      savingRecipe: null, // Track which recipe is being saved
+      showRecipeModal: false,
+      selectedRecipe: null
     }
   },
   computed: {
@@ -720,10 +735,9 @@ export default {
     },
 
     viewRecipeDetails(recipe) {
-      // For now, just show an alert. In a full implementation, 
-      // this could open another modal or navigate to a recipe detail page
       if (recipe) {
-        alert(`Recipe: ${recipe.title}\n\nThis feature will show full recipe details in a future update.`)
+        this.selectedRecipe = recipe
+        this.showRecipeModal = true
       }
     },
 
@@ -738,6 +752,18 @@ export default {
 
     deletePlan() {
       this.$emit('delete-plan', this.mealPlan)
+    },
+
+    closeRecipeModal() {
+      this.showRecipeModal = false
+      this.selectedRecipe = null
+    },
+
+    async onRecipeSaved(savedRecipe) {
+      console.log('Recipe saved from meal plan detail:', savedRecipe)
+      // Show success message
+      this.$toast?.success?.('Recipe saved to your collection!') ||
+      alert('Recipe saved to your collection!')
     }
   }
 }
