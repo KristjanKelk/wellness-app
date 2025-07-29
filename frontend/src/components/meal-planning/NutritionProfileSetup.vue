@@ -927,22 +927,6 @@ export default {
       } else {
         this.aiProfile.diets.push(diet);
       }
-    },
-
-    canProceedToNextStep() {
-      if (this.aiStep === 1) {
-        return this.aiProfile.age && this.aiProfile.gender && this.aiProfile.height && this.aiProfile.weight;
-      }
-      if (this.aiStep === 2) {
-        return this.aiProfile.goal;
-      }
-      if (this.aiStep === 3) {
-        return this.aiProfile.activity;
-      }
-      if (this.aiStep === 4) {
-        return this.aiProfile.diets.length > 0;
-      }
-      return true;
     }
   }
 }
