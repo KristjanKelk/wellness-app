@@ -158,6 +158,7 @@ class RecipeSerializer(serializers.ModelSerializer):
     nutrition_per_serving = serializers.SerializerMethodField()
     dietary_tags_display = serializers.SerializerMethodField()
     user_rating = serializers.SerializerMethodField()
+    is_saved_by_user = serializers.SerializerMethodField()
 
     class Meta:
         model = Recipe
@@ -169,11 +170,11 @@ class RecipeSerializer(serializers.ModelSerializer):
             'fat_per_serving', 'fiber_per_serving', 'nutrition_per_serving',
             'dietary_tags', 'dietary_tags_display', 'allergens', 'image_url',
             'source_url', 'source_type', 'view_count', 'rating_avg', 'rating_count',
-            'user_rating', 'is_verified', 'created_at'
+            'user_rating', 'is_saved_by_user', 'is_verified', 'created_at'
         ]
         read_only_fields = [
             'id', 'total_time_minutes', 'nutrition_per_serving', 'dietary_tags_display',
-            'rating_avg', 'rating_count', 'user_rating', 'view_count', 'created_at'
+            'rating_avg', 'rating_count', 'user_rating', 'is_saved_by_user', 'view_count', 'created_at'
         ]
 
     def get_nutrition_per_serving(self, obj):
@@ -220,6 +221,21 @@ class RecipeSerializer(serializers.ModelSerializer):
             except UserRecipeRating.DoesNotExist:
                 return None
         return None
+
+    def get_is_saved_by_user(self, obj):
+        """Check if current user has saved this recipe"""
+        request = self.context.get('request')
+        if request and request.user.is_authenticated:
+            # Check if user has saved this recipe by spoonacular_id or by the recipe itself
+            if obj.spoonacular_id:
+                return Recipe.objects.filter(
+                    created_by=request.user,
+                    spoonacular_id=obj.spoonacular_id
+                ).exists()
+            else:
+                # If no spoonacular_id, check if this exact recipe belongs to the user
+                return obj.created_by == request.user
+        return False
 
 
 class MealPlanSerializer(serializers.ModelSerializer):
