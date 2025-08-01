@@ -11,6 +11,7 @@ from .services.ai_enhanced_meal_service import AIEnhancedMealService
 from .services.enhanced_spoonacular_service import EnhancedSpoonacularService, SpoonacularAPIError
 from .services.ai_meal_planning_service import AIMealPlanningService
 from .services.ai_nutrition_profile_service import AINutritionProfileService
+from .services.shopping_list_service import ShoppingListService
 from .serializers import (
     NutritionProfileSerializer, RecipeSerializer, IngredientSerializer,
     MealPlanSerializer, UserRecipeRatingSerializer, NutritionLogSerializer
@@ -982,6 +983,63 @@ class RecipeViewSet(viewsets.ModelViewSet):
             status=status.HTTP_204_NO_CONTENT
         )
 
+    @action(detail=True, methods=['post'])
+    def generate_shopping_list(self, request, pk=None):
+        """Generate shopping list for a single recipe"""
+        try:
+            recipe = self.get_object()
+            servings_multiplier = request.data.get('servings_multiplier', 1.0)
+            
+            shopping_service = ShoppingListService()
+            shopping_list = shopping_service.generate_shopping_list_from_recipes(
+                recipe_ids=[str(recipe.id)],
+                servings_multiplier={str(recipe.id): servings_multiplier}
+            )
+            
+            return Response({
+                'shopping_list': shopping_list,
+                'recipe_name': recipe.title,
+                'servings_multiplier': servings_multiplier
+            }, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            logger.error(f"Error generating shopping list for recipe: {str(e)}")
+            return Response(
+                {'error': 'Failed to generate shopping list', 'details': str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    @action(detail=False, methods=['post'])
+    def generate_shopping_list_multiple(self, request):
+        """Generate shopping list for multiple recipes"""
+        try:
+            recipe_ids = request.data.get('recipe_ids', [])
+            servings_multipliers = request.data.get('servings_multipliers', {})
+            
+            if not recipe_ids:
+                return Response(
+                    {'error': 'recipe_ids is required'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            shopping_service = ShoppingListService()
+            shopping_list = shopping_service.generate_shopping_list_from_recipes(
+                recipe_ids=recipe_ids,
+                servings_multiplier=servings_multipliers
+            )
+            
+            return Response({
+                'shopping_list': shopping_list,
+                'recipe_count': len(recipe_ids)
+            }, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            logger.error(f"Error generating shopping list for multiple recipes: {str(e)}")
+            return Response(
+                {'error': 'Failed to generate shopping list', 'details': str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
 
 class IngredientViewSet(viewsets.ReadOnlyModelViewSet):
     """Browse ingredients and their nutritional information"""
@@ -1318,25 +1376,63 @@ class MealPlanViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post'])
     def generate_shopping_list(self, request, pk=None):
         """Generate shopping list from meal plan"""
-        meal_plan = self.get_object()
-        exclude_items = request.data.get('exclude_items', [])
-        group_by_category = request.data.get('group_by_category', True)
+        try:
+            meal_plan = self.get_object()
+            exclude_items = request.data.get('exclude_items', [])
+            group_by_category = request.data.get('group_by_category', True)
+            
+            shopping_service = ShoppingListService()
+            shopping_list = shopping_service.generate_shopping_list_from_meal_plan(str(meal_plan.id))
+            
+            # Filter out excluded items if provided
+            if exclude_items:
+                for category_key, category_data in shopping_list['categories'].items():
+                    category_data['items'] = [
+                        item for item in category_data['items'] 
+                        if item['name'].lower() not in [excluded.lower() for excluded in exclude_items]
+                    ]
+                    category_data['item_count'] = len(category_data['items'])
+            
+            # Save shopping list to meal plan
+            shopping_service.save_shopping_list_to_meal_plan(str(meal_plan.id), shopping_list)
+            
+            return Response({
+                'shopping_list': shopping_list,
+                'meal_plan_id': str(meal_plan.id),
+                'excluded_items': exclude_items
+            }, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            logger.error(f"Error generating shopping list for meal plan: {str(e)}")
+            return Response(
+                {'error': 'Failed to generate shopping list', 'details': str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
-        # TODO: Implement shopping list generation
-        mock_shopping_list = {
-            'produce': ['Spinach (200g)', 'Cherry tomatoes (300g)', 'Avocado (2 pieces)'],
-            'proteins': ['Chicken breast (500g)', 'Salmon fillet (400g)', 'Eggs (12 pieces)'],
-            'grains': ['Quinoa (1 cup)', 'Brown rice (500g)', 'Oats (500g)'],
-            'pantry': ['Olive oil', 'Coconut oil', 'Almond butter'],
-            'dairy': ['Greek yogurt (500g)', 'Almond milk (1L)']
-        }
-
-        # Update meal plan
-        meal_plan.shopping_list_data = mock_shopping_list
-        meal_plan.shopping_list_generated = True
-        meal_plan.save()
-
-        return Response({'shopping_list': mock_shopping_list})
+    @action(detail=True, methods=['get'])
+    def get_shopping_list(self, request, pk=None):
+        """Get existing shopping list for meal plan"""
+        try:
+            meal_plan = self.get_object()
+            
+            if not meal_plan.shopping_list_generated or not meal_plan.shopping_list_data:
+                return Response(
+                    {'message': 'No shopping list generated for this meal plan', 'has_shopping_list': False},
+                    status=status.HTTP_200_OK
+                )
+            
+            return Response({
+                'shopping_list': meal_plan.shopping_list_data,
+                'has_shopping_list': True,
+                'generated_at': meal_plan.updated_at.isoformat()
+            }, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            logger.error(f"Error getting shopping list: {str(e)}")
+            return Response(
+                {'error': 'Failed to get shopping list', 'details': str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
 
 class UserRecipeRatingViewSet(viewsets.ModelViewSet):

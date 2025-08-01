@@ -140,15 +140,34 @@
             <i class="fas fa-plus"></i>
             Add to Meal Plan
           </button>
+          <button class="btn btn-info" @click="generateShoppingList">
+            <i class="fas fa-shopping-cart"></i>
+            Shopping List
+          </button>
         </div>
       </div>
     </div>
+
+    <!-- Shopping List Modal -->
+    <shopping-list-modal
+      v-if="showShoppingListModal"
+      :shopping-list="shoppingListData"
+      :loading="shoppingListLoading"
+      :error="shoppingListError"
+      @close="closeShoppingListModal"
+      @retry="generateShoppingList"
+    />
   </div>
 </template>
 
 <script>
+import ShoppingListModal from './ShoppingListModal.vue'
+
 export default {
   name: 'RecipeDetailModal',
+  components: {
+    ShoppingListModal
+  },
   props: {
     recipe: {
       type: Object,
@@ -157,7 +176,11 @@ export default {
   },
   data() {
     return {
-      saving: false
+      saving: false,
+      showShoppingListModal: false,
+      shoppingListData: null,
+      shoppingListLoading: false,
+      shoppingListError: null
     }
   },
   computed: {
@@ -308,6 +331,52 @@ export default {
       this.$toast?.success?.('Recipe added to meal plan!') ||
       alert('Recipe added to meal plan!')
       this.$emit('add-to-meal-plan', this.recipe)
+    },
+
+    async generateShoppingList() {
+      try {
+        this.shoppingListLoading = true
+        this.shoppingListError = null
+        this.showShoppingListModal = true
+
+        const response = await fetch(`/api/meal-planning/recipes/${this.recipe.id}/generate_shopping_list/`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${this.$store.state.auth.token}`
+          },
+          body: JSON.stringify({
+            servings_multiplier: 1.0
+          })
+        })
+
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`)
+        }
+
+        const data = await response.json()
+        this.shoppingListData = data.shopping_list
+        this.shoppingListLoading = false
+
+        // Show success message
+        this.$toast?.success?.('Shopping list generated successfully!') ||
+        console.log('Shopping list generated successfully!')
+
+      } catch (error) {
+        console.error('Error generating shopping list:', error)
+        this.shoppingListError = error.message || 'Failed to generate shopping list'
+        this.shoppingListLoading = false
+        
+        // Show error message
+        this.$toast?.error?.(`Error: ${this.shoppingListError}`) ||
+        alert(`Error generating shopping list: ${this.shoppingListError}`)
+      }
+    },
+
+    closeShoppingListModal() {
+      this.showShoppingListModal = false
+      this.shoppingListData = null
+      this.shoppingListError = null
     }
   }
 }
