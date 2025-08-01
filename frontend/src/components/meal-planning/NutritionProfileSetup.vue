@@ -35,13 +35,17 @@
                   <input v-model.number="aiProfile.age" type="number" min="13" max="100" class="form-input" />
                 </div>
                 <div class="form-group">
-                  <label>Gender</label>
-                  <select v-model="aiProfile.gender" class="form-select">
-                    <option value="">Select...</option>
-                    <option value="male">Male</option>
-                    <option value="female">Female</option>
-                    <option value="other">Other</option>
-                  </select>
+                  <FormSelect
+                    id="gender-select"
+                    v-model="aiProfile.gender"
+                    label="Gender"
+                    placeholder="Select..."
+                    :options="[
+                      { value: 'male', label: 'Male' },
+                      { value: 'female', label: 'Female' },
+                      { value: 'other', label: 'Other' }
+                    ]"
+                  />
                 </div>
                 <div class="form-group">
                   <label>Height (cm)</label>
@@ -414,18 +418,19 @@
           <h3>Meal Preferences</h3>
           <div class="meal-prefs-grid">
             <div class="form-group">
-              <label for="meals_per_day">Meals per Day</label>
-              <select
+              <FormSelect
                 id="meals_per_day"
-                v-model.number="formData.meals_per_day"
-                class="form-select"
-              >
-                <option value="2">2 meals</option>
-                <option value="3">3 meals</option>
-                <option value="4">4 meals</option>
-                <option value="5">5 meals</option>
-                <option value="6">6 meals</option>
-              </select>
+                v-model="formData.meals_per_day"
+                label="Meals per Day"
+                :options="[
+                  { value: 2, label: '2 meals' },
+                  { value: 3, label: '3 meals' },
+                  { value: 4, label: '4 meals' },
+                  { value: 5, label: '5 meals' },
+                  { value: 6, label: '6 meals' }
+                ]"
+                help-text="Choose the number of meals you prefer per day"
+              />
             </div>
 
             <div class="form-group">
@@ -472,9 +477,13 @@
 
 <script>
 import { mealPlanningApi } from '@/services/mealPlanningApi'
+import FormSelect from '@/components/ui/FormSelect.vue'
 
 export default {
   name: 'NutritionProfileSetup',
+  components: {
+    FormSelect
+  },
   props: {
     profile: {
       type: Object,

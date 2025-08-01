@@ -299,7 +299,21 @@ export default {
     },
 
     imageError(event) {
-      event.target.style.display = 'none'
+      // Instead of hiding the image, show a placeholder
+      event.target.src = this.getPlaceholderImage()
+      event.target.style.background = '#f8f9fa'
+      event.target.style.border = '2px dashed #dee2e6'
+      event.target.style.color = '#6c757d'
+      event.target.style.display = 'flex'
+      event.target.style.alignItems = 'center'
+      event.target.style.justifyContent = 'center'
+      event.target.style.fontSize = '14px'
+      event.target.onerror = null // Prevent infinite loop
+    },
+
+    getPlaceholderImage() {
+      // Return a data URL for a simple placeholder image
+      return 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzAwIiBoZWlnaHQ9IjIwMCIgdmlld0JveD0iMCAwIDMwMCAyMDAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSIzMDAiIGhlaWdodD0iMjAwIiBmaWxsPSIjRjhGOUZBIiBzdHJva2U9IiNERUUyRTYiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWRhc2hhcnJheT0iNSA1Ii8+Cjx0ZXh0IHg9IjE1MCIgeT0iMTAwIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmaWxsPSIjNkM3NTdEIiBmb250LWZhbWlseT0iLWFwcGxlLXN5c3RlbSwgQmxpbmtNYWNTeXN0ZW1Gb250LCBTZWdvZSBVSSwgUm9ib3RvLCBzYW5zLXNlcmlmIiBmb250LXNpemU9IjE0cHgiPk5vIEltYWdlPC90ZXh0Pgo8cGF0aCBkPSJNMTIwIDgwSDEzMFY5MEgxMjBWODBaTTE0MCA4MEgxNTBWOTBIMTQwVjgwWk0xNjAgODBIMTcwVjkwSDE2MFY4MFoiIGZpbGw9IiM2Qzc1N0QiLz4KPC9zdmc+'
     },
 
     async toggleSaveRecipe() {
@@ -310,47 +324,64 @@ export default {
         // Import the API service
         const { mealPlanningApi } = await import('@/services/mealPlanningApi')
         
+        let response
+        
         if (this.localRecipe.is_saved_by_user) {
           // Remove from saved recipes
-          await mealPlanningApi.removeRecipeFromMyCollection(this.localRecipe.id)
+          if (!this.localRecipe.id) {
+            throw new Error('Cannot remove recipe: No recipe ID found')
+          }
+          
+          response = await mealPlanningApi.removeRecipeFromMyCollection(this.localRecipe.id)
           
           // Update local state
           this.localRecipe.is_saved_by_user = false
           
-          this.$toast?.success?.('Recipe removed from your collection!') ||
-          alert('Recipe removed from your collection!')
-          
-          // Emit event to notify parent
-          this.$emit('recipe-removed', this.localRecipe)
+          const message = response.data?.message || 'Recipe removed from your collection!'
+          this.$toast?.success?.(message) || alert(message)
         } else {
-          // Save recipe
-          let response
-          
-          // Check if this is a recipe from meal plan (has spoonacular_id but no recipe.id in our DB)
+          // Save recipe - handle both spoonacular and existing recipes
           if (this.localRecipe.spoonacular_id && !this.localRecipe.created_by) {
-            // Save from meal plan data
+            // This is a spoonacular recipe from meal plan
             response = await mealPlanningApi.saveRecipeFromMealPlan(this.localRecipe)
           } else if (this.localRecipe.id) {
-            // Save existing recipe to user's collection
+            // This is an existing recipe in the database
             response = await mealPlanningApi.saveRecipeToMyCollection(this.localRecipe.id)
           } else {
-            throw new Error('Invalid recipe data for saving')
+            // This is recipe data that needs to be saved
+            response = await mealPlanningApi.saveRecipeFromMealPlan(this.localRecipe)
           }
           
           // Update local state
           this.localRecipe.is_saved_by_user = true
           
-          const message = response.data.message || 'Recipe saved to your collection!'
+          const message = response.data?.message || 'Recipe saved to your collection!'
           this.$toast?.success?.(message) || alert(message)
           
-          // Emit event to refresh recipes if needed
+          // Emit the saved recipe
           this.$emit('recipe-saved', response.data.recipe || this.localRecipe)
         }
         
       } catch (error) {
         console.error('Error toggling recipe save status:', error)
-        const errorMessage = error.response?.data?.message || error.message || 'Failed to update recipe'
-        this.$toast?.error?.(errorMessage) || alert(errorMessage)
+        
+        let errorMessage = 'An error occurred'
+        
+        if (error.response?.status === 404) {
+          errorMessage = 'Recipe not found. It may have been removed.'
+        } else if (error.response?.status === 403) {
+          errorMessage = 'You don\'t have permission to perform this action.'
+        } else if (error.response?.status === 500) {
+          errorMessage = 'Server error. Please try again later.'
+        } else if (error.response?.data?.error) {
+          errorMessage = error.response.data.error
+        } else if (error.response?.data?.message) {
+          errorMessage = error.response.data.message
+        } else if (error.message) {
+          errorMessage = error.message
+        }
+        
+        this.$toast?.error?.(errorMessage) || alert(`Error: ${errorMessage}`)
       } finally {
         this.saving = false
       }

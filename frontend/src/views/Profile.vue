@@ -29,13 +29,17 @@
           </div>
 
           <div class="form-group">
-            <label for="gender">Gender</label>
-            <select id="gender" v-model="profile.gender">
-              <option value="">Select gender</option>
-              <option value="M">Male</option>
-              <option value="F">Female</option>
-              <option value="O">Other</option>
-            </select>
+            <FormSelect
+              id="gender"
+              v-model="profile.gender"
+              label="Gender"
+              placeholder="Select gender"
+              :options="[
+                { value: 'M', label: 'Male' },
+                { value: 'F', label: 'Female' },
+                { value: 'O', label: 'Other' }
+              ]"
+            />
           </div>
         </div>
       </section>
@@ -381,9 +385,13 @@
 <script>
 import HealthProfileService from '../services/health-profile_service';
 import AnalyticsService from "../services/analytics.service";
+import FormSelect from '@/components/ui/FormSelect.vue';
 
 export default {
   name: 'Profile',
+  components: {
+    FormSelect
+  },
   data() {
     return {
       profile: {
