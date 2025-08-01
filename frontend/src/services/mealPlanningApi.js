@@ -342,13 +342,14 @@ export const mealPlanningApi = {
   },
 
   // New AI-powered methods with fallbacks
-  async getMealAlternatives(planId, day, mealType, count = 3) {
+  async getMealAlternatives(planId, day, mealType, count = 3, includeUserRecipes = true) {
     try {
-      console.log('Getting meal alternatives:', { planId, day, mealType, count })
+      console.log('Getting meal alternatives:', { planId, day, mealType, count, includeUserRecipes })
       return await api.post(`/meal-plans/${planId}/get_alternatives/`, {
         day: day,
         meal_type: mealType,
-        count: count
+        count: count,
+        include_user_recipes: includeUserRecipes
       })
     } catch (error) {
       if (error.response?.status === 404) {
