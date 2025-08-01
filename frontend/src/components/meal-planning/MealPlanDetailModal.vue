@@ -709,15 +709,21 @@ export default {
         // Import the API service
         const { mealPlanningApi } = await import('@/services/mealPlanningApi')
         
+        let response
+        
         if (recipe.is_saved_by_user) {
           // Remove from saved recipes
-          await mealPlanningApi.removeRecipeFromMyCollection(recipe.id)
+          if (!recipe.id) {
+            throw new Error('Cannot remove recipe: No recipe ID found')
+          }
+          
+          response = await mealPlanningApi.removeRecipeFromMyCollection(recipe.id)
           
           // Update local state
           recipe.is_saved_by_user = false
           
-          this.$toast?.success?.('Recipe removed from your collection!') ||
-          alert('Recipe removed from your collection!')
+          const message = response.data?.message || 'Recipe removed from your collection!'
+          this.$toast?.success?.(message) || alert(message)
           
         } else {
           // Save recipe
@@ -747,20 +753,36 @@ export default {
             source_type: 'spoonacular'
           }
           
-          const response = await mealPlanningApi.saveRecipeFromMealPlan(recipeData)
+          response = await mealPlanningApi.saveRecipeFromMealPlan(recipeData)
           
           // Update local state
           recipe.is_saved_by_user = true
           
           // Show success message
-          const message = response.data.message || 'Recipe saved to your collection!'
+          const message = response.data?.message || 'Recipe saved to your collection!'
           this.$toast?.success?.(message) || alert(message)
         }
         
       } catch (error) {
         console.error('Error toggling recipe save status:', error)
-        const errorMessage = error.response?.data?.message || error.message || 'Failed to update recipe'
-        this.$toast?.error?.(errorMessage) || alert(errorMessage)
+        
+        let errorMessage = 'An error occurred'
+        
+        if (error.response?.status === 404) {
+          errorMessage = 'Recipe not found. It may have been removed.'
+        } else if (error.response?.status === 403) {
+          errorMessage = 'You don\'t have permission to perform this action.'
+        } else if (error.response?.status === 500) {
+          errorMessage = 'Server error. Please try again later.'
+        } else if (error.response?.data?.error) {
+          errorMessage = error.response.data.error
+        } else if (error.response?.data?.message) {
+          errorMessage = error.response.data.message
+        } else if (error.message) {
+          errorMessage = error.message
+        }
+        
+        this.$toast?.error?.(errorMessage) || alert(`Error: ${errorMessage}`)
       } finally {
         this.savingRecipe = null
       }
@@ -1558,6 +1580,455 @@ $gray-lighter: #e9ecef;
       width: 100%;
       justify-content: center;
     }
+  }
+}
+
+// Add improved readability styles
+.modal-content {
+  max-width: 90vw;
+  width: 1200px;
+  max-height: 90vh;
+  padding: 0;
+  border-radius: 16px;
+  box-shadow: 0 25px 50px rgba(0, 0, 0, 0.2);
+  overflow: hidden;
+  background: linear-gradient(135deg, #fff 0%, #f8f9fa 100%);
+}
+
+.modal-header {
+  padding: 24px 32px;
+  background: linear-gradient(135deg, $primary 0%, $primary-dark 100%);
+  color: white;
+  border-bottom: none;
+  
+  h2 {
+    margin: 0;
+    font-size: 1.75rem;
+    font-weight: 600;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  }
+  
+  .ai-generation-info {
+    margin-top: 8px;
+    display: flex;
+    gap: 12px;
+    
+    .ai-badge, .model-badge {
+      padding: 4px 12px;
+      background: rgba(255, 255, 255, 0.2);
+      border-radius: 20px;
+      font-size: 0.85rem;
+      font-weight: 500;
+      backdrop-filter: blur(10px);
+    }
+  }
+  
+  .close-btn {
+    color: white;
+    background: rgba(255, 255, 255, 0.2);
+    border: none;
+    border-radius: 50%;
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+    backdrop-filter: blur(10px);
+    
+    &:hover {
+      background: rgba(255, 255, 255, 0.3);
+      transform: scale(1.05);
+    }
+  }
+}
+
+.modal-body {
+  padding: 32px;
+  max-height: 70vh;
+  overflow-y: auto;
+  scroll-behavior: smooth;
+  
+  // Custom scrollbar
+  &::-webkit-scrollbar {
+    width: 8px;
+  }
+  
+  &::-webkit-scrollbar-track {
+    background: $gray-lightest;
+    border-radius: 4px;
+  }
+  
+  &::-webkit-scrollbar-thumb {
+    background: $gray-light;
+    border-radius: 4px;
+    
+    &:hover {
+      background: $gray;
+    }
+  }
+}
+
+.plan-overview {
+  background: white;
+  border-radius: 12px;
+  padding: 24px;
+  margin-bottom: 32px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+  border: 1px solid rgba($primary, 0.1);
+}
+
+.overview-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 20px;
+  margin-bottom: 24px;
+  
+  .stat-item {
+    padding: 16px;
+    background: linear-gradient(135deg, $gray-lightest 0%, white 100%);
+    border-radius: 8px;
+    border-left: 4px solid $primary;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    
+    &:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.1);
+    }
+    
+    .stat-label {
+      font-size: 0.9rem;
+      color: $gray;
+      font-weight: 500;
+      margin-bottom: 4px;
+      display: block;
+    }
+    
+    .stat-value {
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: $secondary;
+    }
+  }
+}
+
+.nutrition-overview {
+  background: white;
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 24px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  
+  h4 {
+    margin: 0 0 16px 0;
+    font-size: 1.2rem;
+    color: $secondary;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    
+    &::before {
+      content: "🍎";
+      font-size: 1.1rem;
+    }
+  }
+  
+  .nutrition-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 12px;
+  }
+  
+  .nutrition-item {
+    padding: 12px 16px;
+    background: linear-gradient(135deg, rgba($success, 0.1) 0%, rgba($success, 0.05) 100%);
+    border-radius: 8px;
+    border: 1px solid rgba($success, 0.2);
+    text-align: center;
+    transition: transform 0.2s ease;
+    
+    &:hover {
+      transform: scale(1.02);
+    }
+    
+    .nutrition-label {
+      font-size: 0.85rem;
+      color: $gray;
+      font-weight: 500;
+      margin-bottom: 4px;
+      display: block;
+    }
+    
+    .nutrition-value {
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: $success-dark;
+    }
+  }
+}
+
+.quality-scores {
+  background: white;
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 24px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  
+  h4 {
+    margin: 0 0 20px 0;
+    font-size: 1.2rem;
+    color: $secondary;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    
+    &::before {
+      content: "📊";
+      font-size: 1.1rem;
+    }
+  }
+  
+  .score-item {
+    margin-bottom: 16px;
+    padding: 12px;
+    background: $gray-lightest;
+    border-radius: 8px;
+    
+    .score-label {
+      font-size: 0.95rem;
+      color: $gray-dark;
+      font-weight: 500;
+      margin-bottom: 8px;
+      display: block;
+    }
+    
+    .score-bar {
+      height: 10px;
+      background: rgba($gray-light, 0.3);
+      border-radius: 6px;
+      overflow: hidden;
+      margin-bottom: 4px;
+      
+      .score-fill {
+        height: 100%;
+        background: linear-gradient(90deg, $primary 0%, $primary-light 100%);
+        border-radius: 6px;
+        transition: width 0.5s ease;
+        box-shadow: 0 2px 4px rgba($primary, 0.3);
+      }
+    }
+    
+    .score-value {
+      font-size: 0.9rem;
+      font-weight: 600;
+      color: $primary-dark;
+      text-align: right;
+      display: block;
+    }
+  }
+}
+
+.meals-section {
+  h3 {
+    font-size: 1.4rem;
+    color: $secondary;
+    font-weight: 600;
+    margin-bottom: 24px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    
+    &::before {
+      content: "🍽️";
+      font-size: 1.2rem;
+    }
+  }
+}
+
+.day-section {
+  background: white;
+  border-radius: 12px;
+  padding: 24px;
+  margin-bottom: 24px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+  border: 1px solid rgba($primary, 0.1);
+  
+  h4 {
+    font-size: 1.2rem;
+    color: $primary-dark;
+    font-weight: 600;
+    margin-bottom: 20px;
+    padding-bottom: 8px;
+    border-bottom: 2px solid rgba($primary, 0.2);
+  }
+}
+
+.meals-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 20px;
+}
+
+.meal-card {
+  background: linear-gradient(135deg, white 0%, $gray-lightest 100%);
+  border-radius: 12px;
+  padding: 20px;
+  border: 1px solid rgba($gray-light, 0.5);
+  transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
+  
+  &::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 4px;
+    background: linear-gradient(90deg, $primary 0%, $primary-light 100%);
+  }
+  
+  &:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+    border-color: rgba($primary, 0.3);
+  }
+  
+  .meal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 16px;
+    
+    .meal-info {
+      flex: 1;
+      
+      .meal-title {
+        font-size: 1.1rem;
+        font-weight: 600;
+        color: $secondary;
+        margin-bottom: 4px;
+        line-height: 1.3;
+      }
+      
+      .meal-time {
+        font-size: 0.9rem;
+        color: $gray;
+        font-weight: 500;
+        
+        &::before {
+          content: "🕐";
+          margin-right: 4px;
+        }
+      }
+    }
+  }
+  
+  .meal-actions {
+    display: flex;
+    gap: 8px;
+    flex-shrink: 0;
+    
+    .btn {
+      padding: 8px 12px;
+      border-radius: 6px;
+      border: none;
+      font-size: 0.85rem;
+      font-weight: 500;
+      transition: all 0.2s ease;
+      cursor: pointer;
+      
+      &.btn-outline {
+        background: transparent;
+        border: 1px solid $gray-light;
+        color: $gray-dark;
+        
+        &:hover {
+          background: $gray-light;
+          color: white;
+        }
+      }
+      
+      &.btn-primary {
+        background: linear-gradient(135deg, $primary 0%, $primary-dark 100%);
+        color: white;
+        
+        &:hover {
+          transform: scale(1.05);
+          box-shadow: 0 4px 12px rgba($primary, 0.3);
+        }
+        
+        &:disabled {
+          opacity: 0.6;
+          cursor: not-allowed;
+          transform: none;
+        }
+      }
+    }
+  }
+}
+
+// Enhanced responsive design
+@media (max-width: 768px) {
+  .modal-content {
+    width: 95vw;
+    margin: 2.5vh auto;
+  }
+  
+  .modal-header {
+    padding: 20px 24px;
+    
+    h2 {
+      font-size: 1.4rem;
+    }
+  }
+  
+  .modal-body {
+    padding: 20px;
+  }
+  
+  .overview-stats {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+  
+  .nutrition-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  
+  .meals-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+// Improved loading states
+.loading-placeholder {
+  background: linear-gradient(90deg, $gray-lighter 25%, rgba($gray-lighter, 0.5) 50%, $gray-lighter 75%);
+  background-size: 200% 100%;
+  animation: loading 1.5s infinite;
+  border-radius: 8px;
+  height: 20px;
+  
+  &.loading-title {
+    height: 24px;
+    width: 60%;
+    margin-bottom: 12px;
+  }
+  
+  &.loading-text {
+    height: 16px;
+    width: 80%;
+  }
+}
+
+@keyframes loading {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
   }
 }
 </style>

@@ -234,9 +234,15 @@ export default {
         // Import the API service
         const { mealPlanningApi } = await import('@/services/mealPlanningApi')
         
+        let response
+        
         if (recipe.is_saved_by_user) {
           // Remove from saved recipes
-          await mealPlanningApi.removeRecipeFromMyCollection(recipe.id)
+          if (!recipe.id) {
+            throw new Error('Cannot remove recipe: No recipe ID found')
+          }
+          
+          response = await mealPlanningApi.removeRecipeFromMyCollection(recipe.id)
           
           // Update local state
           recipe.is_saved_by_user = false
@@ -244,20 +250,19 @@ export default {
           this.$emit('recipe-removed', recipe)
           
           // Show success message
-          if (this.$toast?.success) {
-            this.$toast.success('Recipe removed from your collection!')
-          } else {
-            alert('Recipe removed from your collection!')
-          }
+          const message = response.data?.message || 'Recipe removed from your collection!'
+          this.$toast?.success?.(message) || alert(message)
         } else {
-          // Save recipe
-          let response
+          // Save recipe - handle both spoonacular and existing recipes
           if (recipe.spoonacular_id && !recipe.created_by) {
             // Save from meal plan data
             response = await mealPlanningApi.saveRecipeFromMealPlan(recipe)
           } else if (recipe.id) {
             // Save existing recipe to user's collection
             response = await mealPlanningApi.saveRecipeToMyCollection(recipe.id)
+          } else {
+            // This is recipe data that needs to be saved
+            response = await mealPlanningApi.saveRecipeFromMealPlan(recipe)
           }
           
           // Update local state
@@ -266,21 +271,29 @@ export default {
           this.$emit('recipe-saved', response.data.recipe || recipe)
           
           // Show success message
-          const message = response.data.message || 'Recipe saved to your collection!'
-          if (this.$toast?.success) {
-            this.$toast.success(message)
-          } else {
-            alert(message)
-          }
+          const message = response.data?.message || 'Recipe saved to your collection!'
+          this.$toast?.success?.(message) || alert(message)
         }
       } catch (error) {
         console.error('Error toggling recipe save status:', error)
-        const errorMessage = error.response?.data?.message || error.message || 'Failed to update recipe'
-        if (this.$toast?.error) {
-          this.$toast.error(errorMessage)
-        } else {
-          alert(errorMessage)
+        
+        let errorMessage = 'An error occurred'
+        
+        if (error.response?.status === 404) {
+          errorMessage = 'Recipe not found. It may have been removed.'
+        } else if (error.response?.status === 403) {
+          errorMessage = 'You don\'t have permission to perform this action.'
+        } else if (error.response?.status === 500) {
+          errorMessage = 'Server error. Please try again later.'
+        } else if (error.response?.data?.error) {
+          errorMessage = error.response.data.error
+        } else if (error.response?.data?.message) {
+          errorMessage = error.response.data.message
+        } else if (error.message) {
+          errorMessage = error.message
         }
+        
+        this.$toast?.error?.(errorMessage) || alert(`Error: ${errorMessage}`)
       }
     }
   }
