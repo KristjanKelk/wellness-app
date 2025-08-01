@@ -305,7 +305,7 @@ export default {
       }
       
       // Categories
-      Object.entries(this.sortedCategories).forEach(([categoryKey, category]) => {
+      Object.entries(this.sortedCategories).forEach(([, category]) => {
         html += `<div class="category-section">`
         html += `<h2>${category.icon} ${category.name}</h2>`
         html += '<ul>'
