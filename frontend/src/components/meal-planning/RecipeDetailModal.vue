@@ -131,10 +131,15 @@
             <i class="fas fa-times"></i>
             Close
           </button>
-          <button class="btn btn-primary" @click="saveRecipe" :disabled="saving">
+          <button 
+            class="btn" 
+            :class="recipe.is_saved_by_user ? 'btn-outline-danger' : 'btn-primary'" 
+            @click="toggleSaveRecipe" 
+            :disabled="saving"
+          >
             <i v-if="saving" class="fas fa-spinner fa-spin"></i>
-            <i v-else class="fas fa-heart"></i>
-            {{ saving ? 'Saving...' : 'Save Recipe' }}
+            <i v-else :class="recipe.is_saved_by_user ? 'fas fa-heart' : 'far fa-heart'"></i>
+            {{ saving ? (recipe.is_saved_by_user ? 'Removing...' : 'Saving...') : (recipe.is_saved_by_user ? 'Remove from Recipes' : 'Save Recipe') }}
           </button>
           <button class="btn btn-success" @click="addToMealPlan">
             <i class="fas fa-plus"></i>
@@ -289,38 +294,55 @@ export default {
       event.target.style.display = 'none'
     },
 
-    async saveRecipe() {
+    async toggleSaveRecipe() {
       this.saving = true
       try {
-        console.log('Saving recipe:', this.recipe)
+        console.log('Toggling save status for recipe:', this.recipe)
         
         // Import the API service
         const { mealPlanningApi } = await import('@/services/mealPlanningApi')
         
-        let response
-        
-        // Check if this is a recipe from meal plan (has spoonacular_id but no recipe.id in our DB)
-        if (this.recipe.spoonacular_id && !this.recipe.created_by) {
-          // Save from meal plan data
-          response = await mealPlanningApi.saveRecipeFromMealPlan(this.recipe)
-        } else if (this.recipe.id) {
-          // Save existing recipe to user's collection
-          response = await mealPlanningApi.saveRecipeToMyCollection(this.recipe.id)
+        if (this.recipe.is_saved_by_user) {
+          // Remove from saved recipes
+          await mealPlanningApi.removeRecipeFromMyCollection(this.recipe.id)
+          
+          // Update local state
+          this.recipe.is_saved_by_user = false
+          
+          this.$toast?.success?.('Recipe removed from your collection!') ||
+          alert('Recipe removed from your collection!')
+          
+          // Emit event to notify parent
+          this.$emit('recipe-removed', this.recipe)
         } else {
-          throw new Error('Invalid recipe data for saving')
+          // Save recipe
+          let response
+          
+          // Check if this is a recipe from meal plan (has spoonacular_id but no recipe.id in our DB)
+          if (this.recipe.spoonacular_id && !this.recipe.created_by) {
+            // Save from meal plan data
+            response = await mealPlanningApi.saveRecipeFromMealPlan(this.recipe)
+          } else if (this.recipe.id) {
+            // Save existing recipe to user's collection
+            response = await mealPlanningApi.saveRecipeToMyCollection(this.recipe.id)
+          } else {
+            throw new Error('Invalid recipe data for saving')
+          }
+          
+          // Update local state
+          this.recipe.is_saved_by_user = true
+          
+          const message = response.data.message || 'Recipe saved to your collection!'
+          this.$toast?.success?.(message) || alert(message)
+          
+          // Emit event to refresh recipes if needed
+          this.$emit('recipe-saved', response.data.recipe || this.recipe)
         }
         
-        this.$toast?.success?.(response.data.message || 'Recipe saved to your collection!') ||
-        alert(response.data.message || 'Recipe saved to your collection!')
-        
-        // Emit event to refresh recipes if needed
-        this.$emit('recipe-saved', response.data.recipe)
-        
       } catch (error) {
-        console.error('Error saving recipe:', error)
-        const errorMessage = error.response?.data?.message || error.message || 'Failed to save recipe'
-        this.$toast?.error?.(errorMessage) ||
-        alert(errorMessage)
+        console.error('Error toggling recipe save status:', error)
+        const errorMessage = error.response?.data?.message || error.message || 'Failed to update recipe'
+        this.$toast?.error?.(errorMessage) || alert(errorMessage)
       } finally {
         this.saving = false
       }
@@ -781,6 +803,23 @@ export default {
       background: darken($success, 10%);
       border-color: darken($success, 10%);
       transform: translateY(-1px);
+    }
+  }
+
+  &.btn-outline-danger {
+    background: transparent;
+    color: $error;
+    border-color: $error;
+
+    &:hover:not(:disabled) {
+      background: $error;
+      color: $white;
+      border-color: $error;
+      transform: translateY(-1px);
+    }
+
+    i.fas.fa-heart {
+      color: $error;
     }
   }
 }

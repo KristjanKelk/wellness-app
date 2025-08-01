@@ -27,7 +27,8 @@
             :loading="recipesLoading"
             @recipe-selected="selectRecipe"
             @refresh-recipes="loadRecipes"
-            @remove-recipe="removeRecipe"
+            @recipe-saved="onRecipeSaved"
+            @recipe-removed="onRecipeRemoved"
           />
         </div>
 
@@ -217,23 +218,14 @@ export default {
       this.selectedRecipe = null
     },
 
-    async removeRecipe(recipe) {
-      if (confirm(`Are you sure you want to remove "${recipe.title}" from your collection?`)) {
-        try {
-          await mealPlanningApi.removeRecipeFromMyCollection(recipe.id)
-          
-          // Remove from local state
-          this.recipes = this.recipes.filter(r => r.id !== recipe.id)
-          
-          this.$toast?.success?.('Recipe removed from your collection') ||
-          alert('Recipe removed from your collection')
-          
-        } catch (error) {
-          console.error('Error removing recipe:', error)
-          this.$toast?.error?.('Failed to remove recipe') ||
-          alert('Failed to remove recipe')
-        }
-      }
+    async onRecipeRemoved(removedRecipe) {
+      console.log('Recipe removed event received:', removedRecipe)
+      
+      // Remove from local state
+      this.recipes = this.recipes.filter(r => r.id !== removedRecipe.id)
+      
+      // Refresh the recipes list to ensure consistency
+      await this.loadRecipes()
     },
 
     async onRecipeSaved(savedRecipe) {

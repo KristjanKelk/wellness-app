@@ -75,11 +75,11 @@
             </span>
           </div>
           <button 
-            class="remove-btn" 
-            @click.stop="$emit('remove-recipe', recipe)"
-            title="Remove from my recipes"
+            class="save-btn" 
+            @click.stop="toggleSaveRecipe(recipe)"
+            :title="recipe.is_saved_by_user ? 'Remove from my recipes' : 'Save to my recipes'"
           >
-            <i class="fas fa-trash"></i>
+            <i :class="recipe.is_saved_by_user ? 'fas fa-heart' : 'far fa-heart'"></i>
           </button>
         </div>
 
@@ -148,7 +148,7 @@ export default {
       default: false
     }
   },
-  emits: ['recipe-selected', 'refresh-recipes', 'remove-recipe'],
+  emits: ['recipe-selected', 'refresh-recipes', 'recipe-saved', 'recipe-removed'],
   data() {
     return {
       searchQuery: '',
@@ -227,6 +227,61 @@ export default {
 
     handleImageError(event) {
       event.target.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzAwIiBoZWlnaHQ9IjIwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KICA8cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjZjBmMGYwIi8+CiAgPHRleHQgeD0iNTAlIiB5PSI1MCUiIGZvbnQtZmFtaWx5PSJBcmlhbCwgc2Fucy1zZXJpZiIgZm9udC1zaXplPSIxOCIgZmlsbD0iIzk5OTk5OSIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZHk9Ii4zZW0iPkZvb2QgUmVjaXBlPC90ZXh0Pgo8L3N2Zz4K'
+    },
+
+    async toggleSaveRecipe(recipe) {
+      try {
+        // Import the API service
+        const { mealPlanningApi } = await import('@/services/mealPlanningApi')
+        
+        if (recipe.is_saved_by_user) {
+          // Remove from saved recipes
+          await mealPlanningApi.removeRecipeFromMyCollection(recipe.id)
+          
+          // Update local state
+          recipe.is_saved_by_user = false
+          
+          this.$emit('recipe-removed', recipe)
+          
+          // Show success message
+          if (this.$toast?.success) {
+            this.$toast.success('Recipe removed from your collection!')
+          } else {
+            alert('Recipe removed from your collection!')
+          }
+        } else {
+          // Save recipe
+          let response
+          if (recipe.spoonacular_id && !recipe.created_by) {
+            // Save from meal plan data
+            response = await mealPlanningApi.saveRecipeFromMealPlan(recipe)
+          } else if (recipe.id) {
+            // Save existing recipe to user's collection
+            response = await mealPlanningApi.saveRecipeToMyCollection(recipe.id)
+          }
+          
+          // Update local state
+          recipe.is_saved_by_user = true
+          
+          this.$emit('recipe-saved', response.data.recipe || recipe)
+          
+          // Show success message
+          const message = response.data.message || 'Recipe saved to your collection!'
+          if (this.$toast?.success) {
+            this.$toast.success(message)
+          } else {
+            alert(message)
+          }
+        }
+      } catch (error) {
+        console.error('Error toggling recipe save status:', error)
+        const errorMessage = error.response?.data?.message || error.message || 'Failed to update recipe'
+        if (this.$toast?.error) {
+          this.$toast.error(errorMessage)
+        } else {
+          alert(errorMessage)
+        }
+      }
     }
   }
 }
@@ -418,12 +473,12 @@ export default {
   gap: 6px;
 }
 
-.remove-btn {
+.save-btn {
   position: absolute;
   top: 12px;
   right: 12px;
-  background: rgba($error, 0.9);
-  color: $white;
+  background: rgba($white, 0.9);
+  color: $error;
   border: none;
   border-radius: 50%;
   width: 32px;
@@ -435,18 +490,28 @@ export default {
   transition: all 0.2s ease;
   opacity: 0;
   transform: scale(0.8);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 
   &:hover {
-    background: $error;
-    transform: scale(1);
+    background: $white;
+    transform: scale(1.1);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
   }
 
   i {
-    font-size: 0.9rem;
+    font-size: 1rem;
+    
+    &.fas.fa-heart {
+      color: #e74c3c; // Filled heart - red
+    }
+    
+    &.far.fa-heart {
+      color: #7f8c8d; // Unfilled heart - gray
+    }
   }
 }
 
-.recipe-card:hover .remove-btn {
+.recipe-card:hover .save-btn {
   opacity: 1;
   transform: scale(1);
 }
