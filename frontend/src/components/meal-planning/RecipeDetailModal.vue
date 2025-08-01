@@ -126,30 +126,24 @@
       </div>
       
       <div class="modal-footer">
-        <div class="footer-actions">
-          <button class="btn btn-outline" @click="$emit('close')">
-            <i class="fas fa-times"></i>
-            Close
-          </button>
-          <button 
-            class="btn" 
-            :class="recipe.is_saved_by_user ? 'btn-outline-danger' : 'btn-primary'" 
-            @click="toggleSaveRecipe" 
-            :disabled="saving"
-          >
-            <i v-if="saving" class="fas fa-spinner fa-spin"></i>
-            <i v-else :class="recipe.is_saved_by_user ? 'fas fa-heart' : 'far fa-heart'"></i>
-            {{ saving ? (recipe.is_saved_by_user ? 'Removing...' : 'Saving...') : (recipe.is_saved_by_user ? 'Remove from Recipes' : 'Save Recipe') }}
-          </button>
-          <button class="btn btn-success" @click="addToMealPlan">
-            <i class="fas fa-plus"></i>
-            Add to Meal Plan
-          </button>
-          <button class="btn btn-info" @click="generateShoppingList">
-            <i class="fas fa-shopping-cart"></i>
-            Shopping List
-          </button>
-        </div>
+        <button class="btn btn-outline" @click="$emit('close')">
+          <i class="fas fa-times"></i>
+          Close
+        </button>
+        <button 
+          v-if="localRecipe && !localRecipe.is_saved_by_user"
+          class="btn btn-primary" 
+          @click="toggleSaveRecipe" 
+          :disabled="saving"
+        >
+          <i v-if="saving" class="fas fa-spinner fa-spin"></i>
+          <i v-else class="far fa-heart"></i>
+          {{ saving ? 'Saving...' : 'Save Recipe' }}
+        </button>
+        <button class="btn btn-info" @click="generateShoppingList">
+          <i class="fas fa-shopping-cart"></i>
+          Shopping List
+        </button>
       </div>
     </div>
 
@@ -185,7 +179,21 @@ export default {
       showShoppingListModal: false,
       shoppingListData: null,
       shoppingListLoading: false,
-      shoppingListError: null
+      shoppingListError: null,
+      localRecipe: null  // Local copy to avoid mutating props
+    }
+  },
+  mounted() {
+    // Create a local copy of the recipe to avoid mutating props
+    this.localRecipe = { ...this.recipe }
+  },
+  watch: {
+    recipe: {
+      handler(newRecipe) {
+        // Update local copy when prop changes
+        this.localRecipe = { ...newRecipe }
+      },
+      immediate: true
     }
   },
   computed: {
@@ -297,46 +305,46 @@ export default {
     async toggleSaveRecipe() {
       this.saving = true
       try {
-        console.log('Toggling save status for recipe:', this.recipe)
+        console.log('Toggling save status for recipe:', this.localRecipe)
         
         // Import the API service
         const { mealPlanningApi } = await import('@/services/mealPlanningApi')
         
-        if (this.recipe.is_saved_by_user) {
+        if (this.localRecipe.is_saved_by_user) {
           // Remove from saved recipes
-          await mealPlanningApi.removeRecipeFromMyCollection(this.recipe.id)
+          await mealPlanningApi.removeRecipeFromMyCollection(this.localRecipe.id)
           
           // Update local state
-          this.recipe.is_saved_by_user = false
+          this.localRecipe.is_saved_by_user = false
           
           this.$toast?.success?.('Recipe removed from your collection!') ||
           alert('Recipe removed from your collection!')
           
           // Emit event to notify parent
-          this.$emit('recipe-removed', this.recipe)
+          this.$emit('recipe-removed', this.localRecipe)
         } else {
           // Save recipe
           let response
           
           // Check if this is a recipe from meal plan (has spoonacular_id but no recipe.id in our DB)
-          if (this.recipe.spoonacular_id && !this.recipe.created_by) {
+          if (this.localRecipe.spoonacular_id && !this.localRecipe.created_by) {
             // Save from meal plan data
-            response = await mealPlanningApi.saveRecipeFromMealPlan(this.recipe)
-          } else if (this.recipe.id) {
+            response = await mealPlanningApi.saveRecipeFromMealPlan(this.localRecipe)
+          } else if (this.localRecipe.id) {
             // Save existing recipe to user's collection
-            response = await mealPlanningApi.saveRecipeToMyCollection(this.recipe.id)
+            response = await mealPlanningApi.saveRecipeToMyCollection(this.localRecipe.id)
           } else {
             throw new Error('Invalid recipe data for saving')
           }
           
           // Update local state
-          this.recipe.is_saved_by_user = true
+          this.localRecipe.is_saved_by_user = true
           
           const message = response.data.message || 'Recipe saved to your collection!'
           this.$toast?.success?.(message) || alert(message)
           
           // Emit event to refresh recipes if needed
-          this.$emit('recipe-saved', response.data.recipe || this.recipe)
+          this.$emit('recipe-saved', response.data.recipe || this.localRecipe)
         }
         
       } catch (error) {
@@ -346,13 +354,6 @@ export default {
       } finally {
         this.saving = false
       }
-    },
-
-    addToMealPlan() {
-      console.log('Adding recipe to meal plan:', this.recipe)
-      this.$toast?.success?.('Recipe added to meal plan!') ||
-      alert('Recipe added to meal plan!')
-      this.$emit('add-to-meal-plan', this.recipe)
     },
 
     async generateShoppingList() {
@@ -399,6 +400,7 @@ export default {
       this.showShoppingListModal = false
       this.shoppingListData = null
       this.shoppingListError = null
+      this.shoppingListLoading = false  // Reset loading state
     }
   }
 }

@@ -831,6 +831,7 @@ export default {
       this.showShoppingListModal = false
       this.shoppingListData = null
       this.shoppingListError = null
+      this.shoppingListLoading = false  // Reset loading state
     },
 
     async onRecipeSaved(savedRecipe) {
@@ -856,6 +857,7 @@ $white: #ffffff;
 $gray: #6c757d;
 $gray-light: #adb5bd;
 $gray-lighter: #e9ecef;
+$error: #dc3545;
 
 .modal-overlay {
   position: fixed;
