@@ -845,6 +845,8 @@ export default {
 </script>
 
 <style lang="scss" scoped>
+@import '@/assets/styles/variables';
+
 $primary: #007bff;
 $secondary: #6c757d;
 $success: #28a745;
@@ -857,7 +859,6 @@ $white: #ffffff;
 $gray: #6c757d;
 $gray-light: #adb5bd;
 $gray-lighter: #e9ecef;
-$error: #dc3545;
 
 .modal-overlay {
   position: fixed;
