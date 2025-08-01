@@ -307,16 +307,28 @@
       @close="closeRecipeModal"
       @recipe-saved="onRecipeSaved"
     />
+
+    <!-- Shopping List Modal -->
+    <shopping-list-modal
+      v-if="showShoppingListModal"
+      :shopping-list="shoppingListData"
+      :loading="shoppingListLoading"
+      :error="shoppingListError"
+      @close="closeShoppingListModal"
+      @retry="generateShoppingList"
+    />
   </div>
 </template>
 
 <script>
 import RecipeDetailModal from './RecipeDetailModal.vue'
+import ShoppingListModal from './ShoppingListModal.vue'
 
 export default {
   name: 'MealPlanDetailModal',
   components: {
-    RecipeDetailModal
+    RecipeDetailModal,
+    ShoppingListModal
   },
   props: {
     mealPlan: {
@@ -329,7 +341,11 @@ export default {
     return {
       savingRecipe: null, // Track which recipe is being saved
       showRecipeModal: false,
-      selectedRecipe: null
+      selectedRecipe: null,
+      showShoppingListModal: false,
+      shoppingListData: null,
+      shoppingListLoading: false,
+      shoppingListError: null
     }
   },
   computed: {
@@ -741,9 +757,45 @@ export default {
       }
     },
 
-    generateShoppingList() {
-      // TODO: Implement shopping list generation
-      alert('Shopping list generation coming soon!')
+    async generateShoppingList() {
+      try {
+        this.shoppingListLoading = true
+        this.shoppingListError = null
+        this.showShoppingListModal = true
+
+        const response = await fetch(`/api/meal-planning/meal-plans/${this.mealPlan.id}/generate_shopping_list/`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${this.$store.state.auth.token}`
+          },
+          body: JSON.stringify({
+            exclude_items: [],
+            group_by_category: true
+          })
+        })
+
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`)
+        }
+
+        const data = await response.json()
+        this.shoppingListData = data.shopping_list
+        this.shoppingListLoading = false
+
+        // Show success message
+        this.$toast?.success?.('Shopping list generated successfully!') ||
+        console.log('Shopping list generated successfully!')
+
+      } catch (error) {
+        console.error('Error generating shopping list:', error)
+        this.shoppingListError = error.message || 'Failed to generate shopping list'
+        this.shoppingListLoading = false
+        
+        // Show error message
+        this.$toast?.error?.(`Error: ${this.shoppingListError}`) ||
+        alert(`Error generating shopping list: ${this.shoppingListError}`)
+      }
     },
 
     analyzePlan() {
@@ -757,6 +809,12 @@ export default {
     closeRecipeModal() {
       this.showRecipeModal = false
       this.selectedRecipe = null
+    },
+
+    closeShoppingListModal() {
+      this.showShoppingListModal = false
+      this.shoppingListData = null
+      this.shoppingListError = null
     },
 
     async onRecipeSaved(savedRecipe) {
