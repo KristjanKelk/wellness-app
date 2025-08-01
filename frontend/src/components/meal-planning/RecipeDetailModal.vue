@@ -133,13 +133,13 @@
           </button>
           <button 
             class="btn" 
-            :class="recipe.is_saved_by_user ? 'btn-outline-danger' : 'btn-primary'" 
+            :class="localRecipe?.is_saved_by_user ? 'btn-outline-danger' : 'btn-primary'" 
             @click="toggleSaveRecipe" 
             :disabled="saving"
           >
             <i v-if="saving" class="fas fa-spinner fa-spin"></i>
-            <i v-else :class="recipe.is_saved_by_user ? 'fas fa-heart' : 'far fa-heart'"></i>
-            {{ saving ? (recipe.is_saved_by_user ? 'Removing...' : 'Saving...') : (recipe.is_saved_by_user ? 'Remove from Recipes' : 'Save Recipe') }}
+            <i v-else :class="localRecipe?.is_saved_by_user ? 'fas fa-heart' : 'far fa-heart'"></i>
+            {{ saving ? (localRecipe?.is_saved_by_user ? 'Removing...' : 'Saving...') : (localRecipe?.is_saved_by_user ? 'Remove from Recipes' : 'Save Recipe') }}
           </button>
           <button class="btn btn-success" @click="addToMealPlan">
             <i class="fas fa-plus"></i>
@@ -185,7 +185,21 @@ export default {
       showShoppingListModal: false,
       shoppingListData: null,
       shoppingListLoading: false,
-      shoppingListError: null
+      shoppingListError: null,
+      localRecipe: null
+    }
+  },
+  created() {
+    // Create a local copy of the recipe to avoid mutating props
+    this.localRecipe = { ...this.recipe }
+  },
+  watch: {
+    recipe: {
+      handler(newRecipe) {
+        // Update local copy when prop changes
+        this.localRecipe = { ...newRecipe }
+      },
+      immediate: true
     }
   },
   computed: {
@@ -302,12 +316,12 @@ export default {
         // Import the API service
         const { mealPlanningApi } = await import('@/services/mealPlanningApi')
         
-        if (this.recipe.is_saved_by_user) {
+        if (this.localRecipe.is_saved_by_user) {
           // Remove from saved recipes
-          await mealPlanningApi.removeRecipeFromMyCollection(this.recipe.id)
+          await mealPlanningApi.removeRecipeFromMyCollection(this.localRecipe.id)
           
           // Update local state
-          this.recipe.is_saved_by_user = false
+          this.localRecipe.is_saved_by_user = false
           
           this.$toast?.success?.('Recipe removed from your collection!') ||
           alert('Recipe removed from your collection!')
@@ -330,13 +344,13 @@ export default {
           }
           
           // Update local state
-          this.recipe.is_saved_by_user = true
+          this.localRecipe.is_saved_by_user = true
           
           const message = response.data.message || 'Recipe saved to your collection!'
           this.$toast?.success?.(message) || alert(message)
           
           // Emit event to refresh recipes if needed
-          this.$emit('recipe-saved', response.data.recipe || this.recipe)
+          this.$emit('recipe-saved', response.data.recipe || this.localRecipe)
         }
         
       } catch (error) {

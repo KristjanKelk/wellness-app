@@ -21,6 +21,8 @@ $success-light: #c6f6d5;
 $success-dark: #2f855a;
 $warning: #f6ad55;
 $info: #4299e1;
+$light: #f8f9fa;
+$dark: #343a40;
 
 // Export colors as CSS variables for JS access
 :root {
@@ -43,6 +45,8 @@ $info: #4299e1;
   --success-dark-color: #{$success-dark};
   --warning-color: #{$warning};
   --info-color: #{$info};
+  --light-color: #{$light};
+  --dark-color: #{$dark};
 }
 
 // Component-specific colors (derived from primary palette)
