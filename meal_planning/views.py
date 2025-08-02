@@ -1347,12 +1347,13 @@ class MealPlanViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['post'])
     def get_alternatives(self, request, pk=None):
-        """Get meal alternatives for a specific meal"""
+        """Get meal alternatives for a specific meal including user's saved recipes"""
         try:
             meal_plan = self.get_object()
             day = request.data.get('day')
             meal_type = request.data.get('meal_type')
             count = request.data.get('count', 3)
+            include_user_recipes = request.data.get('include_user_recipes', True)
 
             if not day or not meal_type:
                 return Response(
@@ -1362,14 +1363,92 @@ class MealPlanViewSet(viewsets.ModelViewSet):
 
             # Use AI service to get alternatives
             ai_service = AIMealPlanningService()
-            alternatives = ai_service.generate_recipe_alternatives(meal_plan, day, meal_type, count)
+            alternatives = ai_service.generate_recipe_alternatives(
+                meal_plan, day, meal_type, count, include_user_recipes=include_user_recipes
+            )
 
-            return Response(alternatives)
+            return Response({
+                'alternatives': alternatives,
+                'total_count': len(alternatives),
+                'user_recipes_included': include_user_recipes
+            })
 
         except Exception as e:
             logger.error(f"Error getting meal alternatives: {str(e)}")
             return Response(
                 {'error': 'Failed to get alternatives', 'details': str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    @action(detail=True, methods=['post'])
+    def swap_meal(self, request, pk=None):
+        """Swap a meal with a selected alternative recipe"""
+        try:
+            meal_plan = self.get_object()
+            day = request.data.get('day')
+            meal_type = request.data.get('meal_type')
+            new_recipe = request.data.get('new_recipe')
+
+            if not day or not meal_type or not new_recipe:
+                return Response(
+                    {'error': 'day, meal_type, and new_recipe are required'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            logger.info(f"Swapping meal for plan {meal_plan.id}, day: {day}, meal_type: {meal_type}")
+
+            # Get the meal plan data
+            meal_plan_data = meal_plan.meal_plan_data or {}
+            
+            # For daily plans, the day might be the meal type
+            if meal_plan.plan_type == 'daily' and day in ['breakfast', 'lunch', 'dinner']:
+                target_day = 'day_1'
+                target_meal_type = day
+            else:
+                target_day = day
+                target_meal_type = meal_type
+
+            # Initialize day data if it doesn't exist
+            if target_day not in meal_plan_data:
+                meal_plan_data[target_day] = {}
+
+            # Update the meal with the new recipe
+            meal_plan_data[target_day][target_meal_type] = {
+                'recipe': {
+                    'id': new_recipe.get('id'),
+                    'title': new_recipe.get('title'),
+                    'image': new_recipe.get('image'),
+                    'servings': new_recipe.get('servings', 1),
+                    'readyInMinutes': new_recipe.get('readyInMinutes', 30),
+                    'summary': new_recipe.get('summary', ''),
+                    'nutrition': new_recipe.get('nutrition', {}),
+                    'ingredients': new_recipe.get('ingredients', []),
+                    'instructions': new_recipe.get('instructions', ''),
+                    'spoonacular_id': new_recipe.get('id'),
+                    'database_id': new_recipe.get('database_id'),
+                    'is_user_recipe': new_recipe.get('is_user_recipe', False),
+                    'source': new_recipe.get('source', 'external')
+                },
+                'meal_type': target_meal_type
+            }
+
+            # Save the updated meal plan
+            meal_plan.meal_plan_data = meal_plan_data
+            meal_plan.save()
+
+            logger.info(f"Successfully swapped meal for {target_meal_type} on {target_day}")
+
+            # Return the updated meal plan
+            serializer = self.get_serializer(meal_plan)
+            return Response({
+                'message': 'Meal swapped successfully',
+                'meal_plan': serializer.data
+            })
+
+        except Exception as e:
+            logger.error(f"Error swapping meal: {str(e)}")
+            return Response(
+                {'error': 'Failed to swap meal', 'details': str(e)},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 

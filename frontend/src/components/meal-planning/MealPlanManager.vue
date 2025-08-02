@@ -250,6 +250,16 @@
       :meal-plan="selectedPlanForAnalysis"
       @close="closeAnalysisModal"
     />
+
+    <!-- Alternatives Modal -->
+    <alternatives-modal
+      v-if="showAlternativesModal && alternativesModalData"
+      :plan-id="alternativesModalData.planId"
+      :day="alternativesModalData.day"
+      :meal-type="alternativesModalData.mealType"
+      @close="closeAlternativesModal"
+      @alternative-selected="handleAlternativeSelected"
+    />
   </div>
 </template>
 
@@ -257,12 +267,14 @@
 import { mealPlanningApi } from '@/services/mealPlanningApi'
 import MealPlanDetailModal from './MealPlanDetailModal.vue'
 import NutritionalAnalysisModal from './NutritionalAnalysisModal.vue'
+import AlternativesModal from './AlternativesModal.vue'
 
 export default {
   name: 'MealPlanManager',
   components: {
     MealPlanDetailModal,
-    NutritionalAnalysisModal
+    NutritionalAnalysisModal,
+    AlternativesModal
   },
   props: {
     loading: {
@@ -282,6 +294,8 @@ export default {
       selectedPlanForAnalysis: null,
       currentAnalysis: null,
       showAnalysisModal: false,
+      showAlternativesModal: false,
+      alternativesModalData: null,
       generating: false,
       showAdvancedOptions: false,
       generationStatus: null,
@@ -615,13 +629,14 @@ export default {
 
     async getMealAlternatives(planId, mealData) {
       try {
-        console.log('=== Getting Meal Alternatives ===')
+        console.log('=== Opening Meal Alternatives Modal ===')
         console.log('Plan ID:', planId)
         console.log('Meal Data:', mealData)
         
         if (!mealData) {
           console.error('getMealAlternatives: mealData is null/undefined')
-          throw new Error('Meal data is required')
+          this.showError('Meal data is required')
+          return
         }
         
         const { day, mealType } = mealData
@@ -630,22 +645,72 @@ export default {
         
         if (!day || !mealType) {
           console.error('getMealAlternatives: day or mealType missing', { day, mealType })
-          throw new Error('Day and meal type are required')
+          this.showError('Day and meal type are required')
+          return
         }
         
-        console.log('Making API call to get alternatives...')
-        const response = await mealPlanningApi.getMealAlternatives(planId, day, mealType)
-        console.log('Alternatives retrieved:', response.data?.length || 0, 'options')
+        // Set up modal data and show the modal
+        this.alternativesModalData = {
+          planId: planId,
+          day: day,
+          mealType: mealType
+        }
+        this.showAlternativesModal = true
+        
+        console.log('Alternatives modal opened')
         console.log('===============================')
-        return response.data || []
       } catch (error) {
-        console.error('=== Failed to get meal alternatives ===')
+        console.error('=== Failed to open alternatives modal ===')
+        console.error('Error message:', error.message)
+        console.error('Full error:', error)
+        console.error('=====================================')
+        this.showError(`Failed to open alternatives: ${error.message}`)
+      }
+    },
+
+    closeAlternativesModal() {
+      this.showAlternativesModal = false
+      this.alternativesModalData = null
+    },
+
+    async handleAlternativeSelected(selectionData) {
+      try {
+        console.log('=== Handling Alternative Selection ===')
+        console.log('Selection data:', selectionData)
+        
+        const { day, mealType, recipe } = selectionData
+        
+        // Use swapMeal API to replace the current meal with the selected alternative
+        const response = await mealPlanningApi.swapMeal(
+          this.alternativesModalData.planId,
+          day,
+          mealType,
+          recipe
+        )
+        
+        console.log('Meal swapped successfully:', response.data)
+        
+        // Refresh the meal plan to show the updated meal
+        await this.loadMealPlans()
+        
+        // Update the selected plan if it's the one that was modified
+        if (this.selectedPlan && this.selectedPlan.id === this.alternativesModalData.planId) {
+          const updatedPlan = this.mealPlans.find(plan => plan.id === this.selectedPlan.id)
+          if (updatedPlan) {
+            this.selectedPlan = updatedPlan
+          }
+        }
+        
+        this.showSuccess(`${mealType} meal replaced successfully with "${recipe.title}"!`)
+        console.log('========================')
+        
+      } catch (error) {
+        console.error('=== Failed to swap meal ===')
         console.error('Error message:', error.message)
         console.error('Error response:', error.response?.data)
         console.error('Full error:', error)
-        console.error('=====================================')
-        this.showError(`Failed to get meal alternatives: ${error.message}`)
-        return []
+        console.error('================================')
+        this.showError(`Failed to replace meal: ${error.message}`)
       }
     },
 
