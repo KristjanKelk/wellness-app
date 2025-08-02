@@ -47,8 +47,9 @@ class AIMealPlanningService:
             recipes = self._get_alternative_recipes(nutrition_profile, actual_meal_type, count=1)
             
             if not recipes:
-                logger.warning(f"No alternative recipes found for {actual_meal_type}")
-                return meal_plan
+                logger.warning(f"No alternative recipes found for {actual_meal_type}, using fallback")
+                # Use fallback recipes if no API results
+                recipes = self._get_fallback_recipes(actual_meal_type, count=1)
             
             # Update the meal plan data
             if hasattr(meal_plan, 'meal_plan_data') and meal_plan.meal_plan_data:
@@ -133,6 +134,12 @@ class AIMealPlanningService:
             if remaining_count > 0:
                 # Get external alternative recipes
                 external_alternatives = self._get_alternative_recipes(nutrition_profile, actual_meal_type, remaining_count)
+                
+                # If no external alternatives found, use fallback recipes
+                if not external_alternatives:
+                    logger.info(f"No external recipes found for {actual_meal_type}, using fallback alternatives")
+                    external_alternatives = self._get_fallback_recipes(actual_meal_type, remaining_count)
+                
                 alternatives.extend(external_alternatives)
                 logger.info(f"Added {len(external_alternatives)} external recipes")
             
@@ -251,6 +258,103 @@ class AIMealPlanningService:
         except Exception as e:
             logger.error(f"Error fetching alternative recipes: {str(e)}")
             return []
+
+    def _get_fallback_recipes(self, meal_type: str, count: int = 1) -> List[Dict]:
+        """
+        Get fallback recipes when API calls fail
+        
+        Args:
+            meal_type: Type of meal (breakfast, lunch, dinner)
+            count: Number of recipes to return
+            
+        Returns:
+            List of fallback recipe dictionaries
+        """
+        import random
+        
+        fallback_recipes = {
+            'breakfast': [
+                {
+                    'id': f'fallback_breakfast_{random.randint(10, 99)}',
+                    'title': 'Greek Yogurt with Granola',
+                    'summary': 'Creamy Greek yogurt topped with crunchy granola and fresh berries.',
+                    'image': '',
+                    'readyInMinutes': 5,
+                    'servings': 1,
+                    'meal_type': 'breakfast',
+                    'time': '08:00',
+                    'calories_per_serving': 280,
+                    'nutrition': {'nutrients': [{'amount': 280, 'name': 'Calories'}]}
+                },
+                {
+                    'id': f'fallback_breakfast_{random.randint(10, 99)}',
+                    'title': 'Avocado Toast',
+                    'summary': 'Toasted whole grain bread topped with mashed avocado and seasonings.',
+                    'image': '',
+                    'readyInMinutes': 10,
+                    'servings': 1,
+                    'meal_type': 'breakfast',
+                    'time': '08:00',
+                    'calories_per_serving': 320,
+                    'nutrition': {'nutrients': [{'amount': 320, 'name': 'Calories'}]}
+                }
+            ],
+            'lunch': [
+                {
+                    'id': f'fallback_lunch_{random.randint(10, 99)}',
+                    'title': 'Turkey and Hummus Wrap',
+                    'summary': 'Whole wheat wrap filled with lean turkey, hummus, and fresh vegetables.',
+                    'image': '',
+                    'readyInMinutes': 15,
+                    'servings': 1,
+                    'meal_type': 'lunch',
+                    'time': '12:30',
+                    'calories_per_serving': 420,
+                    'nutrition': {'nutrients': [{'amount': 420, 'name': 'Calories'}]}
+                },
+                {
+                    'id': f'fallback_lunch_{random.randint(10, 99)}',
+                    'title': 'Chicken Caesar Salad',
+                    'summary': 'Fresh romaine lettuce with grilled chicken, parmesan, and Caesar dressing.',
+                    'image': '',
+                    'readyInMinutes': 20,
+                    'servings': 1,
+                    'meal_type': 'lunch',
+                    'time': '12:30',
+                    'calories_per_serving': 380,
+                    'nutrition': {'nutrients': [{'amount': 380, 'name': 'Calories'}]}
+                }
+            ],
+            'dinner': [
+                {
+                    'id': f'fallback_dinner_{random.randint(10, 99)}',
+                    'title': 'Grilled Salmon with Vegetables',
+                    'summary': 'Fresh salmon fillet grilled to perfection with seasonal roasted vegetables.',
+                    'image': '',
+                    'readyInMinutes': 30,
+                    'servings': 1,
+                    'meal_type': 'dinner',
+                    'time': '19:00',
+                    'calories_per_serving': 520,
+                    'nutrition': {'nutrients': [{'amount': 520, 'name': 'Calories'}]}
+                },
+                {
+                    'id': f'fallback_dinner_{random.randint(10, 99)}',
+                    'title': 'Chicken Stir-Fry',
+                    'summary': 'Tender chicken pieces stir-fried with fresh vegetables in a light sauce.',
+                    'image': '',
+                    'readyInMinutes': 25,
+                    'servings': 1,
+                    'meal_type': 'dinner',
+                    'time': '19:00',
+                    'calories_per_serving': 450,
+                    'nutrition': {'nutrients': [{'amount': 450, 'name': 'Calories'}]}
+                }
+            ]
+        }
+        
+        recipes = fallback_recipes.get(meal_type, fallback_recipes['lunch'])
+        return random.sample(recipes, min(count, len(recipes)))
 
     def _get_user_recipes(self, user, meal_type: str, count: int = 2) -> List[Dict]:
         """

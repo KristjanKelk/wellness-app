@@ -254,6 +254,13 @@ export default {
 
   mounted() {
     this.loadAlternatives()
+    // Add escape key listener
+    document.addEventListener('keydown', this.handleEscapeKey)
+  },
+
+  beforeUnmount() {
+    // Remove escape key listener
+    document.removeEventListener('keydown', this.handleEscapeKey)
   },
 
   methods: {
@@ -317,6 +324,12 @@ export default {
       } catch (error) {
         console.error('Error selecting alternative:', error)
         this.error = 'Failed to select alternative recipe'
+      }
+    },
+
+    handleEscapeKey(event) {
+      if (event.key === 'Escape') {
+        this.$emit('close')
       }
     },
 
