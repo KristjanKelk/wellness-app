@@ -417,6 +417,14 @@ export default {
       }
     }
     console.log('=====================================')
+    
+    // Add escape key listener
+    document.addEventListener('keydown', this.handleEscapeKey)
+  },
+
+  beforeUnmount() {
+    // Remove escape key listener
+    document.removeEventListener('keydown', this.handleEscapeKey)
   },
   methods: {
     formatPlanType(type) {
@@ -861,6 +869,12 @@ export default {
       // Show success message
       this.$toast?.success?.('Recipe saved to your collection!') ||
       alert('Recipe saved to your collection!')
+    },
+
+    handleEscapeKey(event) {
+      if (event.key === 'Escape') {
+        this.$emit('close')
+      }
     }
   }
 }

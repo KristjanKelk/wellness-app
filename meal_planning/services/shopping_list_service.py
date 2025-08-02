@@ -219,16 +219,31 @@ class ShoppingListService:
                         base_quantity = float(amount_value)
                     elif isinstance(amount_value, str):
                         # Handle string amounts that might contain fractions or ranges
-                        amount_str = amount_value.strip()
+                        amount_str = str(amount_value).strip()
                         if not amount_str or amount_str.lower() in ['to taste', 'as needed', 'optional']:
                             base_quantity = 0
                         else:
-                            # Try to extract first number from string (handles cases like "1-2", "1/2", etc.)
-                            number_match = re.search(r'(\d+(?:\.\d+)?)', amount_str)
-                            if number_match:
-                                base_quantity = float(number_match.group(1))
+                            # Handle fraction strings like "1/2", "3/4", etc.
+                            if '/' in amount_str and amount_str.count('/') == 1:
+                                try:
+                                    parts = amount_str.split('/')
+                                    if len(parts) == 2 and parts[0].replace('.', '').isdigit() and parts[1].replace('.', '').isdigit():
+                                        base_quantity = float(parts[0]) / float(parts[1])
+                                    else:
+                                        # Extract first number if fraction parsing fails
+                                        number_match = re.search(r'(\d+(?:\.\d+)?)', amount_str)
+                                        base_quantity = float(number_match.group(1)) if number_match else 0
+                                except (ValueError, ZeroDivisionError):
+                                    # Try to extract first number as fallback
+                                    number_match = re.search(r'(\d+(?:\.\d+)?)', amount_str)
+                                    base_quantity = float(number_match.group(1)) if number_match else 0
                             else:
-                                base_quantity = 0
+                                # Try to extract first number from string (handles cases like "1-2", "2.5 cups", etc.)
+                                number_match = re.search(r'(\d+(?:\.\d+)?)', amount_str)
+                                if number_match:
+                                    base_quantity = float(number_match.group(1))
+                                else:
+                                    base_quantity = 0
                     else:
                         base_quantity = 0
                 except (ValueError, TypeError):
