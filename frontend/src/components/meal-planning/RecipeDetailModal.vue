@@ -107,7 +107,7 @@
                   v-model.number="adjustedServings" 
                   min="1" 
                   max="20"
-                  class="serving-input"
+                  class="serving-input no-arrows"
                   @input="validateServings"
                 />
                 <button 
@@ -1073,6 +1073,18 @@ export default {
         color: $gray-dark;
         background: transparent;
         outline: none;
+
+        &.no-arrows {
+          /* Hide number input arrows in Chrome, Safari, Edge */
+          &::-webkit-outer-spin-button,
+          &::-webkit-inner-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+          }
+
+          /* Hide number input arrows in Firefox */
+          -moz-appearance: textfield;
+        }
       }
     }
 
