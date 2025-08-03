@@ -17,6 +17,7 @@ from .serializers import (
     MealPlanSerializer, UserRecipeRatingSerializer, NutritionLogSerializer
 )
 import logging
+from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
@@ -1111,7 +1112,7 @@ class MealPlanViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['post'])
     def generate(self, request):
-        """Generate a new meal plan using the AI meal planning service"""
+        """Generate a new meal plan using the enhanced dynamic AI meal planning service"""
         try:
             # Get user's nutrition profile
             nutrition_profile = get_object_or_404(NutritionProfile, user=request.user)
@@ -1134,44 +1135,53 @@ class MealPlanViewSet(viewsets.ModelViewSet):
             else:
                 start_date_obj = start_date
 
+            # Get custom options from request
+            custom_options = {}
+            
             # Apply filters from request data
             target_calories = plan_data.get('target_calories')
             cuisine_preferences = plan_data.get('cuisine_preferences', [])
             max_cook_time = plan_data.get('max_cook_time')
+            dietary_preferences_override = plan_data.get('dietary_preferences', [])
             
-            # Update nutrition profile temporarily with form overrides
             if target_calories:
-                # Create a copy of the profile with updated calories
-                from copy import deepcopy
-                temp_profile = deepcopy(nutrition_profile)
-                temp_profile.calorie_target = target_calories
-                nutrition_profile = temp_profile
-            
+                custom_options['target_calories'] = target_calories
             if cuisine_preferences:
-                # Create a copy of the profile with updated cuisine preferences
-                from copy import deepcopy
-                if not hasattr(nutrition_profile, '__dict__'):
-                    temp_profile = deepcopy(nutrition_profile)
-                else:
-                    temp_profile = nutrition_profile
-                temp_profile.cuisine_preferences = cuisine_preferences
-                nutrition_profile = temp_profile
-
-            # Use the enhanced AI meal planning service
-            ai_meal_service = AIEnhancedMealService()
+                custom_options['cuisine_preferences'] = cuisine_preferences
+            if max_cook_time:
+                custom_options['max_cook_time'] = max_cook_time
+            if dietary_preferences_override:
+                custom_options['dietary_preferences_override'] = dietary_preferences_override
+            
+            # Use enhanced dynamic meal planning service
+            from .services.dynamic_meal_planning_service import DynamicMealPlanningService
+            from .services.enhanced_nutrition_profile_service import EnhancedNutritionProfileService
+            
+            dynamic_service = DynamicMealPlanningService()
+            profile_service = EnhancedNutritionProfileService()
             
             # Determine number of days based on plan type
             days = 1 if plan_type == 'daily' else 7
             
-            # Generate the meal plan with custom filters
-            generation_options = {}
-            if max_cook_time:
-                generation_options['max_cook_time'] = max_cook_time
+            # Create enhanced nutrition profile with overrides if provided
+            enhanced_profile = nutrition_profile
+            if custom_options:
+                # Create temporary profile with custom options
+                from copy import deepcopy
+                enhanced_profile = deepcopy(nutrition_profile)
                 
-            meal_plan_data = ai_meal_service.generate_smart_meal_plan(
-                nutrition_profile, 
+                if target_calories:
+                    enhanced_profile.calorie_target = int(target_calories)
+                if cuisine_preferences:
+                    enhanced_profile.cuisine_preferences = cuisine_preferences
+                if dietary_preferences_override:
+                    enhanced_profile.dietary_preferences = dietary_preferences_override
+            
+            # Generate comprehensive meal plan using dynamic planning
+            meal_plan_data = dynamic_service.generate_personalized_meal_plan(
+                enhanced_profile, 
                 days, 
-                generation_options=generation_options
+                custom_options
             )
             
             # Create a MealPlan object
@@ -1203,6 +1213,76 @@ class MealPlanViewSet(viewsets.ModelViewSet):
             logger.error(f"Error generating meal plan: {str(e)}")
             return Response(
                 {'error': 'Failed to generate meal plan', 'details': str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    @action(detail=False, methods=['get'])
+    def nutrition_analysis(self, request):
+        """Get enhanced nutrition analysis for the user's profile"""
+        try:
+            # Get user's nutrition profile
+            nutrition_profile = get_object_or_404(NutritionProfile, user=request.user)
+            
+            # Use enhanced nutrition profile service
+            from .services.enhanced_nutrition_profile_service import EnhancedNutritionProfileService
+            
+            profile_service = EnhancedNutritionProfileService()
+            
+            # Get comprehensive analysis
+            analysis = profile_service.analyze_and_optimize_profile(nutrition_profile)
+            
+            return Response(analysis, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            logger.error(f"Error getting nutrition analysis: {str(e)}")
+            return Response(
+                {'error': 'Failed to get nutrition analysis', 'details': str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    @action(detail=False, methods=['post'])
+    def optimize_nutrition(self, request):
+        """Get optimized nutrition targets based on custom parameters"""
+        try:
+            # Get user's nutrition profile
+            nutrition_profile = get_object_or_404(NutritionProfile, user=request.user)
+            
+            # Get parameters from request
+            fitness_goal = request.data.get('fitness_goal')
+            activity_level = request.data.get('activity_level')
+            custom_factors = request.data.get('custom_factors', {})
+            
+            # Use enhanced nutrition profile service
+            from .services.enhanced_nutrition_profile_service import EnhancedNutritionProfileService
+            
+            profile_service = EnhancedNutritionProfileService()
+            
+            # Get dynamic macro distribution
+            macro_analysis = profile_service.get_dynamic_macro_distribution(
+                nutrition_profile, fitness_goal, activity_level
+            )
+            
+            # Get adjusted calorie needs
+            calorie_analysis = profile_service.calculate_adjusted_calorie_needs(
+                nutrition_profile, custom_factors
+            )
+            
+            # Generate nutrition strategy
+            strategy = profile_service.generate_nutrition_strategy(nutrition_profile)
+            
+            response_data = {
+                'macro_analysis': macro_analysis,
+                'calorie_analysis': calorie_analysis,
+                'nutrition_strategy': strategy,
+                'generated_at': datetime.now().isoformat()
+            }
+            
+            return Response(response_data, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            logger.error(f"Error optimizing nutrition: {str(e)}")
+            return Response(
+                {'error': 'Failed to optimize nutrition', 'details': str(e)},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
