@@ -1883,7 +1883,7 @@ class NutritionLogViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
-    @action(detail=False, methods=['post'], url_path='(?P<date>[^/.]+)')
+    @action(detail=False, methods=['post', 'put'], url_path='(?P<date>[^/.]+)')
     def save_by_date(self, request, date=None):
         """Create or update nutrition log for a specific date"""
         try:
@@ -1929,6 +1929,38 @@ class NutritionLogViewSet(viewsets.ModelViewSet):
             logger.error(f"Error saving nutrition log by date: {str(e)}")
             return Response(
                 {'error': 'Failed to save nutrition log', 'details': str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    @action(detail=False, methods=['delete'], url_path='(?P<date>[^/.]+)')
+    def delete_by_date(self, request, date=None):
+        """Delete nutrition log for a specific date"""
+        try:
+            # Parse date string
+            if isinstance(date, str):
+                log_date = datetime.strptime(date, '%Y-%m-%d').date()
+            else:
+                log_date = date
+            
+            try:
+                log = self.get_queryset().get(date=log_date)
+                log.delete()
+                return Response({'message': 'Nutrition log deleted successfully'}, status=status.HTTP_200_OK)
+            except NutritionLog.DoesNotExist:
+                return Response(
+                    {'error': 'No nutrition log found for this date'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+                
+        except ValueError:
+            return Response(
+                {'error': 'Invalid date format. Use YYYY-MM-DD'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        except Exception as e:
+            logger.error(f"Error deleting nutrition log by date: {str(e)}")
+            return Response(
+                {'error': 'Failed to delete nutrition log', 'details': str(e)},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 

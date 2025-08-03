@@ -128,6 +128,26 @@
               </div>
             </div>
           </div>
+
+          <!-- Weight Goal Progress Chart -->
+          <div class="progress-card weight-goal">
+            <div class="card-header">
+              <h3>Weight Goal Progress</h3>
+              <div class="progress-indicator" :class="getWeightGoalStatusClass()">
+                {{ getWeightGoalStatusText() }}
+              </div>
+            </div>
+            <div class="weight-chart-container">
+              <ProgressChart
+                title="Weight Progress"
+                :data="weightHistoryData"
+                :goal-value="weightGoal"
+                unit="kg"
+                chart-type="line"
+                color="#8b5cf6"
+              />
+            </div>
+          </div>
         </div>
       </div>
 
@@ -277,9 +297,13 @@
 import { computed, nextTick, onMounted, ref, watch } from 'vue';
 import Chart from 'chart.js/auto';
 import HealthProfileService from '@/services/health-profile_service';
+import ProgressChart from '@/components/dashboard/ProgressChart.vue';
 
 export default {
   name: 'Progress',
+  components: {
+    ProgressChart
+  },
   setup() {
     const loading = ref(true);
     const error = ref(null);
@@ -317,6 +341,10 @@ export default {
       averageDeficit: 0,
       trend: null
     });
+
+    // Weight data
+    const weightHistoryData = ref([]);
+    const weightGoal = ref(null);
 
     // Chart ref
     const trendChart = ref(null);
@@ -514,6 +542,28 @@ export default {
       };
     };
 
+    const fetchWeightHistory = async () => {
+      try {
+        // Fetch weight history from health profiles
+        const profileResponse = await HealthProfileService.getProfile();
+        if (profileResponse.data) {
+          healthProfile.value = profileResponse.data;
+          weightGoal.value = healthProfile.value.weight_goal;
+        }
+
+        // Fetch weight history
+        const weightResponse = await HealthProfileService.getWeightHistory();
+        if (weightResponse.data) {
+          weightHistoryData.value = weightResponse.data.map(entry => ({
+            date: entry.date,
+            value: parseFloat(entry.weight)
+          }));
+        }
+      } catch (err) {
+        console.error('Error fetching weight history:', err);
+      }
+    };
+
     const updateChart = async () => {
       await nextTick();
       
@@ -689,6 +739,33 @@ export default {
       return 'High';
     };
 
+    // Weight goal status methods
+    const getWeightGoalStatusClass = () => {
+      if (!weightGoal.value || !weightHistoryData.value.length) return 'neutral';
+      const currentWeight = weightHistoryData.value[weightHistoryData.value.length - 1]?.value;
+      if (!currentWeight) return 'neutral';
+      
+      const difference = Math.abs(currentWeight - weightGoal.value);
+      const tolerance = weightGoal.value * 0.02; // 2% tolerance
+      
+      if (difference <= tolerance) return 'success';
+      if (difference <= weightGoal.value * 0.05) return 'warning';
+      return 'danger';
+    };
+
+    const getWeightGoalStatusText = () => {
+      if (!weightGoal.value || !weightHistoryData.value.length) return 'No Goal Set';
+      const currentWeight = weightHistoryData.value[weightHistoryData.value.length - 1]?.value;
+      if (!currentWeight) return 'No Data';
+      
+      const difference = currentWeight - weightGoal.value;
+      const tolerance = weightGoal.value * 0.02; // 2% tolerance
+      
+      if (Math.abs(difference) <= tolerance) return 'Goal Achieved!';
+      if (difference > 0) return 'Above Goal';
+      return 'Below Goal';
+    };
+
     const getDeficitSurplusClass = (value = null) => {
       const deficit = value !== null ? value : dailyData.value.calorieDeficitSurplus;
       if (deficit <= -200) return 'success'; // Good deficit
@@ -824,6 +901,7 @@ export default {
     // Lifecycle
     onMounted(() => {
       fetchData();
+      fetchWeightHistory();
     });
 
     return {
@@ -887,7 +965,13 @@ export default {
       // Achievement methods
       getAchievementClass,
       getAchievementText,
-      formatDate
+      formatDate,
+      
+      // Weight goal data and methods
+      weightHistoryData,
+      weightGoal,
+      getWeightGoalStatusClass,
+      getWeightGoalStatusText
     };
   }
 };
@@ -1027,6 +1111,11 @@ export default {
 .progress-card.protein { border-left-color: #3498db; }
 .progress-card.carbs { border-left-color: #f39c12; }
 .progress-card.fat { border-left-color: #9b59b6; }
+.progress-card.weight-goal { 
+  border-left-color: #8b5cf6; 
+  grid-column: 1 / -1; /* Span full width */
+  margin-top: 20px;
+}
 
 .card-header {
   display: flex;
@@ -1388,5 +1477,9 @@ export default {
   .historical-progress-section {
     padding: 20px;
   }
+}
+
+.weight-chart-container {
+  margin-top: 20px;
 }
 </style>

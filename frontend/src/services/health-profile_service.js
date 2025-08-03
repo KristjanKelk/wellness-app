@@ -102,7 +102,31 @@ class HealthProfileService {
      * @returns {Promise} - Promise resolving to nutrition log data
      */
     getNutritionLog(date) {
-        return apiClient.get(`meal-planning/api/nutrition-logs/${date}/`);
+        return apiClient.get(`meal-planning/api/nutrition-logs/${date}/`)
+            .catch(error => {
+                console.error(`Error fetching nutrition log for ${date}:`, error);
+                
+                // Return fallback data for 404 errors (no data for date)
+                if (error.response?.status === 404) {
+                    return {
+                        data: {
+                            date: date,
+                            total_calories: 0,
+                            total_protein: 0,
+                            total_carbs: 0,
+                            total_fat: 0,
+                            total_fiber: 0,
+                            calorie_deficit_surplus: 0,
+                            macro_balance_score: 0,
+                            meals_data: {},
+                            ai_analysis: {}
+                        }
+                    };
+                }
+                
+                // For other errors, re-throw to let the component handle it
+                throw error;
+            });
     }
 
     /**
@@ -117,6 +141,16 @@ class HealthProfileService {
                 start_date: startDate,
                 end_date: endDate
             }
+        }).catch(error => {
+            console.error(`Error fetching nutrition logs from ${startDate} to ${endDate}:`, error);
+            
+            // Return empty array for 404 errors
+            if (error.response?.status === 404) {
+                return { data: [] };
+            }
+            
+            // For other errors, re-throw to let the component handle it
+            throw error;
         });
     }
 
@@ -127,7 +161,11 @@ class HealthProfileService {
      * @returns {Promise} - Promise resolving to created/updated nutrition log data
      */
     saveNutritionLog(date, logData) {
-        return apiClient.post(`meal-planning/api/nutrition-logs/${date}/`, logData);
+        return apiClient.post(`meal-planning/api/nutrition-logs/${date}/`, logData)
+            .catch(error => {
+                console.error(`Error saving nutrition log for ${date}:`, error);
+                throw error;
+            });
     }
 
     /**
@@ -137,7 +175,11 @@ class HealthProfileService {
      * @returns {Promise} - Promise resolving to updated nutrition log data
      */
     updateNutritionLog(date, logData) {
-        return apiClient.put(`meal-planning/api/nutrition-logs/${date}/`, logData);
+        return apiClient.put(`meal-planning/api/nutrition-logs/${date}/`, logData)
+            .catch(error => {
+                console.error(`Error updating nutrition log for ${date}:`, error);
+                throw error;
+            });
     }
 
     /**
@@ -146,7 +188,15 @@ class HealthProfileService {
      * @returns {Promise} - Promise resolving to deletion status
      */
     deleteNutritionLog(date) {
-        return apiClient.delete(`meal-planning/api/nutrition-logs/${date}/`);
+        return apiClient.delete(`meal-planning/api/nutrition-logs/${date}/`)
+            .catch(error => {
+                console.error(`Error deleting nutrition log for ${date}:`, error);
+                // For 404 errors (already deleted), return success
+                if (error.response?.status === 404) {
+                    return { data: { message: 'Nutrition log deleted successfully' } };
+                }
+                throw error;
+            });
     }
 
     // Progress Tracking Methods
@@ -163,6 +213,19 @@ class HealthProfileService {
                 start_date: startDate,
                 end_date: endDate
             }
+        }).catch(error => {
+            console.error(`Error fetching nutrition progress summary:`, error);
+            // Return fallback data for 404 errors
+            if (error.response?.status === 404) {
+                return {
+                    data: {
+                        averages: { calories: 0, protein: 0, carbs: 0, fat: 0 },
+                        achievement_rates: { calories: 0, protein: 0, carbs: 0, fat: 0 },
+                        trends: { calories: 'stable', protein: 'stable', carbs: 'stable', fat: 'stable' }
+                    }
+                };
+            }
+            throw error;
         });
     }
 
@@ -176,6 +239,19 @@ class HealthProfileService {
             params: {
                 week_start: weekStart
             }
+        }).catch(error => {
+            console.error(`Error fetching weekly nutrition averages:`, error);
+            // Return fallback data for 404 errors
+            if (error.response?.status === 404) {
+                return {
+                    data: {
+                        week_start: weekStart,
+                        averages: { calories: 0, protein: 0, carbs: 0, fat: 0, total_deficit: 0 },
+                        days_logged: 0
+                    }
+                };
+            }
+            throw error;
         });
     }
 
@@ -191,6 +267,19 @@ class HealthProfileService {
                 start_date: startDate,
                 end_date: endDate
             }
+        }).catch(error => {
+            console.error(`Error fetching nutrition goal stats:`, error);
+            // Return fallback data for 404 errors
+            if (error.response?.status === 404) {
+                return {
+                    data: {
+                        achievement_rates: { calories: 0, protein: 0, carbs: 0, fat: 0 },
+                        days_on_target: 0,
+                        total_days: 0
+                    }
+                };
+            }
+            throw error;
         });
     }
 
