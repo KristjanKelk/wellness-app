@@ -25,6 +25,13 @@ from health_profiles.models import HealthProfile, Activity
 from .services import MilestoneService, WellnessScoreService
 from .summary_service import HealthSummaryService
 
+# Import nutrition profile for enhanced AI insights
+try:
+    from meal_planning.models import NutritionProfile
+    NUTRITION_AVAILABLE = True
+except ImportError:
+    NUTRITION_AVAILABLE = False
+
 
 class WellnessScoreViewSet(viewsets.ModelViewSet):
     """
@@ -485,6 +492,14 @@ class AIInsightViewSet(viewsets.ModelViewSet):
                 achieved_at__gte=thirty_days_ago
             )
 
+            # Get nutrition profile if available
+            nutrition_profile = None
+            if NUTRITION_AVAILABLE:
+                try:
+                    nutrition_profile = NutritionProfile.objects.get(user=user)
+                except NutritionProfile.DoesNotExist:
+                    nutrition_profile = None
+
             # Calculate activity distribution
             activity_types = recent_activities.values('activity_type').annotate(
                 count=Count('id')
@@ -525,6 +540,16 @@ class AIInsightViewSet(viewsets.ModelViewSet):
                     'recent_milestones': recent_milestones.count(),
                     'weight_entries': recent_weights.count(),
                     'weight_trend': self._calculate_weight_trend(recent_weights)
+                },
+                'nutrition': {
+                    'has_nutrition_profile': nutrition_profile is not None,
+                    'calorie_target': nutrition_profile.calorie_target if nutrition_profile else None,
+                    'protein_target': nutrition_profile.protein_target if nutrition_profile else None,
+                    'carb_target': nutrition_profile.carb_target if nutrition_profile else None,
+                    'fat_target': nutrition_profile.fat_target if nutrition_profile else None,
+                    'dietary_preferences': nutrition_profile.dietary_preferences if nutrition_profile else [],
+                    'allergies_intolerances': nutrition_profile.allergies_intolerances if nutrition_profile else [],
+                    'meals_per_day': nutrition_profile.meals_per_day if nutrition_profile else None
                 }
             }
 
@@ -541,6 +566,7 @@ class AIInsightViewSet(viewsets.ModelViewSet):
         restrictions = context['restrictions']
         activity = context['recent_activity']
         progress = context['progress']
+        nutrition = context.get('nutrition', {})
 
         # Build restrictions list
         active_restrictions = [k.replace('_', ' ') for k, v in restrictions.items() if v and k != 'other_restrictions']
@@ -571,9 +597,16 @@ PROGRESS INDICATORS:
 - Recent milestones: {progress['recent_milestones']}
 - Weight tracking: {progress['weight_entries']} entries, trend: {progress['weight_trend']}
 
+NUTRITION PROFILE:
+- Has nutrition goals: {nutrition.get('has_nutrition_profile', False)}
+- Daily calorie target: {nutrition.get('calorie_target', 'Not set')} kcal
+- Protein target: {nutrition.get('protein_target', 'Not set')}g
+- Dietary preferences: {', '.join(nutrition.get('dietary_preferences', [])) or 'None specified'}
+- Allergies/Intolerances: {', '.join(nutrition.get('allergies_intolerances', [])) or 'None specified'}
+
 Provide 4 specific recommendations:
 1. One immediate action for this week (exercise/activity focus)
-2. One nutrition advice considering dietary preferences and restrictions
+2. One nutrition advice considering dietary preferences, restrictions, and current nutrition goals
 3. One habit improvement suggestion
 4. One motivational insight based on their recent progress
 

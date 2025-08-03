@@ -35,8 +35,8 @@
           <span class="stat-value">{{ nutritionProfile?.calorie_target || 2000 }}</span>
         </div>
         <div class="stat">
-          <span class="stat-label">Meal Plans</span>
-          <span class="stat-value">{{ mealPlanCount }}</span>
+          <span class="stat-label">Protein Goal</span>
+          <span class="stat-value">{{ Math.round(nutritionProfile?.protein_target || 0) }}g</span>
         </div>
       </div>
 
@@ -61,18 +61,22 @@
 <script>
 export default {
   name: 'MealPlanningCard',
+  props: {
+    nutritionProfile: {
+      type: Object,
+      default: null
+    }
+  },
   emits: ['navigate-to-meal-planning'],
   data() {
     return {
-      recipeCount: 5, // You could fetch this from your API
-      mealPlanCount: 0,
-      nutritionProfile: null,
-      hasNutritionProfile: false
+      recipeCount: 5000 // Updated with a more realistic number
     }
   },
-  async mounted() {
-    // You could fetch nutrition profile status here
-    // For now, we'll just use placeholder data
+  computed: {
+    hasNutritionProfile() {
+      return this.nutritionProfile && this.nutritionProfile.calorie_target;
+    }
   }
 }
 </script>
