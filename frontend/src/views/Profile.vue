@@ -1,384 +1,420 @@
 <template>
   <div class="profile-container">
-    <h1>Health Profile</h1>
-    <p class="profile-description">Complete your health profile to receive personalized recommendations and insights.</p>
+    <h1>Profile Settings</h1>
+    <p class="profile-description">Complete your profile to receive personalized recommendations and insights.</p>
 
-    <div v-if="loading" class="loading-container">
-      <div class="loading-spinner"></div>
-      <p>Loading your profile data...</p>
+    <!-- Tab Navigation -->
+    <div class="profile-tabs">
+      <nav class="tabs-nav">
+        <button
+          @click="activeTab = 'general'"
+          class="tab-button"
+          :class="{ 'active': activeTab === 'general' }"
+        >
+          <i class="fas fa-user"></i>
+          General Profile
+        </button>
+        <button
+          @click="activeTab = 'nutrition'"
+          class="tab-button"
+          :class="{ 'active': activeTab === 'nutrition' }"
+        >
+          <i class="fas fa-utensils"></i>
+          Nutrition Profile
+        </button>
+      </nav>
+
+      <div class="tab-content">
+        <!-- General Profile Tab -->
+        <div v-if="activeTab === 'general'" class="tab-panel">
+          <div v-if="loading" class="loading-container">
+            <div class="loading-spinner"></div>
+            <p>Loading your profile data...</p>
+          </div>
+
+          <form v-else @submit.prevent="saveProfile" class="profile-form">
+            <!-- Personal Information Section -->
+            <section class="form-section">
+              <h2>Personal Information</h2>
+              <p class="section-description">Basic information helps us personalize your experience.</p>
+
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="age">Age</label>
+                  <input
+                    type="number"
+                    id="age"
+                    v-model.number="profile.age"
+                    placeholder="Your age"
+                    min="13"
+                    max="120"
+                  >
+                  <small v-if="validationErrors.age" class="error-text">{{ validationErrors.age }}</small>
+                </div>
+
+                <div class="form-group">
+                  <FormSelect
+                    id="gender"
+                    v-model="profile.gender"
+                    label="Gender"
+                    placeholder="Select gender"
+                    :options="[
+                      { value: 'M', label: 'Male' },
+                      { value: 'F', label: 'Female' },
+                      { value: 'O', label: 'Other' }
+                    ]"
+                  />
+                </div>
+              </div>
+            </section>
+
+            <!-- Physical Metrics Section -->
+            <section class="form-section">
+              <h2>Physical Metrics</h2>
+              <p class="section-description">Your height and weight help us calculate important health indicators like BMI.</p>
+
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="height">Height (cm)</label>
+                  <input
+                    type="number"
+                    id="height"
+                    v-model.number="profile.height_cm"
+                    placeholder="Your height in cm"
+                    min="100"
+                    max="250"
+                    step="0.1"
+                  >
+                  <small v-if="validationErrors.height_cm" class="error-text">{{ validationErrors.height_cm }}</small>
+                </div>
+
+                <div class="form-group">
+                  <label for="weight">Weight (kg)</label>
+                  <input
+                    type="number"
+                    id="weight"
+                    v-model.number="profile.weight_kg"
+                    placeholder="Your weight in kg"
+                    min="30"
+                    max="300"
+                    step="0.1"
+                  >
+                  <small v-if="validationErrors.weight_kg" class="error-text">{{ validationErrors.weight_kg }}</small>
+                </div>
+              </div>
+
+              <div class="metrics-summary" v-if="profile.height_cm && profile.weight_kg">
+                <div class="metric-item">
+                  <span class="metric-label">Current BMI:</span>
+                  <span class="metric-value">{{ calculateBMI().toFixed(1) }}</span>
+                  <span class="metric-category">{{ getBMICategory() }}</span>
+                </div>
+              </div>
+            </section>
+
+            <!-- Lifestyle & Goals Section -->
+            <section class="form-section">
+              <h2>Lifestyle & Goals</h2>
+              <p class="section-description">Tell us about your lifestyle and what you want to achieve.</p>
+
+              <div class="form-group">
+                <label for="occupation">Occupation Type</label>
+                <input
+                  type="text"
+                  id="occupation"
+                  v-model="profile.occupation_type"
+                  placeholder="e.g., Office worker, Construction, etc."
+                >
+              </div>
+
+              <div class="form-group">
+                <label for="activity">Activity Level</label>
+                <select id="activity" v-model="profile.activity_level">
+                  <option value="sedentary">Sedentary (little or no exercise)</option>
+                  <option value="light">Lightly Active (light exercise 1-3 days/week)</option>
+                  <option value="moderate">Moderately Active (moderate exercise 3-5 days/week)</option>
+                  <option value="active">Active (hard exercise 6-7 days/week)</option>
+                  <option value="very_active">Very Active (very hard exercise & physical job)</option>
+                </select>
+                <small class="help-text">Choose the option that best describes your typical week.</small>
+              </div>
+
+              <div class="form-group">
+                <label for="goal">Fitness Goal</label>
+                <select id="goal" v-model="profile.fitness_goal">
+                  <option value="weight_loss">Weight Loss</option>
+                  <option value="muscle_gain">Muscle Gain</option>
+                  <option value="general_fitness">General Fitness</option>
+                  <option value="endurance">Endurance</option>
+                  <option value="flexibility">Flexibility</option>
+                </select>
+              </div>
+
+              <div class="form-group" v-if="profile.fitness_goal === 'weight_loss' || profile.fitness_goal === 'muscle_gain'">
+                <label for="target_weight">Target Weight (kg)</label>
+                <input
+                  type="number"
+                  id="target_weight"
+                  v-model.number="profile.target_weight_kg"
+                  placeholder="Your target weight in kg"
+                  min="30"
+                  max="300"
+                  step="0.1"
+                >
+                <small v-if="validationErrors.target_weight_kg" class="error-text">{{ validationErrors.target_weight_kg }}</small>
+              </div>
+
+              <div v-if="isGoalAchieved" class="goal-achieved-message">
+                <p><strong>Congratulations!</strong> You've reached your weight goal of {{ profile.target_weight_kg }}kg!</p>
+              </div>
+            </section>
+
+            <!-- Fitness Assessment Section -->
+            <section class="form-section">
+              <h2>Fitness Assessment</h2>
+              <p class="section-description">
+                This information helps us provide more personalized fitness recommendations and track your progress.
+              </p>
+
+              <div class="subsection">
+                <h3>Current Activity</h3>
+
+                <div class="form-group">
+                  <label for="weeklyActivityDays">How many days per week do you currently exercise?</label>
+                  <input
+                    type="number"
+                    id="weeklyActivityDays"
+                    v-model.number="profile.weekly_activity_days"
+                    min="0"
+                    max="7"
+                    placeholder="0-7 days"
+                  >
+                  <small class="help-text">Enter a number between 0 and 7</small>
+                  <small v-if="validationErrors.weekly_activity_days" class="error-text">{{ validationErrors.weekly_activity_days }}</small>
+                </div>
+
+                <div class="form-group">
+                  <label>What types of exercise do you currently do?</label>
+                  <div class="checkbox-group">
+                    <div class="checkbox-item">
+                      <input type="checkbox" id="cardio" v-model="profile.does_cardio">
+                      <label for="cardio" class="checkbox-label">Cardio (running, cycling, swimming, etc.)</label>
+                    </div>
+                    <div class="checkbox-item">
+                      <input type="checkbox" id="strength" v-model="profile.does_strength">
+                      <label for="strength" class="checkbox-label">Strength Training (weights, resistance, etc.)</label>
+                    </div>
+                    <div class="checkbox-item">
+                      <input type="checkbox" id="flexibility" v-model="profile.does_flexibility">
+                      <label for="flexibility" class="checkbox-label">Flexibility (yoga, stretching, etc.)</label>
+                    </div>
+                    <div class="checkbox-item">
+                      <input type="checkbox" id="sports" v-model="profile.does_sports">
+                      <label for="sports" class="checkbox-label">Sports (team sports, racket sports, etc.)</label>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="subsection">
+                <h3>Workout Details</h3>
+
+                <div class="form-group">
+                  <label for="sessionDuration">Average workout duration</label>
+                  <select id="sessionDuration" v-model="profile.avg_session_duration">
+                    <option value="">Select duration</option>
+                    <option value="short">15-30 minutes</option>
+                    <option value="medium">30-60 minutes</option>
+                    <option value="long">60+ minutes</option>
+                  </select>
+                </div>
+
+                <div class="form-group">
+                  <label for="fitnessLevel">How would you rate your current fitness level?</label>
+                  <select id="fitnessLevel" v-model="profile.fitness_level">
+                    <option value="">Select level</option>
+                    <option value="beginner">Beginner - New to regular exercise</option>
+                    <option value="intermediate">Intermediate - Regularly active for 3+ months</option>
+                    <option value="advanced">Advanced - Consistently training for 1+ years</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="subsection">
+                <h3>Preferences</h3>
+
+                <div class="form-row">
+                  <div class="form-group">
+                    <label for="environment">Preferred exercise environment</label>
+                    <select id="environment" v-model="profile.preferred_environment">
+                      <option value="">Select preference</option>
+                      <option value="home">Home</option>
+                      <option value="gym">Gym</option>
+                      <option value="outdoors">Outdoors</option>
+                    </select>
+                  </div>
+
+                  <div class="form-group">
+                    <label for="timePreference">Preferred time to exercise</label>
+                    <select id="timePreference" v-model="profile.time_preference">
+                      <option value="">Select time</option>
+                      <option value="morning">Morning</option>
+                      <option value="afternoon">Afternoon</option>
+                      <option value="evening">Evening</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              <div class="subsection">
+                <h3>Physical Capacity</h3>
+
+                <div class="form-row">
+                  <div class="form-group">
+                    <label for="endurance">How long can you walk/run continuously? (minutes)</label>
+                    <input
+                      type="number"
+                      id="endurance"
+                      v-model.number="profile.endurance_minutes"
+                      min="0"
+                      max="300"
+                      placeholder="Enter minutes"
+                    >
+                    <small v-if="validationErrors.endurance_minutes" class="error-text">{{ validationErrors.endurance_minutes }}</small>
+                  </div>
+
+                  <div class="form-group">
+                    <label for="pushups">Maximum pushups in one set</label>
+                    <input
+                      type="number"
+                      id="pushups"
+                      v-model.number="profile.pushup_count"
+                      min="0"
+                      max="200"
+                      placeholder="Enter count"
+                    >
+                    <small v-if="validationErrors.pushup_count" class="error-text">{{ validationErrors.pushup_count }}</small>
+                  </div>
+                </div>
+
+                <div class="form-group">
+                  <label for="squats">Maximum bodyweight squats in one set</label>
+                  <input
+                    type="number"
+                    id="squats"
+                    v-model.number="profile.squat_count"
+                    min="0"
+                    max="200"
+                    placeholder="Enter count"
+                  >
+                  <small v-if="validationErrors.squat_count" class="error-text">{{ validationErrors.squat_count }}</small>
+                </div>
+              </div>
+            </section>
+
+            <!-- Dietary Preferences Section -->
+            <section class="form-section">
+              <h2>Dietary Preferences</h2>
+              <p class="section-description">
+                This helps us tailor nutritional recommendations to your dietary needs and preferences.
+              </p>
+
+              <div class="form-group">
+                <label for="dietaryPreference">Primary dietary preference</label>
+                <select id="dietaryPreference" v-model="profile.dietary_preference">
+                  <option value="">Select preference</option>
+                  <option value="omnivore">Omnivore (Eats Everything)</option>
+                  <option value="vegetarian">Vegetarian</option>
+                  <option value="vegan">Vegan</option>
+                  <option value="pescatarian">Pescatarian</option>
+                  <option value="keto">Keto</option>
+                  <option value="paleo">Paleo</option>
+                </select>
+              </div>
+
+              <div class="form-group">
+                <label>Food restrictions or allergies</label>
+                <div class="checkbox-group">
+                  <div class="checkbox-item">
+                    <input type="checkbox" id="glutenFree" v-model="profile.is_gluten_free">
+                    <label for="glutenFree" class="checkbox-label">Gluten-Free</label>
+                  </div>
+                  <div class="checkbox-item">
+                    <input type="checkbox" id="dairyFree" v-model="profile.is_dairy_free">
+                    <label for="dairyFree" class="checkbox-label">Dairy-Free</label>
+                  </div>
+                  <div class="checkbox-item">
+                    <input type="checkbox" id="nutFree" v-model="profile.is_nut_free">
+                    <label for="nutFree" class="checkbox-label">Nut-Free</label>
+                  </div>
+                  <div class="checkbox-item">
+                    <input type="checkbox" id="otherRestrictions" v-model="profile.has_other_restrictions">
+                    <label for="otherRestrictions" class="checkbox-label">Other Restrictions</label>
+                  </div>
+                </div>
+              </div>
+
+              <div class="form-group" v-if="profile.has_other_restrictions">
+                <label for="otherRestrictionsNote">Please describe your other dietary restrictions</label>
+                <textarea
+                  id="otherRestrictionsNote"
+                  v-model="profile.other_restrictions_note"
+                  rows="3"
+                  placeholder="Enter any other dietary restrictions or allergies"
+                ></textarea>
+              </div>
+            </section>
+
+            <!-- Privacy Setting -->
+            <section class="form-section">
+              <h2>Privacy Settings</h2>
+              <p class="section-description">
+                We take your privacy seriously. You control how your data is used.
+              </p>
+
+              <div class="form-group">
+                <div class="checkbox-item privacy-checkbox">
+                  <input type="checkbox" id="data_sharing" v-model="profile.data_sharing_consent">
+                  <label for="data_sharing" class="checkbox-label">
+                    I consent to share my health data for personalized recommendations
+                  </label>
+                </div>
+                <small class="help-text">Your data privacy is important to us. We use this information only to provide personalized wellness recommendations.</small>
+              </div>
+            </section>
+
+            <!-- Submit Section -->
+            <div v-if="message" class="alert" :class="successful ? 'alert-success' : 'alert-danger'">
+              <span v-if="successful">✓</span>
+              <span v-else>!</span>
+              {{ message }}
+            </div>
+
+            <div class="form-actions">
+              <button type="button" class="btn btn-secondary" @click="resetForm" :disabled="saveLoading">
+                Reset
+              </button>
+              <button type="submit" class="btn btn-primary" :disabled="saveLoading || Object.keys(validationErrors).length > 0">
+                <span v-if="saveLoading">
+                  <span class="spinner"></span>
+                  Saving...
+                </span>
+                <span v-else">Save Profile</span>
+              </button>
+            </div>
+          </form>
+        </div>
+
+        <!-- Nutrition Profile Tab -->
+        <div v-if="activeTab === 'nutrition'" class="tab-panel">
+          <nutrition-profile-setup
+            :profile="nutritionProfile"
+            :loading="nutritionProfileLoading"
+            @profile-updated="onNutritionProfileUpdated"
+          />
+        </div>
+      </div>
     </div>
-
-    <form v-else @submit.prevent="saveProfile" class="profile-form">
-      <!-- Personal Information Section -->
-      <section class="form-section">
-        <h2>Personal Information</h2>
-        <p class="section-description">Basic information helps us personalize your experience.</p>
-
-        <div class="form-row">
-          <div class="form-group">
-            <label for="age">Age</label>
-            <input
-              type="number"
-              id="age"
-              v-model.number="profile.age"
-              placeholder="Your age"
-              min="13"
-              max="120"
-            >
-            <small v-if="validationErrors.age" class="error-text">{{ validationErrors.age }}</small>
-          </div>
-
-          <div class="form-group">
-            <FormSelect
-              id="gender"
-              v-model="profile.gender"
-              label="Gender"
-              placeholder="Select gender"
-              :options="[
-                { value: 'M', label: 'Male' },
-                { value: 'F', label: 'Female' },
-                { value: 'O', label: 'Other' }
-              ]"
-            />
-          </div>
-        </div>
-      </section>
-
-      <!-- Physical Metrics Section -->
-      <section class="form-section">
-        <h2>Physical Metrics</h2>
-        <p class="section-description">Your height and weight help us calculate important health indicators like BMI.</p>
-
-        <div class="form-row">
-          <div class="form-group">
-            <label for="height">Height (cm)</label>
-            <input
-              type="number"
-              id="height"
-              v-model.number="profile.height_cm"
-              placeholder="Your height in cm"
-              min="100"
-              max="250"
-              step="0.1"
-            >
-            <small v-if="validationErrors.height_cm" class="error-text">{{ validationErrors.height_cm }}</small>
-          </div>
-
-          <div class="form-group">
-            <label for="weight">Weight (kg)</label>
-            <input
-              type="number"
-              id="weight"
-              v-model.number="profile.weight_kg"
-              placeholder="Your weight in kg"
-              min="30"
-              max="300"
-              step="0.1"
-            >
-            <small v-if="validationErrors.weight_kg" class="error-text">{{ validationErrors.weight_kg }}</small>
-          </div>
-        </div>
-
-        <div class="metrics-summary" v-if="profile.height_cm && profile.weight_kg">
-          <div class="metric-item">
-            <span class="metric-label">Current BMI:</span>
-            <span class="metric-value">{{ calculateBMI().toFixed(1) }}</span>
-            <span class="metric-category">{{ getBMICategory() }}</span>
-          </div>
-        </div>
-      </section>
-
-      <!-- Lifestyle & Goals Section -->
-      <section class="form-section">
-        <h2>Lifestyle & Goals</h2>
-        <p class="section-description">Tell us about your lifestyle and what you want to achieve.</p>
-
-        <div class="form-group">
-          <label for="occupation">Occupation Type</label>
-          <input
-            type="text"
-            id="occupation"
-            v-model="profile.occupation_type"
-            placeholder="e.g., Office worker, Construction, etc."
-          >
-        </div>
-
-        <div class="form-group">
-          <label for="activity">Activity Level</label>
-          <select id="activity" v-model="profile.activity_level">
-            <option value="sedentary">Sedentary (little or no exercise)</option>
-            <option value="light">Lightly Active (light exercise 1-3 days/week)</option>
-            <option value="moderate">Moderately Active (moderate exercise 3-5 days/week)</option>
-            <option value="active">Active (hard exercise 6-7 days/week)</option>
-            <option value="very_active">Very Active (very hard exercise & physical job)</option>
-          </select>
-          <small class="help-text">Choose the option that best describes your typical week.</small>
-        </div>
-
-        <div class="form-group">
-          <label for="goal">Fitness Goal</label>
-          <select id="goal" v-model="profile.fitness_goal">
-            <option value="weight_loss">Weight Loss</option>
-            <option value="muscle_gain">Muscle Gain</option>
-            <option value="general_fitness">General Fitness</option>
-            <option value="endurance">Endurance</option>
-            <option value="flexibility">Flexibility</option>
-          </select>
-        </div>
-
-        <div class="form-group" v-if="profile.fitness_goal === 'weight_loss' || profile.fitness_goal === 'muscle_gain'">
-          <label for="target_weight">Target Weight (kg)</label>
-          <input
-            type="number"
-            id="target_weight"
-            v-model.number="profile.target_weight_kg"
-            placeholder="Your target weight in kg"
-            min="30"
-            max="300"
-            step="0.1"
-          >
-          <small v-if="validationErrors.target_weight_kg" class="error-text">{{ validationErrors.target_weight_kg }}</small>
-        </div>
-
-        <div v-if="isGoalAchieved" class="goal-achieved-message">
-          <p><strong>Congratulations!</strong> You've reached your weight goal of {{ profile.target_weight_kg }}kg!</p>
-        </div>
-      </section>
-
-      <!-- Fitness Assessment Section -->
-      <section class="form-section">
-        <h2>Fitness Assessment</h2>
-        <p class="section-description">
-          This information helps us provide more personalized fitness recommendations and track your progress.
-        </p>
-
-        <div class="subsection">
-          <h3>Current Activity</h3>
-
-          <div class="form-group">
-            <label for="weeklyActivityDays">How many days per week do you currently exercise?</label>
-            <input
-              type="number"
-              id="weeklyActivityDays"
-              v-model.number="profile.weekly_activity_days"
-              min="0"
-              max="7"
-              placeholder="0-7 days"
-            >
-            <small class="help-text">Enter a number between 0 and 7</small>
-            <small v-if="validationErrors.weekly_activity_days" class="error-text">{{ validationErrors.weekly_activity_days }}</small>
-          </div>
-
-          <div class="form-group">
-            <label>What types of exercise do you currently do?</label>
-            <div class="checkbox-group">
-              <div class="checkbox-item">
-                <input type="checkbox" id="cardio" v-model="profile.does_cardio">
-                <label for="cardio" class="checkbox-label">Cardio (running, cycling, swimming, etc.)</label>
-              </div>
-              <div class="checkbox-item">
-                <input type="checkbox" id="strength" v-model="profile.does_strength">
-                <label for="strength" class="checkbox-label">Strength Training (weights, resistance, etc.)</label>
-              </div>
-              <div class="checkbox-item">
-                <input type="checkbox" id="flexibility" v-model="profile.does_flexibility">
-                <label for="flexibility" class="checkbox-label">Flexibility (yoga, stretching, etc.)</label>
-              </div>
-              <div class="checkbox-item">
-                <input type="checkbox" id="sports" v-model="profile.does_sports">
-                <label for="sports" class="checkbox-label">Sports (team sports, racket sports, etc.)</label>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div class="subsection">
-          <h3>Workout Details</h3>
-
-          <div class="form-group">
-            <label for="sessionDuration">Average workout duration</label>
-            <select id="sessionDuration" v-model="profile.avg_session_duration">
-              <option value="">Select duration</option>
-              <option value="short">15-30 minutes</option>
-              <option value="medium">30-60 minutes</option>
-              <option value="long">60+ minutes</option>
-            </select>
-          </div>
-
-          <div class="form-group">
-            <label for="fitnessLevel">How would you rate your current fitness level?</label>
-            <select id="fitnessLevel" v-model="profile.fitness_level">
-              <option value="">Select level</option>
-              <option value="beginner">Beginner - New to regular exercise</option>
-              <option value="intermediate">Intermediate - Regularly active for 3+ months</option>
-              <option value="advanced">Advanced - Consistently training for 1+ years</option>
-            </select>
-          </div>
-        </div>
-
-        <div class="subsection">
-          <h3>Preferences</h3>
-
-          <div class="form-row">
-            <div class="form-group">
-              <label for="environment">Preferred exercise environment</label>
-              <select id="environment" v-model="profile.preferred_environment">
-                <option value="">Select preference</option>
-                <option value="home">Home</option>
-                <option value="gym">Gym</option>
-                <option value="outdoors">Outdoors</option>
-              </select>
-            </div>
-
-            <div class="form-group">
-              <label for="timePreference">Preferred time to exercise</label>
-              <select id="timePreference" v-model="profile.time_preference">
-                <option value="">Select time</option>
-                <option value="morning">Morning</option>
-                <option value="afternoon">Afternoon</option>
-                <option value="evening">Evening</option>
-              </select>
-            </div>
-          </div>
-        </div>
-
-        <div class="subsection">
-          <h3>Physical Capacity</h3>
-
-          <div class="form-row">
-            <div class="form-group">
-              <label for="endurance">How long can you walk/run continuously? (minutes)</label>
-              <input
-                type="number"
-                id="endurance"
-                v-model.number="profile.endurance_minutes"
-                min="0"
-                max="300"
-                placeholder="Enter minutes"
-              >
-              <small v-if="validationErrors.endurance_minutes" class="error-text">{{ validationErrors.endurance_minutes }}</small>
-            </div>
-
-            <div class="form-group">
-              <label for="pushups">Maximum pushups in one set</label>
-              <input
-                type="number"
-                id="pushups"
-                v-model.number="profile.pushup_count"
-                min="0"
-                max="200"
-                placeholder="Enter count"
-              >
-              <small v-if="validationErrors.pushup_count" class="error-text">{{ validationErrors.pushup_count }}</small>
-            </div>
-          </div>
-
-          <div class="form-group">
-            <label for="squats">Maximum bodyweight squats in one set</label>
-            <input
-              type="number"
-              id="squats"
-              v-model.number="profile.squat_count"
-              min="0"
-              max="200"
-              placeholder="Enter count"
-            >
-            <small v-if="validationErrors.squat_count" class="error-text">{{ validationErrors.squat_count }}</small>
-          </div>
-        </div>
-      </section>
-
-      <!-- Dietary Preferences Section -->
-      <section class="form-section">
-        <h2>Dietary Preferences</h2>
-        <p class="section-description">
-          This helps us tailor nutritional recommendations to your dietary needs and preferences.
-        </p>
-
-        <div class="form-group">
-          <label for="dietaryPreference">Primary dietary preference</label>
-          <select id="dietaryPreference" v-model="profile.dietary_preference">
-            <option value="">Select preference</option>
-            <option value="omnivore">Omnivore (Eats Everything)</option>
-            <option value="vegetarian">Vegetarian</option>
-            <option value="vegan">Vegan</option>
-            <option value="pescatarian">Pescatarian</option>
-            <option value="keto">Keto</option>
-            <option value="paleo">Paleo</option>
-          </select>
-        </div>
-
-        <div class="form-group">
-          <label>Food restrictions or allergies</label>
-          <div class="checkbox-group">
-            <div class="checkbox-item">
-              <input type="checkbox" id="glutenFree" v-model="profile.is_gluten_free">
-              <label for="glutenFree" class="checkbox-label">Gluten-Free</label>
-            </div>
-            <div class="checkbox-item">
-              <input type="checkbox" id="dairyFree" v-model="profile.is_dairy_free">
-              <label for="dairyFree" class="checkbox-label">Dairy-Free</label>
-            </div>
-            <div class="checkbox-item">
-              <input type="checkbox" id="nutFree" v-model="profile.is_nut_free">
-              <label for="nutFree" class="checkbox-label">Nut-Free</label>
-            </div>
-            <div class="checkbox-item">
-              <input type="checkbox" id="otherRestrictions" v-model="profile.has_other_restrictions">
-              <label for="otherRestrictions" class="checkbox-label">Other Restrictions</label>
-            </div>
-          </div>
-        </div>
-
-        <div class="form-group" v-if="profile.has_other_restrictions">
-          <label for="otherRestrictionsNote">Please describe your other dietary restrictions</label>
-          <textarea
-            id="otherRestrictionsNote"
-            v-model="profile.other_restrictions_note"
-            rows="3"
-            placeholder="Enter any other dietary restrictions or allergies"
-          ></textarea>
-        </div>
-      </section>
-
-      <!-- Privacy Setting -->
-      <section class="form-section">
-        <h2>Privacy Settings</h2>
-        <p class="section-description">
-          We take your privacy seriously. You control how your data is used.
-        </p>
-
-        <div class="form-group">
-          <div class="checkbox-item privacy-checkbox">
-            <input type="checkbox" id="data_sharing" v-model="profile.data_sharing_consent">
-            <label for="data_sharing" class="checkbox-label">
-              I consent to share my health data for personalized recommendations
-            </label>
-          </div>
-          <small class="help-text">Your data privacy is important to us. We use this information only to provide personalized wellness recommendations.</small>
-        </div>
-      </section>
-
-      <!-- Submit Section -->
-      <div v-if="message" class="alert" :class="successful ? 'alert-success' : 'alert-danger'">
-        <span v-if="successful">✓</span>
-        <span v-else>!</span>
-        {{ message }}
-      </div>
-
-      <div class="form-actions">
-        <button type="button" class="btn btn-secondary" @click="resetForm" :disabled="saveLoading">
-          Reset
-        </button>
-        <button type="submit" class="btn btn-primary" :disabled="saveLoading || Object.keys(validationErrors).length > 0">
-          <span v-if="saveLoading">
-            <span class="spinner"></span>
-            Saving...
-          </span>
-          <span v-else>Save Profile</span>
-        </button>
-      </div>
-    </form>
   </div>
 </template>
 
@@ -386,11 +422,13 @@
 import HealthProfileService from '../services/health-profile_service';
 import AnalyticsService from "../services/analytics.service";
 import FormSelect from '@/components/ui/FormSelect.vue';
+import NutritionProfileSetup from '@/components/meal-planning/NutritionProfileSetup.vue';
 
 export default {
   name: 'Profile',
   components: {
-    FormSelect
+    FormSelect,
+    NutritionProfileSetup
   },
   data() {
     return {
@@ -435,11 +473,18 @@ export default {
       saveLoading: false,
       message: '',
       successful: false,
-      validationErrors: {}
+      validationErrors: {},
+      activeTab: 'general', // Default to general profile tab
+      nutritionProfile: {
+        // Placeholder for nutrition profile data
+        // This will be populated by the NutritionProfileSetup component
+      },
+      nutritionProfileLoading: false,
     };
   },
   mounted() {
     this.fetchProfile();
+    this.loadNutritionProfile();
   },
   computed: {
     isGoalAchieved() {
@@ -702,7 +747,45 @@ export default {
          .catch(error => {
            console.error('Error updating wellness score:', error);
          });
-    }
+    },
+
+         async loadNutritionProfile() {
+       this.nutritionProfileLoading = true;
+       try {
+         // Import the API service
+         const { mealPlanningApi } = await import('@/services/mealPlanningApi');
+         const response = await mealPlanningApi.getNutritionProfile();
+         this.nutritionProfile = response.data;
+       } catch (error) {
+         console.error('Failed to load nutrition profile:', error);
+         // Create default profile if none exists
+         this.nutritionProfile = {
+           calorie_target: 2000,
+           protein_target: 100,
+           carb_target: 250,
+           fat_target: 67,
+           dietary_preferences: [],
+           allergies_intolerances: [],
+           cuisine_preferences: [],
+           disliked_ingredients: [],
+           meals_per_day: 3,
+           timezone: 'Europe/Tallinn'
+         };
+       } finally {
+         this.nutritionProfileLoading = false;
+       }
+     },
+
+     onNutritionProfileUpdated(updatedProfile) {
+       this.nutritionProfile = updatedProfile;
+       this.nutritionProfileLoading = false;
+       this.message = 'Nutrition profile updated successfully!';
+       this.successful = true;
+       // Refresh the component
+       this.$nextTick(() => {
+         this.$forceUpdate();
+       });
+     }
   }
 };
 </script>
@@ -992,5 +1075,87 @@ textarea {
 .goal-achieved-message p {
   margin-bottom: 0.5rem;
   color: darken($success, 10%);
+}
+
+// Tab Styles
+.profile-tabs {
+  background: $white;
+  border-radius: $border-radius-lg;
+  box-shadow: $shadow;
+  overflow: hidden;
+  margin-top: $spacing-4;
+}
+
+.tabs-nav {
+  display: flex;
+  background: $gray-light;
+  border-bottom: 1px solid $gray-lighter;
+}
+
+.tab-button {
+  flex: 1;
+  padding: $spacing-4 $spacing-6;
+  border: none;
+  background: transparent;
+  color: $gray;
+  font-size: 1rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: $spacing-2;
+
+  i {
+    font-size: 0.9rem;
+  }
+
+  &:hover {
+    background: rgba($primary, 0.1);
+    color: $primary;
+  }
+
+  &.active {
+    background: $primary;
+    color: $white;
+    box-shadow: inset 0 -3px 0 rgba($white, 0.3);
+  }
+}
+
+.tab-content {
+  min-height: 600px;
+}
+
+.tab-panel {
+  padding: $spacing-6;
+  animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+// Responsive design for tabs
+@media (max-width: 768px) {
+  .tabs-nav {
+    flex-direction: column;
+  }
+
+  .tab-button {
+    justify-content: flex-start;
+    padding: $spacing-3 $spacing-4;
+  }
+
+  .tab-panel {
+    padding: $spacing-4;
+  }
 }
 </style>

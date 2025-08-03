@@ -32,14 +32,6 @@
           />
         </div>
 
-        <div v-if="activeTab === 'profile'" class="tab-panel">
-          <nutrition-profile-setup
-            :profile="nutritionProfile"
-            :loading="profileLoading"
-            @profile-updated="onProfileUpdated"
-          />
-        </div>
-
         <div v-if="activeTab === 'meal-plans'" class="tab-panel">
           <meal-plan-manager
             :loading="mealPlansLoading"
@@ -68,7 +60,6 @@
 
 <script>
 import RecipeBrowser from '../components/meal-planning/RecipeBrowser.vue'
-import NutritionProfileSetup from '../components/meal-planning/NutritionProfileSetup.vue'
 import MealPlanManager from '../components/meal-planning/MealPlanManager.vue'
 import ComingSoonCard from '../components/meal-planning/ComingSoonCard.vue'
 import RecipeDetailModal from '../components/meal-planning/RecipeDetailModal.vue'
@@ -78,7 +69,6 @@ export default {
   name: 'MealPlanningDashboard',
   components: {
     RecipeBrowser,
-    NutritionProfileSetup,
     MealPlanManager,
     ComingSoonCard,
     RecipeDetailModal
@@ -88,14 +78,12 @@ export default {
       activeTab: 'recipes',
       tabs: [
         { id: 'recipes', name: 'My Recipes', icon: 'fas fa-utensils' },
-        { id: 'profile', name: 'Nutrition Profile', icon: 'fas fa-user-cog' },
         { id: 'meal-plans', name: 'Meal Plans', icon: 'fas fa-calendar-alt' },
         { id: 'analytics', name: 'Analytics', icon: 'fas fa-chart-line' }
       ],
       recipes: [],
       nutritionProfile: null,
       recipesLoading: false,
-      profileLoading: false,
       mealPlansLoading: false,
       showRecipeModal: false,
       selectedRecipe: null
@@ -169,7 +157,6 @@ export default {
     },
 
     async loadNutritionProfile() {
-      this.profileLoading = true
       try {
         const response = await mealPlanningApi.getNutritionProfile()
         this.nutritionProfile = response.data
@@ -188,25 +175,10 @@ export default {
           meals_per_day: 3,
           timezone: 'Europe/Tallinn'
         }
-      } finally {
-        this.profileLoading = false
       }
     },
 
-    // Fixed: Handle profile updates properly
-    onProfileUpdated(updatedProfile) {
-      // Update local state with the new profile data
-      this.nutritionProfile = { ...updatedProfile }
 
-      // Optionally reload related data that depends on the profile
-      // For example, if meal plans depend on the nutrition profile
-      if (this.activeTab === 'meal-plans') {
-        // Refresh meal plans since preferences might have changed
-        this.$nextTick(() => {
-          this.$forceUpdate()
-        })
-      }
-    },
 
     selectRecipe(recipe) {
       this.selectedRecipe = recipe
