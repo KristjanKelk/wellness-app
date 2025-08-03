@@ -254,6 +254,7 @@ export default {
     this.localRecipe = { ...this.recipe }
     // Initialize serving size to recipe's original serving size
     this.adjustedServings = this.recipe.servings || 4
+
   },
   watch: {
     recipe: {
@@ -262,6 +263,7 @@ export default {
         this.localRecipe = { ...newRecipe }
         // Reset serving size to recipe's original serving size
         this.adjustedServings = newRecipe.servings || 4
+
       },
       immediate: true
     }
@@ -638,6 +640,7 @@ export default {
           this.$toast?.success?.(message) || alert(message)
           
           // Emit the saved recipe
+
           this.$emit('recipe-saved', response.data.recipe || this.localRecipe)
         }
         

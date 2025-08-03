@@ -953,7 +953,8 @@ export default {
 </script>
 
 <style lang="scss" scoped>
-@import '@/assets/styles/variables';
+
+@import '@/assets/styles/_variables';
 
 $primary: #007bff;
 $secondary: #6c757d;
@@ -967,6 +968,7 @@ $white: #ffffff;
 $gray: #6c757d;
 $gray-light: #adb5bd;
 $gray-lighter: #e9ecef;
+
 
 .modal-overlay {
   position: fixed;
@@ -1535,11 +1537,11 @@ $gray-lighter: #e9ecef;
   }
 
   &.btn-danger {
-    background: $danger;
+    background: $error;
     color: $white;
 
     &:hover {
-      background: darken($danger, 10%);
+      background: darken($error, 10%);
     }
   }
 
