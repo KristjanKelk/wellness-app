@@ -131,14 +131,15 @@
           Close
         </button>
         <button 
-          v-if="localRecipe && !localRecipe.is_saved_by_user"
-          class="btn btn-primary" 
+          v-if="localRecipe"
+          :class="['btn', localRecipe.is_saved_by_user ? 'btn-success' : 'btn-primary']" 
           @click="toggleSaveRecipe" 
           :disabled="saving"
         >
           <i v-if="saving" class="fas fa-spinner fa-spin"></i>
+          <i v-else-if="localRecipe.is_saved_by_user" class="fas fa-heart"></i>
           <i v-else class="far fa-heart"></i>
-          {{ saving ? 'Saving...' : 'Save Recipe' }}
+          {{ saving ? (localRecipe.is_saved_by_user ? 'Removing...' : 'Saving...') : (localRecipe.is_saved_by_user ? 'Saved' : 'Save Recipe') }}
         </button>
         <button class="btn btn-info" @click="generateShoppingList">
           <i class="fas fa-shopping-cart"></i>
@@ -317,6 +318,11 @@ export default {
     },
 
     async toggleSaveRecipe() {
+      if (!this.localRecipe) {
+        console.warn('No recipe provided to toggle')
+        return
+      }
+      
       this.saving = true
       try {
         console.log('Toggling save status for recipe:', this.localRecipe)
@@ -332,6 +338,12 @@ export default {
             throw new Error('Cannot remove recipe: No recipe ID found')
           }
           
+          // Check if this is a fallback recipe ID
+          const isFallbackRecipe = this.localRecipe.id.toString().startsWith('fallback_')
+          if (isFallbackRecipe) {
+            throw new Error('Cannot remove fallback recipe: Not saved in database')
+          }
+          
           response = await mealPlanningApi.removeRecipeFromMyCollection(this.localRecipe.id)
           
           // Update local state
@@ -340,15 +352,17 @@ export default {
           const message = response.data?.message || 'Recipe removed from your collection!'
           this.$toast?.success?.(message) || alert(message)
         } else {
-          // Save recipe - handle both spoonacular and existing recipes
+          // Save recipe - handle different recipe types
+          const isFallbackRecipe = this.localRecipe.id && this.localRecipe.id.toString().startsWith('fallback_')
+          
           if (this.localRecipe.spoonacular_id && !this.localRecipe.created_by) {
             // This is a spoonacular recipe from meal plan
             response = await mealPlanningApi.saveRecipeFromMealPlan(this.localRecipe)
-          } else if (this.localRecipe.id) {
-            // This is an existing recipe in the database
+          } else if (this.localRecipe.id && !isFallbackRecipe && this.localRecipe.created_by) {
+            // This is an existing recipe in the database created by a user
             response = await mealPlanningApi.saveRecipeToMyCollection(this.localRecipe.id)
           } else {
-            // This is recipe data that needs to be saved
+            // This is recipe data that needs to be saved (fallback recipes, new recipes, etc.)
             response = await mealPlanningApi.saveRecipeFromMealPlan(this.localRecipe)
           }
           
@@ -365,23 +379,34 @@ export default {
       } catch (error) {
         console.error('Error toggling recipe save status:', error)
         
-        let errorMessage = 'An error occurred'
+        let errorMessage = 'An error occurred while saving the recipe'
         
-        if (error.response?.status === 404) {
-          errorMessage = 'Recipe not found. It may have been removed.'
+        if (!navigator.onLine) {
+          errorMessage = 'No internet connection. Please check your network and try again.'
+        } else if (error.response?.status === 404) {
+          errorMessage = 'Recipe not found. This may be a temporary recipe that cannot be saved.'
         } else if (error.response?.status === 403) {
-          errorMessage = 'You don\'t have permission to perform this action.'
+          errorMessage = 'You don\'t have permission to perform this action. Please log in again.'
         } else if (error.response?.status === 500) {
-          errorMessage = 'Server error. Please try again later.'
+          errorMessage = 'Server error. Please try again in a moment.'
+        } else if (error.response?.status === 400) {
+          errorMessage = error.response?.data?.message || 'Invalid recipe data. Please try again.'
         } else if (error.response?.data?.error) {
           errorMessage = error.response.data.error
         } else if (error.response?.data?.message) {
           errorMessage = error.response.data.message
+        } else if (error.message?.includes('Network Error')) {
+          errorMessage = 'Network error. Please check your connection and try again.'
         } else if (error.message) {
           errorMessage = error.message
         }
         
         this.$toast?.error?.(errorMessage) || alert(`Error: ${errorMessage}`)
+        
+        // Reset the save state if it was changed optimistically
+        if (this.localRecipe.is_saved_by_user) {
+          this.localRecipe.is_saved_by_user = false
+        }
       } finally {
         this.saving = false
       }
@@ -393,7 +418,30 @@ export default {
         this.shoppingListError = null
         this.showShoppingListModal = true
 
-        const response = await fetch(`/api/meal-planning/recipes/${this.recipe.id}/generate_shopping_list/`, {
+        // Check if this is a fallback recipe
+        const recipeId = this.localRecipe?.id || this.recipe?.id
+        const isFallbackRecipe = recipeId && recipeId.toString().startsWith('fallback_')
+        
+        if (isFallbackRecipe) {
+          // Generate shopping list from recipe data directly for fallback recipes
+          const ingredients = this.localRecipe?.ingredients_data || this.localRecipe?.ingredients || []
+          this.shoppingListData = {
+            recipe_title: this.localRecipe.title || 'Recipe',
+            total_servings: 1,
+            items: ingredients.map(ingredient => ({
+              ingredient: ingredient.original || ingredient.name || 'Unknown ingredient',
+              quantity: 1,
+              unit: '',
+              category: 'Other'
+            }))
+          }
+          this.shoppingListLoading = false
+          this.$toast?.success?.('Shopping list generated successfully!') ||
+          console.log('Shopping list generated successfully!')
+          return
+        }
+
+        const response = await fetch(`/api/meal-planning/recipes/${recipeId}/generate_shopping_list/`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
