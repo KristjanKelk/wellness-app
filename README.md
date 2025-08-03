@@ -2,6 +2,15 @@
 
 A comprehensive health and fitness tracking application that leverages artificial intelligence to provide personalized wellness insights and recommendations. Built with Django REST Framework and Vue.js.
 
+## 🌐 Live Demo
+
+**Experience the platform live on Render:**
+- **Frontend Application**: [https://wellness-app-fronend.onrender.com](https://wellness-app-fronend.onrender.com)
+- **Backend API**: [https://wellness-app-tx2c.onrender.com](https://wellness-app-tx2c.onrender.com)
+- **API Health Check**: [https://wellness-app-tx2c.onrender.com/api/health/](https://wellness-app-tx2c.onrender.com/api/health/)
+
+*Note: The application is hosted on Render's free tier, which may experience brief startup delays (15-30 seconds) if the service has been inactive.*
+
 ##  Features
 
 ### Core Functionality
@@ -13,6 +22,14 @@ A comprehensive health and fitness tracking application that leverages artificia
 - ** Activity Tracking**: Log workouts, track different exercise types, monitor calories and distances
 - ** Goal Management**: Set and track fitness goals with progress indicators and achievement notifications
 
+### Meal Planning & Nutrition
+- ** Recipe Database**: Browse thousands of recipes with detailed nutritional information
+- ** Smart Recipe Search**: Advanced filtering by dietary restrictions, cuisine type, and nutritional content
+- ** AI Meal Planning**: Generate personalized weekly meal plans based on dietary preferences and health goals
+- ** Recipe Rating System**: Rate and save favorite recipes for future meal planning
+- ** Shopping List Generation**: Automatically create shopping lists from selected meal plans
+- ** Spoonacular Integration**: Powered by comprehensive recipe and nutrition database
+
 ### Advanced Features
 - ** Email Verification**: Secure account activation and password recovery
 - ** Data Privacy**: GDPR-compliant data handling with encryption at rest and in transit
@@ -20,6 +37,7 @@ A comprehensive health and fitness tracking application that leverages artificia
 - ** Real-time Updates**: Live progress tracking and instant feedback
 - ** Data Export**: Export all personal health data in JSON format
 - ** Milestone Tracking**: Automatic achievement detection and celebration
+- ** Service Hibernation Handling**: Intelligent backend wakeup for seamless user experience
 
 ## 🛠 Technical Stack
 
@@ -28,8 +46,10 @@ A comprehensive health and fitness tracking application that leverages artificia
 - **Database**: PostgreSQL with optimized queries
 - **Authentication**: JWT with SimpleJWT, OAuth2 integration
 - **AI Integration**: OpenAI GPT-3.5-turbo for health insights
+- **Recipe API**: Spoonacular API for meal planning and nutrition data
 - **Security**: 2FA with TOTP, email verification, rate limiting
 - **API Documentation**: RESTful APIs with proper serialization
+- **Deployment**: Render.com with environment-based configuration
 
 ### Frontend
 - **Framework**: Vue.js 3 with Composition API
@@ -38,11 +58,13 @@ A comprehensive health and fitness tracking application that leverages artificia
 - **UI/UX**: Custom component library with SCSS styling
 - **Charts**: Chart.js for data visualization
 - **HTTP Client**: Axios with interceptors for token refresh
+- **Service Management**: Intelligent backend hibernation handling
 
 ### Development Tools
 - **Code Quality**: ESLint for JavaScript, proper Python formatting
 - **Build Tools**: Vue CLI with hot reloading
 - **Version Control**: Git with feature branch workflow
+- **Deployment**: Automated deployment pipeline with Render.com
 
 ## 📁 Project Architecture
 
@@ -78,13 +100,19 @@ wellness-platform/
     └── public/                  # Static assets
 ```
 
-## 🚀 Quick Start
+## 🚀 Getting Started
+
+### Quick Demo
+Visit the live application at [wellness-app-fronend.onrender.com](https://wellness-app-fronend.onrender.com) to explore all features without local setup.
+
+*First load may take 15-30 seconds as the service wakes from hibernation.*
 
 ### Prerequisites
 - Python 3.9+
 - Node.js 16+
 - PostgreSQL 12+
 - OpenAI API key (for AI features)
+- Spoonacular API key (for meal planning features)
 
 ### Backend Setup
 
@@ -113,6 +141,7 @@ wellness-platform/
    # Create .env file with:
    SECRET_KEY=your-secret-key
    OPENAI_API_KEY=your-openai-api-key
+   SPOONACULAR_API_KEY=your-spoonacular-api-key
    GOOGLE_CLIENT_ID=your-google-oauth-client-id
    GOOGLE_CLIENT_SECRET=your-google-oauth-secret
    GITHUB_CLIENT_ID=your-github-oauth-client-id
@@ -138,6 +167,22 @@ wellness-platform/
 2. **Access the application**
    - Frontend: http://localhost:8080
    - Backend API: http://localhost:8000/api/
+
+## 🌍 Deployment & Production
+
+### Live Environment
+The application is deployed on Render.com with the following configuration:
+
+- **Backend Service**: `wellness-app-tx2c.onrender.com`
+- **Frontend Service**: `wellness-app-fronend.onrender.com`
+- **Environment**: Production-ready with all security features enabled
+- **Database**: PostgreSQL with SSL encryption
+- **CORS**: Configured for secure cross-origin requests
+
+### Service Management
+- **Auto-wake**: The frontend automatically wakes hibernating backend services
+- **Health Monitoring**: Built-in health checks and service status indicators
+- **Error Handling**: Graceful handling of service timeouts and connectivity issues
 
 ## 📊 API Documentation
 
@@ -177,9 +222,18 @@ POST /api/recipes/search/                 # Advanced recipe search
 POST /api/recipes/{id}/rate/              # Rate a recipe
 GET/POST /api/meal-plans/                 # Manage meal plans
 POST /api/meal-plans/generate/            # Generate meal plan with AI
+GET /api/shopping-lists/                  # Generate shopping lists
+POST /api/recipes/favorites/              # Manage favorite recipes
 ```
 Recipe list and search endpoints support pagination. Clients may specify
 `page_size` to control results per page (default is 20).
+
+### Meal Planning System
+- **Recipe Integration**: Comprehensive database with 300k+ recipes
+- **Dietary Preferences**: Support for vegetarian, vegan, gluten-free, keto, and custom restrictions
+- **Nutritional Analysis**: Detailed macronutrient and micronutrient information
+- **Shopping List Generation**: Automatic ingredient consolidation and quantity calculation
+- **Meal Plan Customization**: Weekly planning with breakfast, lunch, dinner, and snack options
 
 ## 🏗 Key Features Implementation
 
@@ -226,6 +280,17 @@ Automatic tracking and celebration of achievements:
 ## 🙏 Acknowledgments
 
 - OpenAI for AI-powered health insights
+- Spoonacular API for comprehensive recipe and nutrition data
 - Chart.js for beautiful data visualizations
 - Vue.js community for excellent documentation
 - Django REST Framework for robust API development
+- Render.com for reliable cloud hosting
+
+---
+
+**🔗 Quick Links:**
+- [Live Application](https://wellness-app-fronend.onrender.com)
+- [API Documentation](https://wellness-app-tx2c.onrender.com/api/)
+- [Health Check](https://wellness-app-tx2c.onrender.com/api/health/)
+
+*Built with ❤️ for better health and wellness*
