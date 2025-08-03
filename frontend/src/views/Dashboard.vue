@@ -257,7 +257,8 @@ export default {
 
     // Fetch nutrition profile separately (might not exist yet)
     try {
-      const nutritionResponse = await HealthProfileService.getNutritionProfile();
+      const { mealPlanningApi } = await import('@/services/mealPlanningApi');
+      const nutritionResponse = await mealPlanningApi.getNutritionProfile();
       this.nutritionProfile = nutritionResponse.data;
     } catch (nutritionError) {
       console.warn('Nutrition profile not found:', nutritionError);
