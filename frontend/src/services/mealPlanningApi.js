@@ -150,6 +150,10 @@ export const mealPlanningApi = {
     return api.delete(`/recipes/${recipeId}/`)
   },
 
+  adjustRecipePortions(recipeId, servings) {
+    return api.post(`/recipes/${recipeId}/adjust_portions/`, { servings })
+  },
+
   getMyRecipes(params = {}) {
     // Get only user's saved recipes
     const cleanParams = { ...params, my_recipes: 'true' }
@@ -230,7 +234,7 @@ export const mealPlanningApi = {
   // Nutrition Profile endpoints with improved error handling
   async getNutritionProfile() {
     try {
-      return await api.get('/nutrition-profile/current/')
+      return await api.get('/nutrition-profile/my_profile/')
     } catch (error) {
       if (error.response?.status === 404) {
         // Return a default profile structure if none exists
@@ -253,12 +257,12 @@ export const mealPlanningApi = {
   async updateNutritionProfile(profileData) {
     try {
       // Try PATCH first (most RESTful)
-      return await api.patch('/nutrition-profile/current/', profileData)
+      return await api.patch('/nutrition-profile/my_profile/', profileData)
     } catch (error) {
       if (error.response?.status === 405) {
         // If PATCH not allowed, try PUT
         try {
-          return await api.put('/nutrition-profile/current/', profileData)
+          return await api.put('/nutrition-profile/my_profile/', profileData)
         } catch (putError) {
           if (putError.response?.status === 405) {
             // If PUT also not allowed, try POST
@@ -342,13 +346,14 @@ export const mealPlanningApi = {
   },
 
   // New AI-powered methods with fallbacks
-  async getMealAlternatives(planId, day, mealType, count = 3) {
+  async getMealAlternatives(planId, day, mealType, count = 3, includeUserRecipes = true) {
     try {
-      console.log('Getting meal alternatives:', { planId, day, mealType, count })
+      console.log('Getting meal alternatives:', { planId, day, mealType, count, includeUserRecipes })
       return await api.post(`/meal-plans/${planId}/get_alternatives/`, {
         day: day,
         meal_type: mealType,
-        count: count
+        count: count,
+        include_user_recipes: includeUserRecipes
       })
     } catch (error) {
       if (error.response?.status === 404) {

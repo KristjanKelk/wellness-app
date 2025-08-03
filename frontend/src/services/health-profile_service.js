@@ -11,6 +11,14 @@ class HealthProfileService {
     }
 
     /**
+     * Get the current user's health profile (alias for getHealthProfile)
+     * @returns {Promise} - Promise resolving to health profile data
+     */
+    getProfile() {
+        return this.getHealthProfile();
+    }
+
+    /**
      * Update the current user's health profile
      * @param {Object} profileData - Health profile data to update
      * @returns {Promise} - Promise resolving to updated profile data
@@ -84,6 +92,246 @@ class HealthProfileService {
      */
     deleteWeightEntry(entryId) {
         return apiClient.delete(`weight-history/${entryId}/`);
+    }
+
+    // Nutrition Log Methods
+
+    /**
+     * Get nutrition log for a specific date
+     * @param {string} date - Date in YYYY-MM-DD format
+     * @returns {Promise} - Promise resolving to nutrition log data
+     */
+    getNutritionLog(date) {
+        return apiClient.get(`meal-planning/api/nutrition-logs/${date}/`)
+            .catch(error => {
+                console.error(`Error fetching nutrition log for ${date}:`, error);
+                
+                // Return fallback data for 404 errors (no data for date)
+                if (error.response?.status === 404) {
+                    return {
+                        data: {
+                            date: date,
+                            total_calories: 0,
+                            total_protein: 0,
+                            total_carbs: 0,
+                            total_fat: 0,
+                            total_fiber: 0,
+                            calorie_deficit_surplus: 0,
+                            macro_balance_score: 0,
+                            meals_data: {},
+                            ai_analysis: {}
+                        }
+                    };
+                }
+                
+                // For other errors, re-throw to let the component handle it
+                throw error;
+            });
+    }
+
+    /**
+     * Get nutrition logs for a date range
+     * @param {string} startDate - Start date in YYYY-MM-DD format
+     * @param {string} endDate - End date in YYYY-MM-DD format
+     * @returns {Promise} - Promise resolving to nutrition logs data
+     */
+    getNutritionLogs(startDate, endDate) {
+        return apiClient.get('meal-planning/api/nutrition-logs/', {
+            params: {
+                start_date: startDate,
+                end_date: endDate
+            }
+        }).catch(error => {
+            console.error(`Error fetching nutrition logs from ${startDate} to ${endDate}:`, error);
+            
+            // Return empty array for 404 errors
+            if (error.response?.status === 404) {
+                return { data: [] };
+            }
+            
+            // For other errors, re-throw to let the component handle it
+            throw error;
+        });
+    }
+
+    /**
+     * Create or update nutrition log for a specific date
+     * @param {string} date - Date in YYYY-MM-DD format
+     * @param {Object} logData - Nutrition log data
+     * @returns {Promise} - Promise resolving to created/updated nutrition log data
+     */
+    saveNutritionLog(date, logData) {
+        return apiClient.post(`meal-planning/api/nutrition-logs/${date}/`, logData)
+            .catch(error => {
+                console.error(`Error saving nutrition log for ${date}:`, error);
+                throw error;
+            });
+    }
+
+    /**
+     * Update nutrition log for a specific date
+     * @param {string} date - Date in YYYY-MM-DD format
+     * @param {Object} logData - Nutrition log data to update
+     * @returns {Promise} - Promise resolving to updated nutrition log data
+     */
+    updateNutritionLog(date, logData) {
+        return apiClient.put(`meal-planning/api/nutrition-logs/${date}/`, logData)
+            .catch(error => {
+                console.error(`Error updating nutrition log for ${date}:`, error);
+                throw error;
+            });
+    }
+
+    /**
+     * Delete nutrition log for a specific date
+     * @param {string} date - Date in YYYY-MM-DD format
+     * @returns {Promise} - Promise resolving to deletion status
+     */
+    deleteNutritionLog(date) {
+        return apiClient.delete(`meal-planning/api/nutrition-logs/${date}/`)
+            .catch(error => {
+                console.error(`Error deleting nutrition log for ${date}:`, error);
+                // For 404 errors (already deleted), return success
+                if (error.response?.status === 404) {
+                    return { data: { message: 'Nutrition log deleted successfully' } };
+                }
+                throw error;
+            });
+    }
+
+    // Progress Tracking Methods
+
+    /**
+     * Get nutrition progress summary for a date range
+     * @param {string} startDate - Start date in YYYY-MM-DD format
+     * @param {string} endDate - End date in YYYY-MM-DD format
+     * @returns {Promise} - Promise resolving to progress summary data
+     */
+    getNutritionProgressSummary(startDate, endDate) {
+        return apiClient.get('meal-planning/api/nutrition-logs/progress_summary/', {
+            params: {
+                start_date: startDate,
+                end_date: endDate
+            }
+        }).catch(error => {
+            console.error(`Error fetching nutrition progress summary:`, error);
+            // Return fallback data for 404 errors
+            if (error.response?.status === 404) {
+                return {
+                    data: {
+                        averages: { calories: 0, protein: 0, carbs: 0, fat: 0 },
+                        achievement_rates: { calories: 0, protein: 0, carbs: 0, fat: 0 },
+                        trends: { calories: 'stable', protein: 'stable', carbs: 'stable', fat: 'stable' }
+                    }
+                };
+            }
+            throw error;
+        });
+    }
+
+    /**
+     * Get weekly nutrition averages
+     * @param {string} weekStart - Week start date in YYYY-MM-DD format
+     * @returns {Promise} - Promise resolving to weekly averages data
+     */
+    getWeeklyNutritionAverages(weekStart) {
+        return apiClient.get('meal-planning/api/nutrition-logs/weekly_averages/', {
+            params: {
+                week_start: weekStart
+            }
+        }).catch(error => {
+            console.error(`Error fetching weekly nutrition averages:`, error);
+            // Return fallback data for 404 errors
+            if (error.response?.status === 404) {
+                return {
+                    data: {
+                        week_start: weekStart,
+                        averages: { calories: 0, protein: 0, carbs: 0, fat: 0, total_deficit: 0 },
+                        days_logged: 0
+                    }
+                };
+            }
+            throw error;
+        });
+    }
+
+    /**
+     * Get nutrition goal achievement statistics
+     * @param {string} startDate - Start date in YYYY-MM-DD format
+     * @param {string} endDate - End date in YYYY-MM-DD format
+     * @returns {Promise} - Promise resolving to goal achievement statistics
+     */
+    getNutritionGoalStats(startDate, endDate) {
+        return apiClient.get('meal-planning/api/nutrition-logs/goal_stats/', {
+            params: {
+                start_date: startDate,
+                end_date: endDate
+            }
+        }).catch(error => {
+            console.error(`Error fetching nutrition goal stats:`, error);
+            // Return fallback data for 404 errors
+            if (error.response?.status === 404) {
+                return {
+                    data: {
+                        achievement_rates: { calories: 0, protein: 0, carbs: 0, fat: 0 },
+                        days_on_target: 0,
+                        total_days: 0
+                    }
+                };
+            }
+            throw error;
+        });
+    }
+
+    /**
+     * Get nutrition trends analysis
+     * @param {string} startDate - Start date in YYYY-MM-DD format
+     * @param {string} endDate - End date in YYYY-MM-DD format
+     * @param {string} metric - Metric to analyze (calories, protein, carbs, fat)
+     * @returns {Promise} - Promise resolving to trend analysis data
+     */
+    getNutritionTrends(startDate, endDate, metric = 'calories') {
+        return apiClient.get('meal-planning/api/nutrition-logs/trends/', {
+            params: {
+                start_date: startDate,
+                end_date: endDate,
+                metric: metric
+            }
+        });
+    }
+
+    // Activity Methods (if needed for integration)
+
+    /**
+     * Get activity history
+     * @returns {Promise} - Promise resolving to activity history data
+     */
+    getActivityHistory() {
+        return apiClient.get('health-profiles/activities/');
+    }
+
+    /**
+     * Add new activity entry
+     * @param {Object} activityData - Activity data
+     * @returns {Promise} - Promise resolving to created activity entry
+     */
+    addActivity(activityData) {
+        return apiClient.post('health-profiles/activities/', activityData);
+    }
+
+    /**
+     * Get activities for a date range
+     * @param {string} startDate - Start date in YYYY-MM-DD format
+     * @param {string} endDate - End date in YYYY-MM-DD format
+     * @returns {Promise} - Promise resolving to filtered activities data
+     */
+    getActivitiesByDateRange(startDate, endDate) {
+        return apiClient.get('health-profiles/activities/', {
+            params: {
+                start_date: startDate,
+                end_date: endDate
+            }
+        });
     }
 }
 

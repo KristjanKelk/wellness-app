@@ -17,6 +17,8 @@ from .serializers import (
     MealPlanSerializer, UserRecipeRatingSerializer, NutritionLogSerializer
 )
 import logging
+from datetime import datetime, date, timedelta
+from django.utils import timezone
 
 logger = logging.getLogger(__name__)
 
@@ -49,9 +51,9 @@ class NutritionProfileViewSet(viewsets.ModelViewSet):
         )
         return profile
 
-    @action(detail=False, methods=['get', 'put', 'patch'], url_path='current')
-    def current_profile(self, request):
-        """Get or update current user's nutrition profile - This is the endpoint your frontend calls"""
+    @action(detail=False, methods=['get', 'put', 'patch'], url_path='my_profile')
+    def my_profile(self, request):
+        """Get or update current user's nutrition profile - Updated endpoint name for frontend"""
         if request.method == 'GET':
             profile = self.get_object()
             serializer = self.get_serializer(profile)
@@ -131,6 +133,11 @@ class NutritionProfileViewSet(viewsets.ModelViewSet):
                     # Debug: Log validation errors
                     print(f"Validation errors: {serializer.errors}")
                     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    @action(detail=False, methods=['get', 'put', 'patch'], url_path='current')
+    def current_profile(self, request):
+        """Get or update current user's nutrition profile - This is the endpoint your frontend calls"""
+        return self.my_profile(request)
 
     @action(detail=False, methods=['post'])
     def calculate_targets(self, request):
@@ -911,40 +918,73 @@ class RecipeViewSet(viewsets.ModelViewSet):
         """Save a recipe from meal plan data to user's collection"""
         try:
             recipe_data = request.data
+            logger.info(f"Attempting to save recipe from meal plan: {recipe_data.get('title', 'Unknown')}")
+            
+            # Check if this is a fallback recipe that cannot be saved
+            recipe_id = recipe_data.get('spoonacular_id') or recipe_data.get('id')
+            if recipe_id and str(recipe_id).startswith('fallback_'):
+                logger.warning(f"Cannot save fallback recipe: {recipe_id}")
+                return Response(
+                    {'error': 'Cannot save fallback recipe', 'message': 'This is a temporary recipe that cannot be saved to your collection.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
             
             # Check if user already has this recipe saved by spoonacular_id
             spoonacular_id = recipe_data.get('spoonacular_id') or recipe_data.get('id')
-            if spoonacular_id:
-                existing_recipe = Recipe.objects.filter(
-                    created_by=request.user,
-                    spoonacular_id=spoonacular_id
-                ).first()
-                
-                if existing_recipe:
-                    return Response(
-                        {'message': 'Recipe already in your collection', 'recipe_id': str(existing_recipe.id)},
-                        status=status.HTTP_200_OK
-                    )
             
-            # Extract and normalize the data
+            # Only check for existing recipes if we have a valid spoonacular_id (not fallback)
+            if spoonacular_id and not str(spoonacular_id).startswith('fallback_'):
+                try:
+                    # Convert to int if it's a valid spoonacular ID
+                    spoonacular_id_int = int(spoonacular_id)
+                    existing_recipe = Recipe.objects.filter(
+                        created_by=request.user,
+                        spoonacular_id=spoonacular_id_int
+                    ).first()
+                    
+                    if existing_recipe:
+                        return Response(
+                            {'message': 'Recipe already in your collection', 'recipe_id': str(existing_recipe.id)},
+                            status=status.HTTP_200_OK
+                        )
+                except (ValueError, TypeError):
+                    # If spoonacular_id is not a valid integer, treat as None
+                    spoonacular_id_int = None
+            else:
+                spoonacular_id_int = None
+            
+            # Validate and normalize required fields with proper defaults
+            def safe_int(value, default=0):
+                try:
+                    return int(value) if value is not None else default
+                except (ValueError, TypeError):
+                    return default
+                    
+            def safe_float(value, default=0.0):
+                try:
+                    return float(value) if value is not None else default
+                except (ValueError, TypeError):
+                    return default
+            
+            # Extract and normalize the data with proper validation
             saved_recipe = Recipe.objects.create(
                 title=recipe_data.get('title', 'Untitled Recipe'),
                 summary=recipe_data.get('summary', ''),
                 cuisine=recipe_data.get('cuisine', ''),
                 meal_type=recipe_data.get('meal_type', 'dinner'),
-                servings=recipe_data.get('servings', 4),
-                prep_time_minutes=recipe_data.get('prep_time_minutes', 0),
-                cook_time_minutes=recipe_data.get('cook_time_minutes', 0),
-                total_time_minutes=recipe_data.get('total_time_minutes', 0),
+                servings=safe_int(recipe_data.get('servings'), 4),
+                prep_time_minutes=safe_int(recipe_data.get('prep_time_minutes'), 30),  # Default 30 min prep
+                cook_time_minutes=safe_int(recipe_data.get('cook_time_minutes'), 0),
+                total_time_minutes=safe_int(recipe_data.get('total_time_minutes'), 30),  # Default 30 min total
                 difficulty_level=recipe_data.get('difficulty_level', 'medium'),
-                spoonacular_id=spoonacular_id,
+                spoonacular_id=spoonacular_id_int,  # Use the validated integer ID or None
                 ingredients_data=recipe_data.get('ingredients_data', []),
                 instructions=recipe_data.get('instructions', []),
-                calories_per_serving=recipe_data.get('calories_per_serving', 0),
-                protein_per_serving=recipe_data.get('protein_per_serving', 0),
-                carbs_per_serving=recipe_data.get('carbs_per_serving', 0),
-                fat_per_serving=recipe_data.get('fat_per_serving', 0),
-                fiber_per_serving=recipe_data.get('fiber_per_serving', 0),
+                calories_per_serving=safe_float(recipe_data.get('calories_per_serving'), 300),  # Default 300 calories
+                protein_per_serving=safe_float(recipe_data.get('protein_per_serving'), 15),    # Default 15g protein
+                carbs_per_serving=safe_float(recipe_data.get('carbs_per_serving'), 30),       # Default 30g carbs
+                fat_per_serving=safe_float(recipe_data.get('fat_per_serving'), 10),          # Default 10g fat
+                fiber_per_serving=safe_float(recipe_data.get('fiber_per_serving'), 0),
                 dietary_tags=recipe_data.get('dietary_tags', []),
                 allergens=recipe_data.get('allergens', []),
                 image_url=recipe_data.get('image_url', ''),
@@ -954,6 +994,8 @@ class RecipeViewSet(viewsets.ModelViewSet):
                 created_by=request.user
             )
             
+            logger.info(f"Successfully saved recipe: {saved_recipe.title} (ID: {saved_recipe.id})")
+            
             serializer = self.get_serializer(saved_recipe)
             return Response({
                 'message': 'Recipe saved to your collection!',
@@ -962,8 +1004,9 @@ class RecipeViewSet(viewsets.ModelViewSet):
             
         except Exception as e:
             logger.error(f"Error saving recipe from meal plan: {str(e)}")
+            logger.error(f"Recipe data: {recipe_data}")
             return Response(
-                {'error': 'Failed to save recipe'},
+                {'error': 'Failed to save recipe', 'details': str(e)},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
@@ -982,6 +1025,176 @@ class RecipeViewSet(viewsets.ModelViewSet):
             {'message': 'Recipe removed from your collection'},
             status=status.HTTP_204_NO_CONTENT
         )
+
+    @action(detail=True, methods=['post'])
+    def adjust_portions(self, request, pk=None):
+        """Get recipe with adjusted portions for ingredients and nutrition"""
+        try:
+            recipe = self.get_object()
+            servings = request.data.get('servings', recipe.servings)
+            
+            if servings <= 0:
+                return Response(
+                    {'error': 'Servings must be a positive number'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Calculate multiplier
+            multiplier = servings / recipe.servings
+            
+            # Adjust nutrition values
+            adjusted_nutrition = {
+                'calories_per_serving': recipe.calories_per_serving,
+                'protein_per_serving': recipe.protein_per_serving,
+                'carbs_per_serving': recipe.carbs_per_serving,
+                'fat_per_serving': recipe.fat_per_serving,
+                'fiber_per_serving': recipe.fiber_per_serving,
+                'total_calories': recipe.calories_per_serving * servings,
+                'total_protein': recipe.protein_per_serving * servings,
+                'total_carbs': recipe.carbs_per_serving * servings,
+                'total_fat': recipe.fat_per_serving * servings,
+                'total_fiber': recipe.fiber_per_serving * servings,
+            }
+            
+            # Adjust ingredients
+            adjusted_ingredients = []
+            for ingredient in recipe.ingredients_data:
+                adjusted_ingredient = self._adjust_ingredient_quantity(ingredient, multiplier)
+                adjusted_ingredients.append(adjusted_ingredient)
+            
+            return Response({
+                'recipe_id': recipe.id,
+                'original_servings': recipe.servings,
+                'adjusted_servings': servings,
+                'multiplier': multiplier,
+                'nutrition': adjusted_nutrition,
+                'ingredients': adjusted_ingredients
+            }, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            logger.error(f"Error adjusting recipe portions: {str(e)}")
+            return Response(
+                {'error': 'Failed to adjust recipe portions', 'details': str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    def _adjust_ingredient_quantity(self, ingredient, multiplier):
+        """Helper method to adjust ingredient quantities"""
+        import re
+        
+        if isinstance(ingredient, str):
+            return self._adjust_string_ingredient(ingredient, multiplier)
+        
+        # Handle dictionary ingredient format
+        adjusted = ingredient.copy()
+        
+        # Adjust the 'original' field if it exists
+        if 'original' in adjusted:
+            adjusted['original'] = self._adjust_string_ingredient(adjusted['original'], multiplier)
+        
+        # Adjust numeric quantity fields
+        for field in ['amount', 'quantity']:
+            if field in adjusted and adjusted[field]:
+                try:
+                    value = float(adjusted[field])
+                    adjusted[field] = self._round_quantity(value * multiplier)
+                except (ValueError, TypeError):
+                    pass
+        
+        return adjusted
+    
+    def _adjust_string_ingredient(self, ingredient_str, multiplier):
+        """Adjust quantities in string ingredient descriptions"""
+        import re
+        
+        if not ingredient_str or multiplier == 1:
+            return ingredient_str
+        
+        # Patterns to match quantities
+        patterns = [
+            r'^(\d+(?:\.\d+)?(?:/\d+)?(?:\s+\d+/\d+)?)',  # Numbers and fractions
+            r'^(\d+-\d+)',  # Ranges like 2-3
+        ]
+        
+        for pattern in patterns:
+            match = re.match(pattern, ingredient_str.strip())
+            if match:
+                original_quantity = match.group(1)
+                try:
+                    if '/' in original_quantity:
+                        # Handle fractions
+                        adjusted_quantity = self._adjust_fraction(original_quantity, multiplier)
+                    elif '-' in original_quantity:
+                        # Handle ranges
+                        parts = original_quantity.split('-')
+                        min_val = float(parts[0]) * multiplier
+                        max_val = float(parts[1]) * multiplier
+                        adjusted_quantity = f"{self._round_quantity(min_val)}-{self._round_quantity(max_val)}"
+                    else:
+                        # Handle regular numbers
+                        value = float(original_quantity) * multiplier
+                        adjusted_quantity = str(self._round_quantity(value))
+                    
+                    return ingredient_str.replace(original_quantity, adjusted_quantity, 1)
+                except (ValueError, TypeError):
+                    pass
+        
+        return ingredient_str
+    
+    def _adjust_fraction(self, fraction_str, multiplier):
+        """Convert fraction to decimal, multiply, and convert back to readable format"""
+        parts = fraction_str.strip().split()
+        decimal_value = 0
+        
+        for part in parts:
+            if '/' in part:
+                numerator, denominator = part.split('/')
+                decimal_value += int(numerator) / int(denominator)
+            else:
+                decimal_value += int(part)
+        
+        adjusted_value = decimal_value * multiplier
+        return self._decimal_to_readable(adjusted_value)
+    
+    def _decimal_to_readable(self, decimal_value):
+        """Convert decimal to readable fraction or mixed number"""
+        # If close to a whole number, return whole number
+        if abs(decimal_value - round(decimal_value)) < 0.1:
+            return str(round(decimal_value))
+        
+        # Common fractions
+        fractions = [
+            (0.125, '1/8'), (0.25, '1/4'), (0.333, '1/3'), (0.375, '3/8'),
+            (0.5, '1/2'), (0.625, '5/8'), (0.667, '2/3'), (0.75, '3/4'), (0.875, '7/8')
+        ]
+        
+        whole_part = int(decimal_value)
+        fractional_part = decimal_value - whole_part
+        
+        # Find closest fraction
+        for frac_decimal, frac_str in fractions:
+            if abs(fractional_part - frac_decimal) < 0.1:
+                if whole_part > 0:
+                    return f"{whole_part} {frac_str}"
+                else:
+                    return frac_str
+        
+        # If no close fraction found, use decimal
+        if whole_part > 0:
+            return f"{decimal_value:.1f}"
+        else:
+            return f"{decimal_value:.2f}"
+    
+    def _round_quantity(self, quantity):
+        """Round quantity to appropriate precision"""
+        if quantity < 0.1:
+            return round(quantity, 2)
+        elif quantity < 1:
+            return round(quantity, 1)
+        elif quantity < 10:
+            return round(quantity * 4) / 4  # Round to nearest quarter
+        else:
+            return round(quantity)
 
     @action(detail=True, methods=['post'])
     def generate_shopping_list(self, request, pk=None):
@@ -1075,7 +1288,7 @@ class MealPlanViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['post'])
     def generate(self, request):
-        """Generate a new meal plan using the AI meal planning service"""
+        """Generate a new meal plan using the enhanced dynamic AI meal planning service"""
         try:
             # Get user's nutrition profile
             nutrition_profile = get_object_or_404(NutritionProfile, user=request.user)
@@ -1098,44 +1311,53 @@ class MealPlanViewSet(viewsets.ModelViewSet):
             else:
                 start_date_obj = start_date
 
+            # Get custom options from request
+            custom_options = {}
+            
             # Apply filters from request data
             target_calories = plan_data.get('target_calories')
             cuisine_preferences = plan_data.get('cuisine_preferences', [])
             max_cook_time = plan_data.get('max_cook_time')
+            dietary_preferences_override = plan_data.get('dietary_preferences', [])
             
-            # Update nutrition profile temporarily with form overrides
             if target_calories:
-                # Create a copy of the profile with updated calories
-                from copy import deepcopy
-                temp_profile = deepcopy(nutrition_profile)
-                temp_profile.calorie_target = target_calories
-                nutrition_profile = temp_profile
-            
+                custom_options['target_calories'] = target_calories
             if cuisine_preferences:
-                # Create a copy of the profile with updated cuisine preferences
-                from copy import deepcopy
-                if not hasattr(nutrition_profile, '__dict__'):
-                    temp_profile = deepcopy(nutrition_profile)
-                else:
-                    temp_profile = nutrition_profile
-                temp_profile.cuisine_preferences = cuisine_preferences
-                nutrition_profile = temp_profile
-
-            # Use the enhanced AI meal planning service
-            ai_meal_service = AIEnhancedMealService()
+                custom_options['cuisine_preferences'] = cuisine_preferences
+            if max_cook_time:
+                custom_options['max_cook_time'] = max_cook_time
+            if dietary_preferences_override:
+                custom_options['dietary_preferences_override'] = dietary_preferences_override
+            
+            # Use enhanced dynamic meal planning service
+            from .services.dynamic_meal_planning_service import DynamicMealPlanningService
+            from .services.enhanced_nutrition_profile_service import EnhancedNutritionProfileService
+            
+            dynamic_service = DynamicMealPlanningService()
+            profile_service = EnhancedNutritionProfileService()
             
             # Determine number of days based on plan type
             days = 1 if plan_type == 'daily' else 7
             
-            # Generate the meal plan with custom filters
-            generation_options = {}
-            if max_cook_time:
-                generation_options['max_cook_time'] = max_cook_time
+            # Create enhanced nutrition profile with overrides if provided
+            enhanced_profile = nutrition_profile
+            if custom_options:
+                # Create temporary profile with custom options
+                from copy import deepcopy
+                enhanced_profile = deepcopy(nutrition_profile)
                 
-            meal_plan_data = ai_meal_service.generate_smart_meal_plan(
-                nutrition_profile, 
+                if target_calories:
+                    enhanced_profile.calorie_target = int(target_calories)
+                if cuisine_preferences:
+                    enhanced_profile.cuisine_preferences = cuisine_preferences
+                if dietary_preferences_override:
+                    enhanced_profile.dietary_preferences = dietary_preferences_override
+            
+            # Generate comprehensive meal plan using dynamic planning
+            meal_plan_data = dynamic_service.generate_personalized_meal_plan(
+                enhanced_profile, 
                 days, 
-                generation_options=generation_options
+                custom_options
             )
             
             # Create a MealPlan object
@@ -1167,6 +1389,76 @@ class MealPlanViewSet(viewsets.ModelViewSet):
             logger.error(f"Error generating meal plan: {str(e)}")
             return Response(
                 {'error': 'Failed to generate meal plan', 'details': str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    @action(detail=False, methods=['get'])
+    def nutrition_analysis(self, request):
+        """Get enhanced nutrition analysis for the user's profile"""
+        try:
+            # Get user's nutrition profile
+            nutrition_profile = get_object_or_404(NutritionProfile, user=request.user)
+            
+            # Use enhanced nutrition profile service
+            from .services.enhanced_nutrition_profile_service import EnhancedNutritionProfileService
+            
+            profile_service = EnhancedNutritionProfileService()
+            
+            # Get comprehensive analysis
+            analysis = profile_service.analyze_and_optimize_profile(nutrition_profile)
+            
+            return Response(analysis, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            logger.error(f"Error getting nutrition analysis: {str(e)}")
+            return Response(
+                {'error': 'Failed to get nutrition analysis', 'details': str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    @action(detail=False, methods=['post'])
+    def optimize_nutrition(self, request):
+        """Get optimized nutrition targets based on custom parameters"""
+        try:
+            # Get user's nutrition profile
+            nutrition_profile = get_object_or_404(NutritionProfile, user=request.user)
+            
+            # Get parameters from request
+            fitness_goal = request.data.get('fitness_goal')
+            activity_level = request.data.get('activity_level')
+            custom_factors = request.data.get('custom_factors', {})
+            
+            # Use enhanced nutrition profile service
+            from .services.enhanced_nutrition_profile_service import EnhancedNutritionProfileService
+            
+            profile_service = EnhancedNutritionProfileService()
+            
+            # Get dynamic macro distribution
+            macro_analysis = profile_service.get_dynamic_macro_distribution(
+                nutrition_profile, fitness_goal, activity_level
+            )
+            
+            # Get adjusted calorie needs
+            calorie_analysis = profile_service.calculate_adjusted_calorie_needs(
+                nutrition_profile, custom_factors
+            )
+            
+            # Generate nutrition strategy
+            strategy = profile_service.generate_nutrition_strategy(nutrition_profile)
+            
+            response_data = {
+                'macro_analysis': macro_analysis,
+                'calorie_analysis': calorie_analysis,
+                'nutrition_strategy': strategy,
+                'generated_at': datetime.now().isoformat()
+            }
+            
+            return Response(response_data, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            logger.error(f"Error optimizing nutrition: {str(e)}")
+            return Response(
+                {'error': 'Failed to optimize nutrition', 'details': str(e)},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
@@ -1347,12 +1639,13 @@ class MealPlanViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['post'])
     def get_alternatives(self, request, pk=None):
-        """Get meal alternatives for a specific meal"""
+        """Get meal alternatives for a specific meal including user's saved recipes"""
         try:
             meal_plan = self.get_object()
             day = request.data.get('day')
             meal_type = request.data.get('meal_type')
             count = request.data.get('count', 3)
+            include_user_recipes = request.data.get('include_user_recipes', True)
 
             if not day or not meal_type:
                 return Response(
@@ -1362,14 +1655,92 @@ class MealPlanViewSet(viewsets.ModelViewSet):
 
             # Use AI service to get alternatives
             ai_service = AIMealPlanningService()
-            alternatives = ai_service.generate_recipe_alternatives(meal_plan, day, meal_type, count)
+            alternatives = ai_service.generate_recipe_alternatives(
+                meal_plan, day, meal_type, count, include_user_recipes=include_user_recipes
+            )
 
-            return Response(alternatives)
+            return Response({
+                'alternatives': alternatives,
+                'total_count': len(alternatives),
+                'user_recipes_included': include_user_recipes
+            })
 
         except Exception as e:
             logger.error(f"Error getting meal alternatives: {str(e)}")
             return Response(
                 {'error': 'Failed to get alternatives', 'details': str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    @action(detail=True, methods=['post'])
+    def swap_meal(self, request, pk=None):
+        """Swap a meal with a selected alternative recipe"""
+        try:
+            meal_plan = self.get_object()
+            day = request.data.get('day')
+            meal_type = request.data.get('meal_type')
+            new_recipe = request.data.get('new_recipe')
+
+            if not day or not meal_type or not new_recipe:
+                return Response(
+                    {'error': 'day, meal_type, and new_recipe are required'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            logger.info(f"Swapping meal for plan {meal_plan.id}, day: {day}, meal_type: {meal_type}")
+
+            # Get the meal plan data
+            meal_plan_data = meal_plan.meal_plan_data or {}
+            
+            # For daily plans, the day might be the meal type
+            if meal_plan.plan_type == 'daily' and day in ['breakfast', 'lunch', 'dinner']:
+                target_day = 'day_1'
+                target_meal_type = day
+            else:
+                target_day = day
+                target_meal_type = meal_type
+
+            # Initialize day data if it doesn't exist
+            if target_day not in meal_plan_data:
+                meal_plan_data[target_day] = {}
+
+            # Update the meal with the new recipe
+            meal_plan_data[target_day][target_meal_type] = {
+                'recipe': {
+                    'id': new_recipe.get('id'),
+                    'title': new_recipe.get('title'),
+                    'image': new_recipe.get('image'),
+                    'servings': new_recipe.get('servings', 1),
+                    'readyInMinutes': new_recipe.get('readyInMinutes', 30),
+                    'summary': new_recipe.get('summary', ''),
+                    'nutrition': new_recipe.get('nutrition', {}),
+                    'ingredients': new_recipe.get('ingredients', []),
+                    'instructions': new_recipe.get('instructions', ''),
+                    'spoonacular_id': new_recipe.get('id'),
+                    'database_id': new_recipe.get('database_id'),
+                    'is_user_recipe': new_recipe.get('is_user_recipe', False),
+                    'source': new_recipe.get('source', 'external')
+                },
+                'meal_type': target_meal_type
+            }
+
+            # Save the updated meal plan
+            meal_plan.meal_plan_data = meal_plan_data
+            meal_plan.save()
+
+            logger.info(f"Successfully swapped meal for {target_meal_type} on {target_day}")
+
+            # Return the updated meal plan
+            serializer = self.get_serializer(meal_plan)
+            return Response({
+                'message': 'Meal swapped successfully',
+                'meal_plan': serializer.data
+            })
+
+        except Exception as e:
+            logger.error(f"Error swapping meal: {str(e)}")
+            return Response(
+                {'error': 'Failed to swap meal', 'details': str(e)},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
@@ -1456,7 +1827,595 @@ class NutritionLogViewSet(viewsets.ModelViewSet):
         return NutritionLog.objects.filter(user=self.request.user)
 
     def perform_create(self, serializer):
-        serializer.save(user=self.request.user)
+        user = self.request.user
+        log_data = serializer.validated_data.copy()
+        
+        # Calculate deficit/surplus if we have nutrition profile
+        try:
+            nutrition_profile = NutritionProfile.objects.get(user=user)
+            if nutrition_profile.calorie_target:
+                total_calories = log_data.get('total_calories', 0)
+                deficit_surplus = total_calories - nutrition_profile.calorie_target
+                log_data['calorie_deficit_surplus'] = deficit_surplus
+        except NutritionProfile.DoesNotExist:
+            pass
+        
+        serializer.save(user=user, **log_data)
+
+    @action(detail=False, methods=['get'], url_path='(?P<date>[^/.]+)')
+    def get_by_date(self, request, date=None):
+        """Get nutrition log for a specific date"""
+        try:
+            # Parse date string
+            if isinstance(date, str):
+                log_date = datetime.strptime(date, '%Y-%m-%d').date()
+            else:
+                log_date = date
+            
+            try:
+                log = self.get_queryset().get(date=log_date)
+                serializer = self.get_serializer(log)
+                return Response(serializer.data)
+            except NutritionLog.DoesNotExist:
+                # Return empty log structure if no data exists for this date
+                return Response({
+                    'date': log_date.strftime('%Y-%m-%d'),
+                    'total_calories': 0,
+                    'total_protein': 0,
+                    'total_carbs': 0,
+                    'total_fat': 0,
+                    'total_fiber': 0,
+                    'calorie_deficit_surplus': 0,
+                    'macro_balance_score': 0,
+                    'meals_data': {},
+                    'ai_analysis': {}
+                }, status=status.HTTP_200_OK)
+                
+        except ValueError:
+            return Response(
+                {'error': 'Invalid date format. Use YYYY-MM-DD'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        except Exception as e:
+            logger.error(f"Error getting nutrition log by date: {str(e)}")
+            return Response(
+                {'error': 'Failed to get nutrition log', 'details': str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    @action(detail=False, methods=['post', 'put'], url_path='(?P<date>[^/.]+)')
+    def save_by_date(self, request, date=None):
+        """Create or update nutrition log for a specific date"""
+        try:
+            # Parse date string
+            if isinstance(date, str):
+                log_date = datetime.strptime(date, '%Y-%m-%d').date()
+            else:
+                log_date = date
+            
+            # Get or create nutrition log for this date
+            log, created = NutritionLog.objects.get_or_create(
+                user=request.user,
+                date=log_date,
+                defaults=request.data
+            )
+            
+            if not created:
+                # Update existing log
+                for field, value in request.data.items():
+                    if hasattr(log, field):
+                        setattr(log, field, value)
+                
+                # Calculate deficit/surplus
+                try:
+                    nutrition_profile = NutritionProfile.objects.get(user=request.user)
+                    if nutrition_profile.calorie_target:
+                        total_calories = request.data.get('total_calories', log.total_calories)
+                        log.calorie_deficit_surplus = total_calories - nutrition_profile.calorie_target
+                except NutritionProfile.DoesNotExist:
+                    pass
+                
+                log.save()
+            
+            serializer = self.get_serializer(log)
+            return Response(serializer.data, status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
+                
+        except ValueError:
+            return Response(
+                {'error': 'Invalid date format. Use YYYY-MM-DD'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        except Exception as e:
+            logger.error(f"Error saving nutrition log by date: {str(e)}")
+            return Response(
+                {'error': 'Failed to save nutrition log', 'details': str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    @action(detail=False, methods=['delete'], url_path='(?P<date>[^/.]+)')
+    def delete_by_date(self, request, date=None):
+        """Delete nutrition log for a specific date"""
+        try:
+            # Parse date string
+            if isinstance(date, str):
+                log_date = datetime.strptime(date, '%Y-%m-%d').date()
+            else:
+                log_date = date
+            
+            try:
+                log = self.get_queryset().get(date=log_date)
+                log.delete()
+                return Response({'message': 'Nutrition log deleted successfully'}, status=status.HTTP_200_OK)
+            except NutritionLog.DoesNotExist:
+                return Response(
+                    {'error': 'No nutrition log found for this date'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+                
+        except ValueError:
+            return Response(
+                {'error': 'Invalid date format. Use YYYY-MM-DD'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        except Exception as e:
+            logger.error(f"Error deleting nutrition log by date: {str(e)}")
+            return Response(
+                {'error': 'Failed to delete nutrition log', 'details': str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    @action(detail=False, methods=['get'])
+    def date_range(self, request):
+        """Get nutrition logs for a date range"""
+        try:
+            start_date = request.query_params.get('start_date')
+            end_date = request.query_params.get('end_date')
+            
+            if not start_date or not end_date:
+                return Response(
+                    {'error': 'start_date and end_date are required'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Parse dates
+            start_date_obj = datetime.strptime(start_date, '%Y-%m-%d').date()
+            end_date_obj = datetime.strptime(end_date, '%Y-%m-%d').date()
+            
+            logs = self.get_queryset().filter(
+                date__gte=start_date_obj,
+                date__lte=end_date_obj
+            ).order_by('date')
+            
+            serializer = self.get_serializer(logs, many=True)
+            return Response(serializer.data)
+                
+        except ValueError:
+            return Response(
+                {'error': 'Invalid date format. Use YYYY-MM-DD'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        except Exception as e:
+            logger.error(f"Error getting nutrition logs by date range: {str(e)}")
+            return Response(
+                {'error': 'Failed to get nutrition logs', 'details': str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    @action(detail=False, methods=['get'])
+    def progress_summary(self, request):
+        """Get nutrition progress summary for a date range"""
+        try:
+            start_date = request.query_params.get('start_date')
+            end_date = request.query_params.get('end_date')
+            
+            if not start_date or not end_date:
+                return Response(
+                    {'error': 'start_date and end_date are required'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Parse dates
+            start_date_obj = datetime.strptime(start_date, '%Y-%m-%d').date()
+            end_date_obj = datetime.strptime(end_date, '%Y-%m-%d').date()
+            
+            logs = self.get_queryset().filter(
+                date__gte=start_date_obj,
+                date__lte=end_date_obj
+            )
+            
+            # Get user's nutrition profile for targets
+            try:
+                nutrition_profile = NutritionProfile.objects.get(user=request.user)
+            except NutritionProfile.DoesNotExist:
+                return Response(
+                    {'error': 'No nutrition profile found'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            # Calculate summary statistics
+            if logs.exists():
+                totals = logs.aggregate(
+                    avg_calories=models.Avg('total_calories'),
+                    avg_protein=models.Avg('total_protein'),
+                    avg_carbs=models.Avg('total_carbs'),
+                    avg_fat=models.Avg('total_fat'),
+                    total_deficit=models.Sum('calorie_deficit_surplus')
+                )
+                
+                # Calculate goal achievement stats
+                calorie_target = nutrition_profile.calorie_target
+                days_on_target = logs.filter(
+                    total_calories__gte=calorie_target * 0.9,
+                    total_calories__lte=calorie_target * 1.1
+                ).count()
+                
+                total_days = logs.count()
+                consistency_score = (days_on_target / total_days * 100) if total_days > 0 else 0
+                
+                summary = {
+                    'averages': {
+                        'calories': round(totals['avg_calories'] or 0, 1),
+                        'protein': round(totals['avg_protein'] or 0, 1),
+                        'carbs': round(totals['avg_carbs'] or 0, 1),
+                        'fat': round(totals['avg_fat'] or 0, 1),
+                        'total_deficit': round(totals['total_deficit'] or 0, 1)
+                    },
+                    'targets': {
+                        'calories': nutrition_profile.calorie_target,
+                        'protein': nutrition_profile.protein_target,
+                        'carbs': nutrition_profile.carb_target,
+                        'fat': nutrition_profile.fat_target
+                    },
+                    'stats': {
+                        'total_days': total_days,
+                        'days_on_target': days_on_target,
+                        'consistency_score': round(consistency_score, 1)
+                    },
+                    'date_range': {
+                        'start_date': start_date,
+                        'end_date': end_date
+                    }
+                }
+            else:
+                summary = {
+                    'averages': {'calories': 0, 'protein': 0, 'carbs': 0, 'fat': 0, 'total_deficit': 0},
+                    'targets': {
+                        'calories': nutrition_profile.calorie_target,
+                        'protein': nutrition_profile.protein_target,
+                        'carbs': nutrition_profile.carb_target,
+                        'fat': nutrition_profile.fat_target
+                    },
+                    'stats': {'total_days': 0, 'days_on_target': 0, 'consistency_score': 0},
+                    'date_range': {'start_date': start_date, 'end_date': end_date}
+                }
+            
+            return Response(summary)
+                
+        except ValueError:
+            return Response(
+                {'error': 'Invalid date format. Use YYYY-MM-DD'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        except Exception as e:
+            logger.error(f"Error getting progress summary: {str(e)}")
+            return Response(
+                {'error': 'Failed to get progress summary', 'details': str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    @action(detail=False, methods=['get'])
+    def weekly_averages(self, request):
+        """Get weekly nutrition averages"""
+        try:
+            week_start = request.query_params.get('week_start')
+            
+            if not week_start:
+                return Response(
+                    {'error': 'week_start is required (YYYY-MM-DD format)'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Parse week start date
+            week_start_obj = datetime.strptime(week_start, '%Y-%m-%d').date()
+            week_end_obj = week_start_obj + timedelta(days=6)
+            
+            logs = self.get_queryset().filter(
+                date__gte=week_start_obj,
+                date__lte=week_end_obj
+            )
+            
+            if logs.exists():
+                averages = logs.aggregate(
+                    avg_calories=models.Avg('total_calories'),
+                    avg_protein=models.Avg('total_protein'),
+                    avg_carbs=models.Avg('total_carbs'),
+                    avg_fat=models.Avg('total_fat'),
+                    total_deficit=models.Sum('calorie_deficit_surplus')
+                )
+                
+                result = {
+                    'week_start': week_start,
+                    'week_end': week_end_obj.strftime('%Y-%m-%d'),
+                    'averages': {
+                        'calories': round(averages['avg_calories'] or 0, 1),
+                        'protein': round(averages['avg_protein'] or 0, 1),
+                        'carbs': round(averages['avg_carbs'] or 0, 1),
+                        'fat': round(averages['avg_fat'] or 0, 1),
+                        'total_deficit': round(averages['total_deficit'] or 0, 1)
+                    },
+                    'days_logged': logs.count()
+                }
+            else:
+                result = {
+                    'week_start': week_start,
+                    'week_end': week_end_obj.strftime('%Y-%m-%d'),
+                    'averages': {'calories': 0, 'protein': 0, 'carbs': 0, 'fat': 0, 'total_deficit': 0},
+                    'days_logged': 0
+                }
+            
+            return Response(result)
+                
+        except ValueError:
+            return Response(
+                {'error': 'Invalid date format. Use YYYY-MM-DD'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        except Exception as e:
+            logger.error(f"Error getting weekly averages: {str(e)}")
+            return Response(
+                {'error': 'Failed to get weekly averages', 'details': str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    @action(detail=False, methods=['get'])
+    def goal_stats(self, request):
+        """Get nutrition goal achievement statistics"""
+        try:
+            start_date = request.query_params.get('start_date')
+            end_date = request.query_params.get('end_date')
+            
+            if not start_date or not end_date:
+                return Response(
+                    {'error': 'start_date and end_date are required'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Parse dates
+            start_date_obj = datetime.strptime(start_date, '%Y-%m-%d').date()
+            end_date_obj = datetime.strptime(end_date, '%Y-%m-%d').date()
+            
+            logs = self.get_queryset().filter(
+                date__gte=start_date_obj,
+                date__lte=end_date_obj
+            )
+            
+            # Get user's nutrition profile for targets
+            try:
+                nutrition_profile = NutritionProfile.objects.get(user=request.user)
+            except NutritionProfile.DoesNotExist:
+                return Response(
+                    {'error': 'No nutrition profile found'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            if logs.exists():
+                total_days = logs.count()
+                calorie_target = nutrition_profile.calorie_target
+                protein_target = nutrition_profile.protein_target
+                carb_target = nutrition_profile.carb_target
+                fat_target = nutrition_profile.fat_target
+                
+                # Calculate achievement rates for each macro
+                calorie_achievements = logs.filter(
+                    total_calories__gte=calorie_target * 0.9,
+                    total_calories__lte=calorie_target * 1.1
+                ).count()
+                
+                protein_achievements = logs.filter(
+                    total_protein__gte=protein_target * 0.8
+                ).count()
+                
+                carb_achievements = logs.filter(
+                    total_carbs__gte=carb_target * 0.8,
+                    total_carbs__lte=carb_target * 1.2
+                ).count()
+                
+                fat_achievements = logs.filter(
+                    total_fat__gte=fat_target * 0.8,
+                    total_fat__lte=fat_target * 1.2
+                ).count()
+                
+                stats = {
+                    'total_days': total_days,
+                    'achievements': {
+                        'calories': {
+                            'days_achieved': calorie_achievements,
+                            'percentage': round(calorie_achievements / total_days * 100, 1)
+                        },
+                        'protein': {
+                            'days_achieved': protein_achievements,
+                            'percentage': round(protein_achievements / total_days * 100, 1)
+                        },
+                        'carbs': {
+                            'days_achieved': carb_achievements,
+                            'percentage': round(carb_achievements / total_days * 100, 1)
+                        },
+                        'fat': {
+                            'days_achieved': fat_achievements,
+                            'percentage': round(fat_achievements / total_days * 100, 1)
+                        }
+                    },
+                    'overall_consistency': round((calorie_achievements + protein_achievements + carb_achievements + fat_achievements) / (4 * total_days) * 100, 1),
+                    'date_range': {
+                        'start_date': start_date,
+                        'end_date': end_date
+                    }
+                }
+            else:
+                stats = {
+                    'total_days': 0,
+                    'achievements': {
+                        'calories': {'days_achieved': 0, 'percentage': 0},
+                        'protein': {'days_achieved': 0, 'percentage': 0},
+                        'carbs': {'days_achieved': 0, 'percentage': 0},
+                        'fat': {'days_achieved': 0, 'percentage': 0}
+                    },
+                    'overall_consistency': 0,
+                    'date_range': {'start_date': start_date, 'end_date': end_date}
+                }
+            
+            return Response(stats)
+                
+        except ValueError:
+            return Response(
+                {'error': 'Invalid date format. Use YYYY-MM-DD'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        except Exception as e:
+            logger.error(f"Error getting goal stats: {str(e)}")
+            return Response(
+                {'error': 'Failed to get goal stats', 'details': str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    @action(detail=False, methods=['get'])
+    def trends(self, request):
+        """Get nutrition trends analysis"""
+        try:
+            start_date = request.query_params.get('start_date')
+            end_date = request.query_params.get('end_date')
+            metric = request.query_params.get('metric', 'calories')
+            
+            if not start_date or not end_date:
+                return Response(
+                    {'error': 'start_date and end_date are required'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            if metric not in ['calories', 'protein', 'carbs', 'fat']:
+                return Response(
+                    {'error': 'metric must be one of: calories, protein, carbs, fat'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Parse dates
+            start_date_obj = datetime.strptime(start_date, '%Y-%m-%d').date()
+            end_date_obj = datetime.strptime(end_date, '%Y-%m-%d').date()
+            
+            logs = self.get_queryset().filter(
+                date__gte=start_date_obj,
+                date__lte=end_date_obj
+            ).order_by('date')
+            
+            if logs.exists():
+                # Get field name for the metric
+                field_map = {
+                    'calories': 'total_calories',
+                    'protein': 'total_protein', 
+                    'carbs': 'total_carbs',
+                    'fat': 'total_fat'
+                }
+                field_name = field_map[metric]
+                
+                # Extract daily values
+                daily_values = []
+                dates = []
+                for log in logs:
+                    daily_values.append(getattr(log, field_name, 0))
+                    dates.append(log.date.strftime('%Y-%m-%d'))
+                
+                # Calculate trend statistics
+                if len(daily_values) > 1:
+                    # Simple linear trend calculation
+                    x_values = list(range(len(daily_values)))
+                    n = len(daily_values)
+                    sum_x = sum(x_values)
+                    sum_y = sum(daily_values)
+                    sum_xy = sum(x * y for x, y in zip(x_values, daily_values))
+                    sum_x2 = sum(x * x for x in x_values)
+                    
+                    # Linear regression slope
+                    slope = (n * sum_xy - sum_x * sum_y) / (n * sum_x2 - sum_x * sum_x) if (n * sum_x2 - sum_x * sum_x) != 0 else 0
+                    
+                    # Calculate average and determine trend
+                    average = sum_y / n
+                    trend_direction = 'increasing' if slope > 0.1 else ('decreasing' if slope < -0.1 else 'stable')
+                    
+                    # Calculate recent vs previous period averages
+                    mid_point = len(daily_values) // 2
+                    recent_avg = sum(daily_values[mid_point:]) / len(daily_values[mid_point:]) if len(daily_values[mid_point:]) > 0 else 0
+                    previous_avg = sum(daily_values[:mid_point]) / len(daily_values[:mid_point]) if len(daily_values[:mid_point]) > 0 else 0
+                    
+                    trend_data = {
+                        'metric': metric,
+                        'date_range': {'start_date': start_date, 'end_date': end_date},
+                        'daily_data': {
+                            'dates': dates,
+                            'values': daily_values
+                        },
+                        'statistics': {
+                            'average': round(average, 1),
+                            'minimum': round(min(daily_values), 1),
+                            'maximum': round(max(daily_values), 1),
+                            'slope': round(slope, 3),
+                            'trend_direction': trend_direction
+                        },
+                        'period_comparison': {
+                            'recent_average': round(recent_avg, 1),
+                            'previous_average': round(previous_avg, 1),
+                            'change': round(recent_avg - previous_avg, 1),
+                            'change_percentage': round((recent_avg - previous_avg) / previous_avg * 100, 1) if previous_avg > 0 else 0
+                        },
+                        'data_points': len(daily_values)
+                    }
+                else:
+                    trend_data = {
+                        'metric': metric,
+                        'date_range': {'start_date': start_date, 'end_date': end_date},
+                        'daily_data': {'dates': dates, 'values': daily_values},
+                        'statistics': {
+                            'average': daily_values[0] if daily_values else 0,
+                            'minimum': daily_values[0] if daily_values else 0,
+                            'maximum': daily_values[0] if daily_values else 0,
+                            'slope': 0,
+                            'trend_direction': 'insufficient_data'
+                        },
+                        'period_comparison': {
+                            'recent_average': 0,
+                            'previous_average': 0,
+                            'change': 0,
+                            'change_percentage': 0
+                        },
+                        'data_points': len(daily_values)
+                    }
+            else:
+                trend_data = {
+                    'metric': metric,
+                    'date_range': {'start_date': start_date, 'end_date': end_date},
+                    'daily_data': {'dates': [], 'values': []},
+                    'statistics': {
+                        'average': 0, 'minimum': 0, 'maximum': 0, 'slope': 0,
+                        'trend_direction': 'no_data'
+                    },
+                    'period_comparison': {
+                        'recent_average': 0, 'previous_average': 0, 'change': 0, 'change_percentage': 0
+                    },
+                    'data_points': 0
+                }
+            
+            return Response(trend_data)
+                
+        except ValueError:
+            return Response(
+                {'error': 'Invalid date format. Use YYYY-MM-DD'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        except Exception as e:
+            logger.error(f"Error getting nutrition trends: {str(e)}")
+            return Response(
+                {'error': 'Failed to get nutrition trends', 'details': str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
     @action(detail=False, methods=['post'])
     def analyze(self, request):

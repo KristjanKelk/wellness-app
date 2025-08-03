@@ -1,6 +1,7 @@
 from collections import defaultdict
 from decimal import Decimal
 import logging
+import re
 from typing import Dict, List, Any, Tuple
 from ..models import Recipe, MealPlan, Ingredient
 
@@ -211,7 +212,45 @@ class ShoppingListService:
                 if not ingredient_name:
                     continue
                 
-                quantity = float(ingredient_data.get('amount', 0)) * multiplier
+                # Safely convert amount to float, handling various input types
+                amount_value = ingredient_data.get('amount', 0)
+                try:
+                    if isinstance(amount_value, (int, float)):
+                        base_quantity = float(amount_value)
+                    elif isinstance(amount_value, str):
+                        # Handle string amounts that might contain fractions or ranges
+                        amount_str = str(amount_value).strip()
+                        if not amount_str or amount_str.lower() in ['to taste', 'as needed', 'optional']:
+                            base_quantity = 0
+                        else:
+                            # Handle fraction strings like "1/2", "3/4", etc.
+                            if '/' in amount_str and amount_str.count('/') == 1:
+                                try:
+                                    parts = amount_str.split('/')
+                                    if len(parts) == 2 and parts[0].replace('.', '').isdigit() and parts[1].replace('.', '').isdigit():
+                                        base_quantity = float(parts[0]) / float(parts[1])
+                                    else:
+                                        # Extract first number if fraction parsing fails
+                                        number_match = re.search(r'(\d+(?:\.\d+)?)', amount_str)
+                                        base_quantity = float(number_match.group(1)) if number_match else 0
+                                except (ValueError, ZeroDivisionError):
+                                    # Try to extract first number as fallback
+                                    number_match = re.search(r'(\d+(?:\.\d+)?)', amount_str)
+                                    base_quantity = float(number_match.group(1)) if number_match else 0
+                            else:
+                                # Try to extract first number from string (handles cases like "1-2", "2.5 cups", etc.)
+                                number_match = re.search(r'(\d+(?:\.\d+)?)', amount_str)
+                                if number_match:
+                                    base_quantity = float(number_match.group(1))
+                                else:
+                                    base_quantity = 0
+                    else:
+                        base_quantity = 0
+                except (ValueError, TypeError):
+                    logger.warning(f"Could not parse ingredient amount '{amount_value}' for recipe {recipe.id}, defaulting to 0")
+                    base_quantity = 0
+                
+                quantity = base_quantity * multiplier
                 unit = ingredient_data.get('unit', '').lower().strip()
                 
                 # Try to find the ingredient in our database for category info
@@ -260,7 +299,29 @@ class ShoppingListService:
             if not ingredient_name:
                 continue
             
-            quantity = float(ingredient_data.get('amount', 0))
+            # Safely convert amount to float, handling various input types
+            amount_value = ingredient_data.get('amount', 0)
+            try:
+                if isinstance(amount_value, (int, float)):
+                    quantity = float(amount_value)
+                elif isinstance(amount_value, str):
+                    # Handle string amounts that might contain fractions or ranges
+                    amount_str = amount_value.strip()
+                    if not amount_str or amount_str.lower() in ['to taste', 'as needed', 'optional']:
+                        quantity = 0
+                    else:
+                        # Try to extract first number from string (handles cases like "1-2", "1/2", etc.)
+                        number_match = re.search(r'(\d+(?:\.\d+)?)', amount_str)
+                        if number_match:
+                            quantity = float(number_match.group(1))
+                        else:
+                            quantity = 0
+                else:
+                    quantity = 0
+            except (ValueError, TypeError):
+                logger.warning(f"Could not parse ingredient amount '{amount_value}' for '{ingredient_name}', defaulting to 0")
+                quantity = 0
+                
             unit = ingredient_data.get('unit', '').lower().strip()
             
             # Try to find the ingredient in our database for category info

@@ -198,27 +198,33 @@ class AnalyticsService {
         return {
             bmi_score: {
                 name: "BMI Score",
-                weight: 30,
+                weight: 25,
                 description: "Based on your Body Mass Index relative to healthy ranges",
                 optimal: "BMI between 18.5-24.9 for maximum points"
             },
             activity_score: {
                 name: "Activity Score",
-                weight: 30,
+                weight: 25,
                 description: "Based on your logged activities and declared activity level",
                 optimal: "Regular activities logged with good variety and consistency"
             },
             progress_score: {
                 name: "Progress Score",
-                weight: 20,
+                weight: 15,
                 description: "Based on milestone achievements and goal progress",
                 optimal: "Regular milestones and steady progress toward goals"
             },
             habits_score: {
                 name: "Habits Score",
-                weight: 20,
+                weight: 15,
                 description: "Based on consistency in logging and profile completeness",
                 optimal: "Regular weight logging and complete health profile"
+            },
+            nutrition_score: {
+                name: "Nutrition Score",
+                weight: 20,
+                description: "Based on nutrition profile setup, goal adherence, and logging consistency",
+                optimal: "Complete nutrition profile with regular food logging and meeting nutrition goals"
             }
         };
     }
@@ -238,23 +244,28 @@ class AnalyticsService {
             components: {
                 bmi: {
                     score: Math.round(scoreData.bmi_score || 0),
-                    points: Math.round((scoreData.bmi_score || 0) * 0.3),
+                    points: Math.round((scoreData.bmi_score || 0) * 0.25),
                     ...explanations.bmi_score
                 },
                 activity: {
                     score: Math.round(scoreData.activity_score || 0),
-                    points: Math.round((scoreData.activity_score || 0) * 0.3),
+                    points: Math.round((scoreData.activity_score || 0) * 0.25),
                     ...explanations.activity_score
                 },
                 progress: {
                     score: Math.round(scoreData.progress_score || 0),
-                    points: Math.round((scoreData.progress_score || 0) * 0.2),
+                    points: Math.round((scoreData.progress_score || 0) * 0.15),
                     ...explanations.progress_score
                 },
                 habits: {
                     score: Math.round(scoreData.habits_score || 0),
-                    points: Math.round((scoreData.habits_score || 0) * 0.2),
+                    points: Math.round((scoreData.habits_score || 0) * 0.15),
                     ...explanations.habits_score
+                },
+                nutrition: {
+                    score: Math.round(scoreData.nutrition_score || 0),
+                    points: Math.round((scoreData.nutrition_score || 0) * 0.20),
+                    ...explanations.nutrition_score
                 }
             },
             breakdown: scoreData.score_breakdown || null,

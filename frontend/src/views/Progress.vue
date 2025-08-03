@@ -1,11 +1,13 @@
 <template>
   <div class="progress-container">
-    <h1>Your Progress</h1>
-    <p class="page-description">Track your weight changes over time.</p>
+    <div class="page-header">
+      <h1>Goal Tracking Progress</h1>
+      <p class="page-description">Track your nutritional intake against your goals with detailed progress insights.</p>
+    </div>
 
     <div v-if="loading" class="loading-container">
       <div class="loading-spinner"></div>
-      <p>Loading your health data...</p>
+      <p>Loading your progress data...</p>
     </div>
 
     <div v-else-if="error" class="error-container">
@@ -14,1082 +16,1470 @@
     </div>
 
     <div v-else-if="!hasProfileData" class="empty-container">
-      <p>Please complete your health profile to start tracking your progress.</p>
+      <p>Please complete your health profile and nutrition goals to start tracking your progress.</p>
       <router-link to="/profile" class="btn-primary">Complete Profile</router-link>
     </div>
 
     <div v-else class="progress-content">
-      <!-- Chart Controls -->
-      <div class="chart-controls">
-        <div class="time-range-selector">
-          <label for="timeRange">Time Range:</label>
-          <select id="timeRange" v-model="selectedTimeRange" @change="updateChart">
-            <option value="all">All Time</option>
-            <option value="year">Last Year</option>
-            <option value="6months">Last 6 Months</option>
-            <option value="3months">Last 3 Months</option>
-            <option value="month">Last Month</option>
-            <option value="week">Last Week</option>
-          </select>
+      <!-- Daily Progress Section -->
+      <div class="daily-progress-section">
+        <h2>Today's Progress</h2>
+        <div class="date-selector">
+          <label for="selectedDate">Date:</label>
+          <input 
+            type="date" 
+            id="selectedDate" 
+            v-model="selectedDate" 
+            @change="fetchDailyData"
+            :max="getCurrentDate()"
+          >
         </div>
 
-      </div>
-
-      <!-- Weight Progress Chart -->
-      <div class="chart-section">
-        <h2>Weight Progress Chart</h2>
-        <div class="chart-container">
-          <canvas ref="weightChart"></canvas>
-        </div>
-
-        <div v-if="weightHistory && weightHistory.length > 1" class="chart-info">
-          <div class="info-item">
-            <div class="info-icon">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M12 22C17.5228 22 22 17.5228 22 12C22 6.47715 17.5228 2 12 2C6.47715 2 2 6.47715 2 12C2 17.5228 6.47715 22 12 22Z" stroke="#30C1B1" stroke-width="2"/>
-                <path d="M12 16V12" stroke="#30C1B1" stroke-width="2" stroke-linecap="round"/>
-                <circle cx="12" cy="8" r="1" fill="#30C1B1"/>
-              </svg>
+        <div class="progress-cards">
+          <!-- Calorie Progress Card -->
+          <div class="progress-card calories">
+            <div class="card-header">
+              <h3>Daily Calories</h3>
+              <div class="progress-indicator" :class="getCalorieStatusClass()">
+                {{ getCalorieStatusText() }}
+              </div>
             </div>
-            <div class="info-text">Each point represents a weight entry with a unique timestamp</div>
-          </div>
-          <div v-if="profile?.target_weight_kg" class="info-item">
-            <div class="info-icon">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M3 12H21" stroke="#FF9800" stroke-width="2" stroke-linecap="round" stroke-dasharray="4 4"/>
-              </svg>
+            <div class="progress-bar-container">
+              <div class="progress-bar">
+                <div 
+                  class="progress-fill calories-fill" 
+                  :style="{ width: `${getCalorieProgressPercentage()}%` }"
+                ></div>
+              </div>
+              <div class="progress-labels">
+                <span>{{ dailyData.totalCalories || 0 }} kcal</span>
+                <span>{{ nutritionProfile?.calorie_target || 0 }} kcal target</span>
+              </div>
             </div>
-            <div class="info-text">Dashed line shows your target weight ({{ profile.target_weight_kg }} kg)</div>
-          </div>
-          <div v-if="showTrendline" class="info-item">
-            <div class="info-icon">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M3 20L21 4" stroke="#9C27B0" stroke-width="2" stroke-linecap="round"/>
-              </svg>
+            <div class="deficit-surplus">
+              <span :class="getDeficitSurplusClass()">
+                {{ getDeficitSurplusText() }}
+              </span>
             </div>
-            <div class="info-text">Purple line shows the overall trend of your weight change</div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Progress Summary Section -->
-      <div class="progress-summary-section" v-if="hasEnoughData">
-        <h2>Progress Summary</h2>
-        <div class="summary-cards">
-          <div class="summary-card">
-            <h3>Weekly Change</h3>
-            <div class="summary-value" :class="getChangeClass(weeklyChange)">
-              {{ weeklyChange > 0 ? '+' : '' }}{{ weeklyChange }} kg
-            </div>
-            <div class="summary-label">Average change per week</div>
           </div>
 
-          <div class="summary-card">
-            <h3>Monthly Change</h3>
-            <div class="summary-value" :class="getChangeClass(monthlyChange)">
-              {{ monthlyChange > 0 ? '+' : '' }}{{ monthlyChange }} kg
+          <!-- Protein Progress Card -->
+          <div class="progress-card protein">
+            <div class="card-header">
+              <h3>Protein</h3>
+              <div class="progress-indicator" :class="getProteinStatusClass()">
+                {{ getProteinStatusText() }}
+              </div>
             </div>
-            <div class="summary-label">Average change per month</div>
-          </div>
-
-          <div class="summary-card">
-            <h3>Projected Goal</h3>
-            <div class="summary-value">
-              {{ projectedGoal }}
-            </div>
-            <div class="summary-label">Based on current progress</div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Weight History Section -->
-      <div class="weight-history-section">
-        <h2>Weight History</h2>
-        <div class="weight-history-header">
-          <div class="weight-summary">
-            <div class="summary-item">
-              <div class="summary-label">Starting Weight</div>
-              <div class="summary-value">{{ startingWeight || '—' }} kg</div>
-            </div>
-            <div class="summary-item">
-              <div class="summary-label">Current Weight</div>
-              <div class="summary-value">{{ profile?.weight_kg || '—' }} kg</div>
-            </div>
-            <div class="summary-item">
-              <div class="summary-label">Target Weight</div>
-              <div class="summary-value">{{ profile?.target_weight_kg || 'Not set' }}</div>
-            </div>
-            <div class="summary-item">
-              <div class="summary-label">Total Change</div>
-              <div class="summary-value" :class="getTotalChangeClass()">
-                {{ totalWeightChange > 0 ? '+' : '' }}{{ totalWeightChange || '0' }} kg
+            <div class="progress-bar-container">
+              <div class="progress-bar">
+                <div 
+                  class="progress-fill protein-fill" 
+                  :style="{ width: `${getProteinProgressPercentage()}%` }"
+                ></div>
+              </div>
+              <div class="progress-labels">
+                <span>{{ Math.round(dailyData.totalProtein || 0) }}g</span>
+                <span>{{ Math.round(nutritionProfile?.protein_target || 0) }}g target</span>
               </div>
             </div>
           </div>
-          <div class="action-buttons">
-            <button @click="showAddWeightModal = true" class="btn-primary">
-              Log New Weight
-            </button>
+
+          <!-- Carbs Progress Card -->
+          <div class="progress-card carbs">
+            <div class="card-header">
+              <h3>Carbs</h3>
+              <div class="progress-indicator" :class="getCarbsStatusClass()">
+                {{ getCarbsStatusText() }}
+              </div>
+            </div>
+            <div class="progress-bar-container">
+              <div class="progress-bar">
+                <div 
+                  class="progress-fill carbs-fill" 
+                  :style="{ width: `${getCarbsProgressPercentage()}%` }"
+                ></div>
+              </div>
+              <div class="progress-labels">
+                <span>{{ Math.round(dailyData.totalCarbs || 0) }}g</span>
+                <span>{{ Math.round(nutritionProfile?.carb_target || 0) }}g target</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Fat Progress Card -->
+          <div class="progress-card fat">
+            <div class="card-header">
+              <h3>Fat</h3>
+              <div class="progress-indicator" :class="getFatStatusClass()">
+                {{ getFatStatusText() }}
+              </div>
+            </div>
+            <div class="progress-bar-container">
+              <div class="progress-bar">
+                <div 
+                  class="progress-fill fat-fill" 
+                  :style="{ width: `${getFatProgressPercentage()}%` }"
+                ></div>
+              </div>
+              <div class="progress-labels">
+                <span>{{ Math.round(dailyData.totalFat || 0) }}g</span>
+                <span>{{ Math.round(nutritionProfile?.fat_target || 0) }}g target</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Weight Goal Progress Chart -->
+          <div class="progress-card weight-goal">
+            <div class="card-header">
+              <h3>Weight Goal Progress</h3>
+              <div class="progress-indicator" :class="getWeightGoalStatusClass()">
+                {{ getWeightGoalStatusText() }}
+              </div>
+            </div>
+            <div class="weight-chart-container">
+              <ProgressChart
+                title="Weight Progress"
+                :data="weightHistoryData"
+                :goal-value="weightGoal"
+                unit="kg"
+                chart-type="line"
+                color="#8b5cf6"
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Weekly Progress Section -->
+      <div class="weekly-progress-section">
+        <h2>Weekly Overview</h2>
+        <div class="time-range-selector">
+          <label for="weekRange">Week:</label>
+          <select id="weekRange" v-model="selectedWeek" @change="fetchWeeklyData">
+            <option v-for="week in availableWeeks" :key="week.value" :value="week.value">
+              {{ week.label }}
+            </option>
+          </select>
+        </div>
+
+        <div class="weekly-summary">
+          <div class="summary-card">
+            <h3>Average Daily Calories</h3>
+            <div class="summary-value" :class="getWeeklyCalorieClass()">
+              {{ Math.round(weeklyAverages.calories || 0) }} kcal
+            </div>
+            <div class="summary-target">
+              Target: {{ nutritionProfile?.calorie_target || 0 }} kcal
+            </div>
+            <div class="summary-difference" :class="getWeeklyCalorieDifferenceClass()">
+              {{ getWeeklyCalorieDifference() }}
+            </div>
+          </div>
+
+          <div class="summary-card">
+            <h3>Weekly Deficit/Surplus</h3>
+            <div class="summary-value" :class="getWeeklyDeficitClass()">
+              {{ Math.round(weeklyAverages.totalDeficit || 0) }} kcal
+            </div>
+            <div class="summary-label">Total for the week</div>
+          </div>
+
+          <div class="summary-card">
+            <h3>Days on Target</h3>
+            <div class="summary-value success">
+              {{ weeklyStats.daysOnTarget || 0 }}/7
+            </div>
+            <div class="summary-label">Within ±10% of goals</div>
+          </div>
+
+          <div class="summary-card">
+            <h3>Consistency Score</h3>
+            <div class="summary-value" :class="getConsistencyScoreClass()">
+              {{ Math.round(weeklyStats.consistencyScore || 0) }}%
+            </div>
+            <div class="summary-label">Goal adherence</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Trend Analysis Section -->
+      <div class="trend-analysis-section">
+        <h2>Caloric Trend Analysis</h2>
+        <div class="chart-controls">
+          <div class="chart-type-selector">
+            <label>Chart Type:</label>
+            <div class="radio-group">
+              <label>
+                <input type="radio" v-model="chartType" value="deficit" />
+                Daily Deficit/Surplus
+              </label>
+              <label>
+                <input type="radio" v-model="chartType" value="intake" />
+                Calorie Intake vs Target
+              </label>
+            </div>
+          </div>
+          <div class="time-period-selector">
+            <label for="chartPeriod">Period:</label>
+            <select id="chartPeriod" v-model="chartPeriod" @change="updateChart">
+              <option value="week">Last 7 Days</option>
+              <option value="month">Last 30 Days</option>
+              <option value="quarter">Last 3 Months</option>
+            </select>
           </div>
         </div>
 
-        <div v-if="weightHistory && weightHistory.length > 0" class="weight-history-table">
+        <div class="chart-container">
+          <canvas ref="trendChart"></canvas>
+        </div>
+
+        <div class="chart-insights">
+          <div class="insight-card" v-if="trendInsights.averageDeficit">
+            <h4>Average Daily Deficit</h4>
+            <p :class="getDeficitInsightClass()">
+              {{ Math.round(trendInsights.averageDeficit) }} kcal
+              <span class="insight-note">
+                {{ getDeficitInsightText() }}
+              </span>
+            </p>
+          </div>
+          
+          <div class="insight-card" v-if="trendInsights.trend">
+            <h4>Trend Direction</h4>
+            <p :class="getTrendDirectionClass()">
+              {{ getTrendDirectionText() }}
+              <span class="insight-note">
+                {{ getTrendInsightText() }}
+              </span>
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Historical Progress Section -->
+      <div class="historical-progress-section">
+        <h2>Historical Progress</h2>
+        <div class="progress-history-table">
           <table>
             <thead>
               <tr>
                 <th>Date</th>
-                <th>Time</th>
-                <th>Weight (kg)</th>
-                <th>Change</th>
+                <th>Calories</th>
+                <th>Target</th>
+                <th>Deficit/Surplus</th>
+                <th>Goal Achievement</th>
               </tr>
             </thead>
             <tbody>
-              <tr v-for="(entry, index) in sortedWeightHistory" :key="entry.id">
-                <td>{{ formatDate(entry.recorded_at) }}</td>
-                <td>{{ formatTime(entry.recorded_at) }}</td>
-                <td>{{ entry.weight_kg }}</td>
-                <td :class="getChangeClass(getWeightChange(entry, index))">
-                  {{ getWeightChange(entry, index) }}
+              <tr v-for="day in progressHistory" :key="day.date">
+                <td>{{ formatDate(day.date) }}</td>
+                <td>{{ Math.round(day.totalCalories || 0) }}</td>
+                <td>{{ nutritionProfile?.calorie_target || 0 }}</td>
+                <td :class="getDeficitSurplusClass(day.calorieDeficitSurplus)">
+                  {{ getDeficitSurplusText(day.calorieDeficitSurplus) }}
+                </td>
+                <td>
+                  <div class="achievement-indicator" :class="getAchievementClass(day)">
+                    {{ getAchievementText(day) }}
+                  </div>
                 </td>
               </tr>
             </tbody>
           </table>
         </div>
-
-        <div v-else class="no-data-message">
-          <p>No weight history data available. Start logging your weight to see your progress over time.</p>
-        </div>
-
-        <div v-if="weightHistory && weightHistory.length > 1" class="timestamp-verification">
-          <div class="verification-icon">✓</div>
-          <div class="verification-text">
-            Each weight entry has a unique timestamp for accurate tracking
-          </div>
-        </div>
       </div>
     </div>
-
-    <!-- Add Weight Modal -->
-    <AddWeightModal
-      v-if="showAddWeightModal"
-      :loading="weightLoading"
-      :error="weightError"
-      @close="showAddWeightModal = false"
-      @save="saveNewWeight"
-      @error="setWeightError"
-    />
   </div>
 </template>
 
 <script>
-import {computed, nextTick, onMounted, onUnmounted, ref, watch} from 'vue';
+import { computed, nextTick, onMounted, ref, watch } from 'vue';
 import Chart from 'chart.js/auto';
-import AddWeightModal from '@/components/dashboard/AddWeightModal.vue';
 import HealthProfileService from '@/services/health-profile_service';
+import ProgressChart from '@/components/dashboard/ProgressChart.vue';
 
 export default {
   name: 'Progress',
   components: {
-    AddWeightModal
+    ProgressChart
   },
   setup() {
     const loading = ref(true);
     const error = ref(null);
-    const profile = ref(null);
-    const weightHistory = ref([]);
-    const showAddWeightModal = ref(false);
-    const weightLoading = ref(false);
-    const weightError = ref(null);
-    const weightChart = ref(null);
-    const weightChartInstance = ref(null);
+    const healthProfile = ref(null);
+    const nutritionProfile = ref(null);
+    const selectedDate = ref(new Date().toISOString().split('T')[0]);
+    const selectedWeek = ref('current');
+    const chartType = ref('deficit');
+    const chartPeriod = ref('week');
 
-    // Chart configuration options
-    const selectedTimeRange = ref('all');
-    const selectedChartType = ref('line');
-    const showTrendline = ref(true);
+    // Data refs
+    const dailyData = ref({
+      totalCalories: 0,
+      totalProtein: 0,
+      totalCarbs: 0,
+      totalFat: 0,
+      calorieDeficitSurplus: 0
+    });
+
+    const weeklyAverages = ref({
+      calories: 0,
+      protein: 0,
+      carbs: 0,
+      fat: 0,
+      totalDeficit: 0
+    });
+
+    const weeklyStats = ref({
+      daysOnTarget: 0,
+      consistencyScore: 0
+    });
+
+    const progressHistory = ref([]);
+    const trendInsights = ref({
+      averageDeficit: 0,
+      trend: null
+    });
+
+    // Weight data
+    const weightHistoryData = ref([]);
+    const weightGoal = ref(null);
+
+    // Chart ref
+    const trendChart = ref(null);
+    let chartInstance = null;
 
     // Computed properties
     const hasProfileData = computed(() => {
-      return profile.value && profile.value.height_cm && profile.value.weight_kg;
+      return healthProfile.value && nutritionProfile.value;
     });
 
-    const hasEnoughData = computed(() => {
-      return weightHistory.value && Array.isArray(weightHistory.value) && weightHistory.value.length > 2;
+    const availableWeeks = computed(() => {
+      const weeks = [];
+      const today = new Date();
+      
+      for (let i = 0; i < 12; i++) {
+        const weekStart = new Date(today);
+        weekStart.setDate(today.getDate() - (today.getDay() + 7 * i));
+        const weekEnd = new Date(weekStart);
+        weekEnd.setDate(weekStart.getDate() + 6);
+        
+        const label = i === 0 ? 'This Week' : 
+                     i === 1 ? 'Last Week' : 
+                     `${weekStart.toLocaleDateString()} - ${weekEnd.toLocaleDateString()}`;
+        
+        weeks.push({
+          value: `week-${i}`,
+          label: label,
+          startDate: weekStart.toISOString().split('T')[0],
+          endDate: weekEnd.toISOString().split('T')[0]
+        });
+      }
+      
+      return weeks;
     });
 
-    const sortedWeightHistory = computed(() => {
-      if (!weightHistory.value || !Array.isArray(weightHistory.value) || weightHistory.value.length === 0) {
-        return [];
-      }
-
-      try {
-        return [...weightHistory.value].sort((a, b) =>
-          new Date(b.recorded_at) - new Date(a.recorded_at)
-        );
-      } catch (error) {
-        console.error('Error sorting weight history:', error);
-        return [];
-      }
-    });
-
-    const startingWeight = computed(() => {
-      if (!weightHistory.value || !Array.isArray(weightHistory.value) || weightHistory.value.length === 0) {
-        return profile.value?.weight_kg || null;
-      }
-
-      try {
-        // Get the oldest weight entry
-        const oldest = [...weightHistory.value]
-          .sort((a, b) => new Date(a.recorded_at) - new Date(b.recorded_at))
-          .shift();
-
-        return oldest ? oldest.weight_kg : profile.value?.weight_kg || null;
-      } catch (error) {
-        console.error('Error calculating starting weight:', error);
-        return profile.value?.weight_kg || null;
-      }
-    });
-
-    const totalWeightChange = computed(() => {
-      if (!weightHistory.value || !Array.isArray(weightHistory.value) || weightHistory.value.length === 0) {
-        return 0;
-      }
-
-      try {
-        const sorted = [...weightHistory.value].sort((a, b) =>
-          new Date(a.recorded_at) - new Date(b.recorded_at)
-        );
-
-        if (sorted.length < 2) return 0;
-
-        const first = parseFloat(sorted[0].weight_kg);
-        const last = parseFloat(sorted[sorted.length - 1].weight_kg);
-
-        return (last - first).toFixed(1);
-      } catch (error) {
-        console.error('Error calculating total weight change:', error);
-        return 0;
-      }
-    });
-
-    // Calculate weekly and monthly changes
-    const weeklyChange = computed(() => {
-      if (!weightHistory.value || !Array.isArray(weightHistory.value) || weightHistory.value.length < 2) {
-        return 0;
-      }
-
-      try {
-        const oneWeekAgo = new Date();
-        oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
-
-        const recentEntries = weightHistory.value.filter(entry =>
-          new Date(entry.recorded_at) >= oneWeekAgo
-        );
-
-        if (recentEntries.length < 2) return 0;
-
-        const sorted = recentEntries.sort((a, b) =>
-          new Date(a.recorded_at) - new Date(b.recorded_at)
-        );
-
-        const first = parseFloat(sorted[0].weight_kg);
-        const last = parseFloat(sorted[sorted.length - 1].weight_kg);
-
-        return (last - first).toFixed(1);
-      } catch (error) {
-        console.error('Error calculating weekly change:', error);
-        return 0;
-      }
-    });
-
-    const monthlyChange = computed(() => {
-      if (!weightHistory.value || !Array.isArray(weightHistory.value) || weightHistory.value.length < 2) {
-        return 0;
-      }
-
-      try {
-        const oneMonthAgo = new Date();
-        oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1);
-
-        const recentEntries = weightHistory.value.filter(entry =>
-          new Date(entry.recorded_at) >= oneMonthAgo
-        );
-
-        if (recentEntries.length < 2) return 0;
-
-        const sorted = recentEntries.sort((a, b) =>
-          new Date(a.recorded_at) - new Date(b.recorded_at)
-        );
-
-        const first = parseFloat(sorted[0].weight_kg);
-        const last = parseFloat(sorted[sorted.length - 1].weight_kg);
-
-        return (last - first).toFixed(1);
-      } catch (error) {
-        console.error('Error calculating monthly change:', error);
-        return 0;
-      }
-    });
-
-    // Projected goal date based on current trend
-    const projectedGoal = computed(() => {
-      if (!hasEnoughData.value || !profile.value?.target_weight_kg) return 'Not available';
-
-      const currentWeight = parseFloat(profile.value.weight_kg);
-      const targetWeight = parseFloat(profile.value.target_weight_kg);
-      const dailyChange = calculateChangeRate(1);
-
-      // If no change or wrong direction, cannot project
-      if (Math.abs(dailyChange) < 0.01 ||
-          (profile.value.fitness_goal === 'weight_loss' && dailyChange >= 0) ||
-          (profile.value.fitness_goal === 'muscle_gain' && dailyChange <= 0)) {
-        return 'Not on track';
-      }
-
-      const daysToGoal = Math.abs(Math.round((targetWeight - currentWeight) / dailyChange));
-
-      if (daysToGoal > 365 * 2) {
-        return 'Long-term goal';
-      }
-
-      const date = new Date();
-      date.setDate(date.getDate() + daysToGoal);
-
-      return `~${formatDate(date)} (${daysToGoal} days)`;
-    });
-
-    // Calculate weight change rate (per day specified)
-    const calculateChangeRate = (daysInterval) => {
-      if (!weightHistory.value || weightHistory.value.length < 2) return 0;
-
-      // Get chronologically sorted data
-      const sorted = [...weightHistory.value].sort((a, b) =>
-        new Date(a.recorded_at) - new Date(b.recorded_at)
-      );
-
-      // Get oldest and newest entries
-      const oldest = sorted[0];
-      const newest = sorted[sorted.length - 1];
-
-      // Calculate days between first and last entry
-      const firstDate = new Date(oldest.recorded_at);
-      const lastDate = new Date(newest.recorded_at);
-      const daysDiff = (lastDate - firstDate) / (1000 * 60 * 60 * 24);
-
-      if (daysDiff < 1) return 0; // Avoid division by zero or if all entries are same day
-
-      // Calculate change per day, then multiply by specified interval
-      const weightDiff = parseFloat(newest.weight_kg) - parseFloat(oldest.weight_kg);
-      const ratePerDay = weightDiff / daysDiff;
-
-      return ratePerDay * daysInterval;
+    // Methods
+    const getCurrentDate = () => {
+      return new Date().toISOString().split('T')[0];
     };
-
-    // Calculate trend line data
-    const calculateTrendLine = (entries) => {
-      if (entries.length < 2) return null;
-
-      // Extract x (timestamps) and y (weight) values
-      const timestamps = entries.map(entry => new Date(entry.recorded_at).getTime());
-      const weights = entries.map(entry => parseFloat(entry.weight_kg));
-
-      // Calculate means
-      const meanX = timestamps.reduce((sum, val) => sum + val, 0) / timestamps.length;
-      const meanY = weights.reduce((sum, val) => sum + val, 0) / weights.length;
-
-      // Calculate numerator and denominator for slope
-      let numerator = 0;
-      let denominator = 0;
-
-      for (let i = 0; i < timestamps.length; i++) {
-        numerator += (timestamps[i] - meanX) * (weights[i] - meanY);
-        denominator += (timestamps[i] - meanX) * (timestamps[i] - meanX);
-      }
-
-      // Calculate slope and intercept
-      const slope = denominator !== 0 ? numerator / denominator : 0;
-      const intercept = meanY - slope * meanX;
-
-      // Calculate trend values for first and last points
-      const firstPoint = {
-        x: new Date(timestamps[0]),
-        y: slope * timestamps[0] + intercept
-      };
-
-      const lastPoint = {
-        x: new Date(timestamps[timestamps.length - 1]),
-        y: slope * timestamps[timestamps.length - 1] + intercept
-      };
-
-      return [firstPoint, lastPoint];
-    };
-
-    // Updated fetchData function to ensure chart renders on initial load
 
     const fetchData = async () => {
-      loading.value = true;
-      error.value = null;
-
       try {
-        const profileResponse = await HealthProfileService.getHealthProfile();
-        profile.value = profileResponse.data;
+        loading.value = true;
+        error.value = null;
 
-        const weightResponse = await HealthProfileService.getWeightHistory();
+        // Fetch health profile
+        const healthResponse = await HealthProfileService.getProfile();
+        healthProfile.value = healthResponse.data;
 
-        // FIX: Handle paginated weight history response
-        if (weightResponse.data && weightResponse.data.results) {
-          weightHistory.value = weightResponse.data.results;
-        } else if (Array.isArray(weightResponse.data)) {
-          weightHistory.value = weightResponse.data;
-        } else {
-          weightHistory.value = [];
-        }
+        // Fetch nutrition profile
+        const { mealPlanningApi } = await import('@/services/mealPlanningApi');
+        const nutritionResponse = await mealPlanningApi.getNutritionProfile();
+        nutritionProfile.value = nutritionResponse.data;
 
-        // Wait for the DOM to update before rendering chart
-        await nextTick();
+        await Promise.all([
+          fetchDailyData(),
+          fetchWeeklyData(),
+          fetchProgressHistory()
+        ]);
 
-        // Only try to render chart if we have data
-        if (weightHistory.value && weightHistory.value.length > 0) {
-          const filteredEntries = filterEntriesByTimeRange();
-          renderChart(filteredEntries);
-        }
       } catch (err) {
-        console.error('Error fetching progress data:', err);
+        console.error('Error fetching data:', err);
         error.value = 'Failed to load progress data. Please try again.';
       } finally {
         loading.value = false;
       }
     };
 
-    // Initialize component with immediate rendering
-    onMounted(() => {
-      // Fetch data immediately
-      fetchData();
-
-      // Add resize handler for responsive charts
-      const resizeHandler = () => {
-        if (weightChartInstance.value) {
-          weightChartInstance.value.resize();
-        }
-      };
-
-      window.addEventListener('resize', resizeHandler);
-
-      // Clean up on unmount
-      onUnmounted(() => {
-        window.removeEventListener('resize', resizeHandler);
-        if (weightChartInstance.value) {
-          weightChartInstance.value.destroy();
-        }
-      });
-    });
-
-    // Update chart based on selected options
-    const updateChart = () => {
-      if (!weightChart.value || !weightHistory.value || weightHistory.value.length === 0) return;
-
-      if (weightChartInstance.value) {
-        weightChartInstance.value.destroy();
-      }
-
-      const filteredEntries = filterEntriesByTimeRange();
-      if (filteredEntries.length === 0) return;
-
-      renderChart(filteredEntries);
-    };
-
-    // Filter entries based on selected time range
-    const filterEntriesByTimeRange = () => {
-
-      if (!weightHistory.value || !Array.isArray(weightHistory.value) || weightHistory.value.length === 0) {
-        return [];
-      }
-
+    const fetchDailyData = async () => {
       try {
-        // Sort by date
-        const sortedEntries = [...weightHistory.value].sort((a, b) =>
-          new Date(a.recorded_at) - new Date(b.recorded_at)
-        );
-
-        if (selectedTimeRange.value === 'all') {
-          return sortedEntries;
+        const response = await HealthProfileService.getNutritionLog(selectedDate.value);
+        if (response.data) {
+          dailyData.value = response.data;
+          
+          // Calculate deficit/surplus
+          if (nutritionProfile.value?.calorie_target) {
+            dailyData.value.calorieDeficitSurplus = 
+              (dailyData.value.totalCalories || 0) - nutritionProfile.value.calorie_target;
+          }
+        } else {
+          // No data for this date
+          dailyData.value = {
+            totalCalories: 0,
+            totalProtein: 0,
+            totalCarbs: 0,
+            totalFat: 0,
+            calorieDeficitSurplus: -(nutritionProfile.value?.calorie_target || 0)
+          };
         }
-
-        // Calculate cut-off date based on selected range
-        const now = new Date();
-        let cutoffDate = new Date();
-
-        switch (selectedTimeRange.value) {
-          case 'year':
-            cutoffDate.setFullYear(now.getFullYear() - 1);
-            break;
-          case '6months':
-            cutoffDate.setMonth(now.getMonth() - 6);
-            break;
-          case '3months':
-            cutoffDate.setMonth(now.getMonth() - 3);
-            break;
-          case 'month':
-            cutoffDate.setMonth(now.getMonth() - 1);
-            break;
-          case 'week':
-            cutoffDate.setDate(now.getDate() - 7);
-            break;
-          default:
-            return sortedEntries;
-        }
-
-        // Filter entries by date
-        return sortedEntries.filter(entry =>
-          new Date(entry.recorded_at) >= cutoffDate
-        );
-      } catch (error) {
-        console.error('Error filtering weight entries:', error);
-        return [];
+      } catch (err) {
+        console.error('Error fetching daily data:', err);
       }
     };
 
-    // Render weight progress chart
-    // Fix the renderChart function to address the bar chart error and initial loading
-    const renderChart = (entries) => {
-      if (!weightChart.value || !entries || entries.length === 0) return;
+    const fetchWeeklyData = async () => {
+      try {
+        const weekInfo = availableWeeks.value.find(w => w.value === selectedWeek.value);
+        if (!weekInfo) return;
 
-      // Destroy existing chart instance if it exists
-      if (weightChartInstance.value) {
-        weightChartInstance.value.destroy();
+        const response = await HealthProfileService.getNutritionLogs(
+          weekInfo.startDate, 
+          weekInfo.endDate
+        );
+        
+        const logs = response.data || [];
+        
+        if (logs.length > 0) {
+          // Calculate averages
+          const totals = logs.reduce((acc, log) => ({
+            calories: acc.calories + (log.totalCalories || 0),
+            protein: acc.protein + (log.totalProtein || 0),
+            carbs: acc.carbs + (log.totalCarbs || 0),
+            fat: acc.fat + (log.totalFat || 0),
+            deficit: acc.deficit + (log.calorieDeficitSurplus || 0)
+          }), { calories: 0, protein: 0, carbs: 0, fat: 0, deficit: 0 });
+
+          weeklyAverages.value = {
+            calories: totals.calories / logs.length,
+            protein: totals.protein / logs.length,
+            carbs: totals.carbs / logs.length,
+            fat: totals.fat / logs.length,
+            totalDeficit: totals.deficit
+          };
+
+          // Calculate stats
+          const calorieTarget = nutritionProfile.value?.calorie_target || 0;
+          const daysOnTarget = logs.filter(log => {
+            const variance = Math.abs((log.totalCalories || 0) - calorieTarget) / calorieTarget;
+            return variance <= 0.1; // Within 10%
+          }).length;
+
+          const totalVariance = logs.reduce((acc, log) => {
+            const variance = Math.abs((log.totalCalories || 0) - calorieTarget) / calorieTarget;
+            return acc + Math.min(variance, 1); // Cap at 100% variance
+          }, 0);
+
+          weeklyStats.value = {
+            daysOnTarget,
+            consistencyScore: Math.max(0, 100 - (totalVariance / logs.length * 100))
+          };
+        }
+      } catch (err) {
+        console.error('Error fetching weekly data:', err);
+      }
+    };
+
+    const fetchProgressHistory = async () => {
+      try {
+        const endDate = new Date();
+        const startDate = new Date();
+        startDate.setDate(endDate.getDate() - 30); // Last 30 days
+
+        const response = await HealthProfileService.getNutritionLogs(
+          startDate.toISOString().split('T')[0],
+          endDate.toISOString().split('T')[0]
+        );
+
+        progressHistory.value = (response.data || []).map(log => ({
+          ...log,
+          calorieDeficitSurplus: (log.totalCalories || 0) - (nutritionProfile.value?.calorie_target || 0)
+        }));
+
+        calculateTrendInsights();
+        updateChart();
+      } catch (err) {
+        console.error('Error fetching progress history:', err);
+      }
+    };
+
+    const calculateTrendInsights = () => {
+      if (progressHistory.value.length === 0) return;
+
+      const deficits = progressHistory.value.map(day => day.calorieDeficitSurplus || 0);
+      const averageDeficit = deficits.reduce((acc, def) => acc + def, 0) / deficits.length;
+
+      // Simple trend calculation (last 7 days vs previous 7 days)
+      const recentDeficits = deficits.slice(-7);
+      const previousDeficits = deficits.slice(-14, -7);
+      
+      let trend = null;
+      if (previousDeficits.length > 0) {
+        const recentAvg = recentDeficits.reduce((acc, def) => acc + def, 0) / recentDeficits.length;
+        const previousAvg = previousDeficits.reduce((acc, def) => acc + def, 0) / previousDeficits.length;
+        
+        if (Math.abs(recentAvg - previousAvg) > 50) {
+          trend = recentAvg < previousAvg ? 'improving' : 'worsening';
+        } else {
+          trend = 'stable';
+        }
       }
 
-      // Format dates for labels
-      const labels = entries.map(entry => formatDate(entry.recorded_at));
-      const weightData = entries.map(entry => parseFloat(entry.weight_kg));
+      trendInsights.value = {
+        averageDeficit,
+        trend
+      };
+    };
 
-      // Basic configuration common to all chart types
-      const config = {
-        type: selectedChartType.value,
-        data: {
-          labels: labels,
-          datasets: []
-        },
+    const fetchWeightHistory = async () => {
+      try {
+        // Fetch weight history from health profiles
+        const profileResponse = await HealthProfileService.getProfile();
+        if (profileResponse.data) {
+          healthProfile.value = profileResponse.data;
+          weightGoal.value = healthProfile.value.weight_goal;
+        }
+
+        // Fetch weight history
+        const weightResponse = await HealthProfileService.getWeightHistory();
+        if (weightResponse.data) {
+          weightHistoryData.value = weightResponse.data.map(entry => ({
+            date: entry.date,
+            value: parseFloat(entry.weight)
+          }));
+        }
+      } catch (err) {
+        console.error('Error fetching weight history:', err);
+      }
+    };
+
+    const updateChart = async () => {
+      await nextTick();
+      
+      if (!trendChart.value || progressHistory.value.length === 0) return;
+
+      if (chartInstance) {
+        chartInstance.destroy();
+      }
+
+      const ctx = trendChart.value.getContext('2d');
+      const labels = progressHistory.value.slice(-getDaysForPeriod()).map(day => 
+        new Date(day.date).toLocaleDateString()
+      );
+
+      let datasets = [];
+      
+      if (chartType.value === 'deficit') {
+        datasets = [{
+          label: 'Daily Deficit/Surplus',
+          data: progressHistory.value.slice(-getDaysForPeriod()).map(day => day.calorieDeficitSurplus || 0),
+          borderColor: '#30C1B1',
+          backgroundColor: 'rgba(48, 193, 177, 0.1)',
+          fill: true,
+          tension: 0.4
+        }, {
+          label: 'Target (0)',
+          data: new Array(labels.length).fill(0),
+          borderColor: '#FF9800',
+          borderDash: [5, 5],
+          pointRadius: 0
+        }];
+      } else {
+        datasets = [{
+          label: 'Daily Intake',
+          data: progressHistory.value.slice(-getDaysForPeriod()).map(day => day.totalCalories || 0),
+          borderColor: '#4CAF50',
+          backgroundColor: 'rgba(76, 175, 80, 0.1)',
+          fill: false,
+          tension: 0.4
+        }, {
+          label: 'Target',
+          data: new Array(labels.length).fill(nutritionProfile.value?.calorie_target || 0),
+          borderColor: '#FF9800',
+          borderDash: [5, 5],
+          pointRadius: 0
+        }];
+      }
+
+      chartInstance = new Chart(ctx, {
+        type: 'line',
+        data: { labels, datasets },
         options: {
           responsive: true,
           maintainAspectRatio: false,
-          interaction: {
-            mode: 'index',
-            intersect: false,
-          },
-          plugins: {
-            legend: {
-              position: 'bottom'
-            },
-            tooltip: {
-              callbacks: {
-                label: function(context) {
-                  let label = context.dataset.label || '';
-                  if (label) {
-                    label += ': ';
-                  }
-                  if (context.parsed.y !== null) {
-                    label += context.parsed.y.toFixed(1) + ' kg';
-                  }
-                  return label;
-                }
-              }
-            }
-          },
           scales: {
+            y: {
+              beginAtZero: chartType.value === 'intake',
+              title: {
+                display: true,
+                text: chartType.value === 'deficit' ? 'Calories (Deficit/Surplus)' : 'Calories'
+              }
+            },
             x: {
               title: {
                 display: true,
                 text: 'Date'
               }
+            }
+          },
+          plugins: {
+            legend: {
+              display: true,
+              position: 'top'
             },
-            y: {
-              title: {
-                display: true,
-                text: 'Weight (kg)'
-              }
+            tooltip: {
+              mode: 'index',
+              intersect: false
             }
           }
         }
-      };
-
-      // Add appropriate datasets based on chart type
-
-      // 1. Weight dataset
-      const weightDataset = {
-        label: 'Weight (kg)',
-        data: weightData,
-        borderColor: '#30C1B1',
-        backgroundColor: selectedChartType.value === 'line' ? 'rgba(48, 193, 177, 0.1)' : 'rgba(48, 193, 177, 0.7)',
-        borderWidth: 2,
-        tension: 0.3,
-        fill: selectedChartType.value === 'line'
-      };
-
-      // 2. Target weight dataset (only shown as line)
-      let targetDataset = null;
-      if (profile.value?.target_weight_kg) {
-        targetDataset = {
-          label: 'Target Weight',
-          data: Array(entries.length).fill(parseFloat(profile.value.target_weight_kg)),
-          borderColor: '#FF9800',
-          backgroundColor: 'transparent',
-          borderWidth: 2,
-          borderDash: [5, 5],
-          pointRadius: 0,
-          type: 'line', // Force line chart for target weight
-          order: 1 // Draw lines above bars
-        };
-      }
-
-      // 3. Trendline dataset (only shown as line)
-      let trendDataset = null;
-      if (showTrendline.value && entries.length >= 2) {
-        const trendLine = calculateTrendLine(entries);
-
-        if (trendLine) {
-          // Create array with nulls and only first and last points for a straight line
-          const trendData = Array(entries.length).fill(null);
-          trendData[0] = trendLine[0].y;
-          trendData[trendData.length - 1] = trendLine[1].y;
-
-          trendDataset = {
-            label: 'Trend',
-            data: trendData,
-            borderColor: '#9C27B0',
-            backgroundColor: 'transparent',
-            borderWidth: 2,
-            pointRadius: 0,
-            tension: 0,
-            spanGaps: true, // Connect points with line despite null values
-            type: 'line', // Force line chart for trend line
-            order: 0 // Draw on top
-          };
-        }
-      }
-
-      // Add datasets to config
-      config.data.datasets.push(weightDataset);
-      if (targetDataset) config.data.datasets.push(targetDataset);
-      if (trendDataset) config.data.datasets.push(trendDataset);
-
-      // Create new chart instance
-      weightChartInstance.value = new Chart(weightChart.value, config);
+      });
     };
 
-    // Add new weight entry
-    const saveNewWeight = async (weight) => {
-      weightLoading.value = true;
-      weightError.value = null;
-
-      try {
-        await HealthProfileService.addWeightEntry(weight);
-        const profileData = { ...profile.value, weight_kg: weight };
-        await HealthProfileService.updateHealthProfile(profileData);
-        await fetchData();
-        showAddWeightModal.value = false;
-      } catch (err) {
-        console.error('Error saving weight:', err);
-        if (err.response && err.response.data && err.response.data.detail) {
-          weightError.value = err.response.data.detail;
-        } else {
-          weightError.value = 'Failed to save weight. Please try again.';
-        }
-      } finally {
-        weightLoading.value = false;
+    const getDaysForPeriod = () => {
+      switch (chartPeriod.value) {
+        case 'week': return 7;
+        case 'month': return 30;
+        case 'quarter': return 90;
+        default: return 7;
       }
     };
 
-    // Utility methods
-    const setWeightError = (message) => {
-      weightError.value = message;
+    // Progress calculation methods
+    const getCalorieProgressPercentage = () => {
+      if (!nutritionProfile.value?.calorie_target) return 0;
+      const percentage = (dailyData.value.totalCalories || 0) / nutritionProfile.value.calorie_target * 100;
+      return Math.min(percentage, 100);
+    };
+
+    const getProteinProgressPercentage = () => {
+      if (!nutritionProfile.value?.protein_target) return 0;
+      const percentage = (dailyData.value.totalProtein || 0) / nutritionProfile.value.protein_target * 100;
+      return Math.min(percentage, 100);
+    };
+
+    const getCarbsProgressPercentage = () => {
+      if (!nutritionProfile.value?.carb_target) return 0;
+      const percentage = (dailyData.value.totalCarbs || 0) / nutritionProfile.value.carb_target * 100;
+      return Math.min(percentage, 100);
+    };
+
+    const getFatProgressPercentage = () => {
+      if (!nutritionProfile.value?.fat_target) return 0;
+      const percentage = (dailyData.value.totalFat || 0) / nutritionProfile.value.fat_target * 100;
+      return Math.min(percentage, 100);
+    };
+
+    // Status methods
+    const getCalorieStatusClass = () => {
+      const percentage = getCalorieProgressPercentage();
+      if (percentage >= 90 && percentage <= 110) return 'success';
+      if (percentage >= 80 && percentage <= 120) return 'warning';
+      return 'danger';
+    };
+
+    const getCalorieStatusText = () => {
+      const percentage = getCalorieProgressPercentage();
+      if (percentage >= 90 && percentage <= 110) return 'On Target';
+      if (percentage < 80) return 'Under Target';
+      if (percentage > 120) return 'Over Target';
+      return 'Close to Target';
+    };
+
+    const getProteinStatusClass = () => {
+      const percentage = getProteinProgressPercentage();
+      if (percentage >= 90) return 'success';
+      if (percentage >= 70) return 'warning';
+      return 'danger';
+    };
+
+    const getProteinStatusText = () => {
+      const percentage = getProteinProgressPercentage();
+      if (percentage >= 90) return 'Good';
+      if (percentage >= 70) return 'Low';
+      return 'Very Low';
+    };
+
+    const getCarbsStatusClass = () => {
+      const percentage = getCarbsProgressPercentage();
+      if (percentage >= 80 && percentage <= 120) return 'success';
+      if (percentage >= 60 && percentage <= 140) return 'warning';
+      return 'danger';
+    };
+
+    const getCarbsStatusText = () => {
+      const percentage = getCarbsProgressPercentage();
+      if (percentage >= 80 && percentage <= 120) return 'Balanced';
+      if (percentage < 60) return 'Low';
+      return 'High';
+    };
+
+    const getFatStatusClass = () => {
+      const percentage = getFatProgressPercentage();
+      if (percentage >= 80 && percentage <= 120) return 'success';
+      if (percentage >= 60 && percentage <= 140) return 'warning';
+      return 'danger';
+    };
+
+    const getFatStatusText = () => {
+      const percentage = getFatProgressPercentage();
+      if (percentage >= 80 && percentage <= 120) return 'Balanced';
+      if (percentage < 60) return 'Low';
+      return 'High';
+    };
+
+    // Weight goal status methods
+    const getWeightGoalStatusClass = () => {
+      if (!weightGoal.value || !weightHistoryData.value.length) return 'neutral';
+      const currentWeight = weightHistoryData.value[weightHistoryData.value.length - 1]?.value;
+      if (!currentWeight) return 'neutral';
+      
+      const difference = Math.abs(currentWeight - weightGoal.value);
+      const tolerance = weightGoal.value * 0.02; // 2% tolerance
+      
+      if (difference <= tolerance) return 'success';
+      if (difference <= weightGoal.value * 0.05) return 'warning';
+      return 'danger';
+    };
+
+    const getWeightGoalStatusText = () => {
+      if (!weightGoal.value || !weightHistoryData.value.length) return 'No Goal Set';
+      const currentWeight = weightHistoryData.value[weightHistoryData.value.length - 1]?.value;
+      if (!currentWeight) return 'No Data';
+      
+      const difference = currentWeight - weightGoal.value;
+      const tolerance = weightGoal.value * 0.02; // 2% tolerance
+      
+      if (Math.abs(difference) <= tolerance) return 'Goal Achieved!';
+      if (difference > 0) return 'Above Goal';
+      return 'Below Goal';
+    };
+
+    const getDeficitSurplusClass = (value = null) => {
+      const deficit = value !== null ? value : dailyData.value.calorieDeficitSurplus;
+      if (deficit <= -200) return 'success'; // Good deficit
+      if (deficit >= -50 && deficit <= 50) return 'warning'; // Near maintenance
+      if (deficit > 200) return 'danger'; // Surplus
+      return 'neutral';
+    };
+
+    const getDeficitSurplusText = (value = null) => {
+      const deficit = value !== null ? value : dailyData.value.calorieDeficitSurplus;
+      if (deficit < 0) return `${Math.abs(Math.round(deficit))} kcal deficit`;
+      if (deficit > 0) return `${Math.round(deficit)} kcal surplus`;
+      return 'At maintenance';
+    };
+
+    // Weekly methods
+    const getWeeklyCalorieClass = () => {
+      if (!nutritionProfile.value?.calorie_target) return 'neutral';
+      const target = nutritionProfile.value.calorie_target;
+      const actual = weeklyAverages.value.calories;
+      const percentage = actual / target;
+      
+      if (percentage >= 0.9 && percentage <= 1.1) return 'success';
+      if (percentage >= 0.8 && percentage <= 1.2) return 'warning';
+      return 'danger';
+    };
+
+    const getWeeklyCalorieDifference = () => {
+      if (!nutritionProfile.value?.calorie_target) return '';
+      const difference = weeklyAverages.value.calories - nutritionProfile.value.calorie_target;
+      if (Math.abs(difference) < 10) return 'On target';
+      return difference > 0 ? `+${Math.round(difference)} kcal` : `${Math.round(difference)} kcal`;
+    };
+
+    const getWeeklyCalorieDifferenceClass = () => {
+      if (!nutritionProfile.value?.calorie_target) return 'neutral';
+      const difference = weeklyAverages.value.calories - nutritionProfile.value.calorie_target;
+      if (Math.abs(difference) < 50) return 'success';
+      if (Math.abs(difference) < 100) return 'warning';
+      return 'danger';
+    };
+
+    const getWeeklyDeficitClass = () => {
+      const deficit = weeklyAverages.value.totalDeficit;
+      if (deficit <= -1000) return 'success'; // Good weekly deficit
+      if (deficit >= -300 && deficit <= 300) return 'warning'; // Near maintenance
+      return 'danger'; // Surplus
+    };
+
+    const getConsistencyScoreClass = () => {
+      const score = weeklyStats.value.consistencyScore;
+      if (score >= 80) return 'success';
+      if (score >= 60) return 'warning';
+      return 'danger';
+    };
+
+    // Trend insight methods
+    const getDeficitInsightClass = () => {
+      const deficit = trendInsights.value.averageDeficit;
+      if (deficit <= -200 && deficit >= -500) return 'success';
+      if (deficit > -200 && deficit < 0) return 'warning';
+      return 'danger';
+    };
+
+    const getDeficitInsightText = () => {
+      const deficit = trendInsights.value.averageDeficit;
+      if (deficit <= -400) return 'Aggressive deficit - monitor for sustainability';
+      if (deficit <= -200) return 'Healthy deficit for weight loss';
+      if (deficit < 0) return 'Mild deficit';
+      if (deficit === 0) return 'At maintenance calories';
+      return 'Caloric surplus';
+    };
+
+    const getTrendDirectionClass = () => {
+      const trend = trendInsights.value.trend;
+      if (trend === 'improving') return 'success';
+      if (trend === 'stable') return 'warning';
+      return 'danger';
+    };
+
+    const getTrendDirectionText = () => {
+      const trend = trendInsights.value.trend;
+      if (trend === 'improving') return 'Improving';
+      if (trend === 'stable') return 'Stable';
+      if (trend === 'worsening') return 'Needs Attention';
+      return 'Unknown';
+    };
+
+    const getTrendInsightText = () => {
+      const trend = trendInsights.value.trend;
+      if (trend === 'improving') return 'Your deficit is getting better!';
+      if (trend === 'stable') return 'Consistent with your goals';
+      if (trend === 'worsening') return 'Consider adjusting your approach';
+      return '';
+    };
+
+    // Achievement methods
+    const getAchievementClass = (day) => {
+      const target = nutritionProfile.value?.calorie_target || 0;
+      const actual = day.totalCalories || 0;
+      const variance = Math.abs(actual - target) / target;
+      
+      if (variance <= 0.05) return 'excellent'; // Within 5%
+      if (variance <= 0.1) return 'good'; // Within 10%
+      if (variance <= 0.2) return 'fair'; // Within 20%
+      return 'poor';
+    };
+
+    const getAchievementText = (day) => {
+      const target = nutritionProfile.value?.calorie_target || 0;
+      const actual = day.totalCalories || 0;
+      const variance = Math.abs(actual - target) / target;
+      
+      if (variance <= 0.05) return 'Excellent';
+      if (variance <= 0.1) return 'Good';
+      if (variance <= 0.2) return 'Fair';
+      return 'Needs Work';
     };
 
     const formatDate = (dateString) => {
-      const date = new Date(dateString);
-      return date.toLocaleDateString(undefined, {
-        month: 'short',
-        day: 'numeric',
-        year: 'numeric'
-      });
+      return new Date(dateString).toLocaleDateString();
     };
 
-    const formatTime = (dateString) => {
-      const date = new Date(dateString);
-      return date.toLocaleTimeString(undefined, {
-        hour: '2-digit',
-        minute: '2-digit'
-      });
-    };
-
-    const getWeightChange = (entry, index) => {
-      if (index === sortedWeightHistory.value.length - 1) {
-        return '—';
-      }
-
-      const currentWeight = parseFloat(entry.weight_kg);
-      const previousWeight = parseFloat(sortedWeightHistory.value[index + 1].weight_kg);
-      const change = (currentWeight - previousWeight).toFixed(1);
-
-      return change > 0 ? `+${change}` : change;
-    };
-
-    const getChangeClass = (change) => {
-      if (change === '—' || change === 0 || change === '0' || change === '0.0') return 'neutral';
-
-      let numChange = 0;
-      if (typeof change === 'string') {
-        numChange = parseFloat(change);
-      } else {
-        numChange = change;
-      }
-
-      if (profile.value && profile.value.fitness_goal) {
-        if (profile.value.fitness_goal === 'weight_loss') {
-          return numChange < 0 ? 'positive' : 'negative';
-        } else if (profile.value.fitness_goal === 'muscle_gain') {
-          return numChange > 0 ? 'positive' : 'negative';
-        }
-      }
-
-      return 'neutral';
-    };
-
-    const getTotalChangeClass = () => {
-      if (!totalWeightChange.value || !profile.value) return 'neutral';
-
-      const change = parseFloat(totalWeightChange.value);
-
-      if (change === 0) return 'neutral';
-
-      if (profile.value.fitness_goal === 'weight_loss') {
-        return change < 0 ? 'positive' : 'negative';
-      } else if (profile.value.fitness_goal === 'muscle_gain') {
-        return change > 0 ? 'positive' : 'negative';
-      }
-
-      return 'neutral';
-    };
-
-    // Watch for changes in chart configuration
-    watch([selectedChartType, showTrendline], () => {
+    // Watchers
+    watch([chartType, chartPeriod], () => {
       updateChart();
     });
 
-    // Initialize component
+    watch(selectedWeek, () => {
+      fetchWeeklyData();
+    });
+
+    // Lifecycle
     onMounted(() => {
       fetchData();
+      fetchWeightHistory();
     });
 
     return {
       loading,
       error,
-      profile,
-      weightHistory,
-      showAddWeightModal,
-      weightLoading,
-      weightError,
-      weightChart,
+      healthProfile,
+      nutritionProfile,
+      selectedDate,
+      selectedWeek,
+      chartType,
+      chartPeriod,
+      dailyData,
+      weeklyAverages,
+      weeklyStats,
+      progressHistory,
+      trendInsights,
+      trendChart,
       hasProfileData,
-      hasEnoughData,
-      sortedWeightHistory,
-      startingWeight,
-      totalWeightChange,
-      weeklyChange,
-      monthlyChange,
-      projectedGoal,
-      selectedTimeRange,
-      selectedChartType,
-      showTrendline,
+      availableWeeks,
+      
+      // Methods
+      getCurrentDate,
       fetchData,
+      fetchDailyData,
+      fetchWeeklyData,
+      fetchProgressHistory,
       updateChart,
-      saveNewWeight,
-      setWeightError,
+      
+      // Progress calculations
+      getCalorieProgressPercentage,
+      getProteinProgressPercentage,
+      getCarbsProgressPercentage,
+      getFatProgressPercentage,
+      
+      // Status methods
+      getCalorieStatusClass,
+      getCalorieStatusText,
+      getProteinStatusClass,
+      getProteinStatusText,
+      getCarbsStatusClass,
+      getCarbsStatusText,
+      getFatStatusClass,
+      getFatStatusText,
+      getDeficitSurplusClass,
+      getDeficitSurplusText,
+      
+      // Weekly methods
+      getWeeklyCalorieClass,
+      getWeeklyCalorieDifference,
+      getWeeklyCalorieDifferenceClass,
+      getWeeklyDeficitClass,
+      getConsistencyScoreClass,
+      
+      // Trend insight methods
+      getDeficitInsightClass,
+      getDeficitInsightText,
+      getTrendDirectionClass,
+      getTrendDirectionText,
+      getTrendInsightText,
+      
+      // Achievement methods
+      getAchievementClass,
+      getAchievementText,
       formatDate,
-      formatTime,
-      getWeightChange,
-      getChangeClass,
-      getTotalChangeClass
+      
+      // Weight goal data and methods
+      weightHistoryData,
+      weightGoal,
+      getWeightGoalStatusClass,
+      getWeightGoalStatusText
     };
   }
 };
 </script>
 
-<style lang="scss" scoped>
-@import '@/assets/styles/_variables.scss';
-@import '@/assets/styles/_utilities.scss';
-
-// Chart controls
-.chart-controls {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 1rem;
-  margin-bottom: 1.5rem;
-  padding: 1rem;
-  background-color: #f8f9fa;
-  border-radius: 8px;
-
-  .time-range-selector,
-  .chart-type-selector,
-  .comparison-selector {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-
-    label {
-      font-weight: 500;
-      margin-bottom: 0;
-    }
-
-    select {
-      padding: 0.5rem;
-      border-radius: 4px;
-      border: 1px solid #ddd;
-      background-color: white;
-    }
-  }
+<style scoped>
+.progress-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 20px;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
 }
 
-// Progress summary
-.progress-summary-section {
-  margin-bottom: 2rem;
-
-  .summary-cards {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-    gap: 1rem;
-
-    .summary-card {
-      padding: 1.5rem;
-      background-color: white;
-      border-radius: 8px;
-      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-      text-align: center;
-
-      h3 {
-        font-size: 1rem;
-        margin-bottom: 0.5rem;
-      }
-
-      .summary-value {
-        font-size: 1.5rem;
-        font-weight: bold;
-        margin-bottom: 0.5rem;
-
-        &.positive {
-          color: #4caf50;
-        }
-
-        &.negative {
-          color: #f44336;
-        }
-
-        &.neutral {
-          color: #757575;
-        }
-      }
-
-      .summary-label {
-        font-size: 0.9rem;
-        color: #757575;
-      }
-    }
-  }
-}
-
-// Chart section styling
-.chart-section {
-  margin-bottom: 2rem;
-
-  .chart-container {
-    background-color: white;
-    border-radius: 8px;
-    padding: 1rem;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-    height: 400px;
-  }
-
-  .chart-info {
-    margin-top: 1rem;
-    display: flex;
-    flex-wrap: wrap;
-    gap: 1rem;
-
-    .info-item {
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
-      background-color: #f8f9fa;
-      padding: 0.5rem 1rem;
-      border-radius: 4px;
-
-      .info-text {
-        font-size: 0.9rem;
-      }
-    }
-  }
-}
-
-// Weight history table styling
-.weight-history-section {
-  .weight-history-table {
-    margin-top: 1rem;
-    overflow-x: auto;
-
-    table {
-      width: 100%;
-      border-collapse: collapse;
-
-      th, td {
-        padding: 0.75rem;
-        text-align: left;
-        border-bottom: 1px solid #ddd;
-      }
-
-      th {
-        background-color: #f8f9fa;
-        font-weight: 600;
-      }
-
-      tr:hover {
-        background-color: #f8f9fa;
-      }
-
-      td.positive {
-        color: #4caf50;
-        font-weight: 500;
-      }
-
-      td.negative {
-        color: #f44336;
-        font-weight: 500;
-      }
-    }
-  }
-}
-
-// Empty state styling
-.empty-container {
+.page-header {
   text-align: center;
-  padding: 3rem;
-  background-color: white;
-  border-radius: 8px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-
-  p {
-    margin-bottom: 1.5rem;
-    color: #757575;
-  }
+  margin-bottom: 30px;
 }
 
-// Error and loading states
-.error-container,
-.loading-container {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 3rem;
-  background-color: white;
-  border-radius: 8px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-
-  .loading-spinner {
-    width: 40px;
-    height: 40px;
-    border: 4px solid rgba(0, 0, 0, 0.1);
-    border-top-color: #30C1B1;
-    border-radius: 50%;
-    animation: spin 1s linear infinite;
-    margin-bottom: 1rem;
-  }
-
-  .error-message {
-    color: #f44336;
-    margin-bottom: 1rem;
-  }
-
-  .btn-retry {
-    padding: 0.5rem 1rem;
-    background-color: #f44336;
-    color: white;
-    border: none;
-    border-radius: 4px;
-    cursor: pointer;
-
-    &:hover {
-      background-color: darken(#f44336, 10%);
-    }
-  }
+.page-header h1 {
+  color: #2c3e50;
+  margin-bottom: 10px;
+  font-size: 2.5rem;
+  font-weight: 600;
 }
 
-.weight-history-header {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 1.5rem;
-
-  .weight-summary {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 1.5rem;
-
-    .summary-item {
-      .summary-label {
-        font-size: 0.9rem;
-        color: #757575;
-      }
-
-      .summary-value {
-        font-size: 1.2rem;
-        font-weight: 600;
-
-        &.positive {
-          color: #4caf50;
-        }
-
-        &.negative {
-          color: #f44336;
-        }
-      }
-    }
-  }
+.page-description {
+  color: #7f8c8d;
+  font-size: 1.1rem;
+  max-width: 600px;
+  margin: 0 auto;
 }
 
-.no-data-message {
+.loading-container, .error-container, .empty-container {
   text-align: center;
-  padding: 2rem;
-  background-color: #f8f9fa;
-  border-radius: 8px;
-  margin-bottom: 1.5rem;
-
-  p {
-    color: #757575;
-  }
+  padding: 60px 20px;
 }
 
-.timestamp-verification {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  background-color: #e8f5e9;
-  padding: 0.75rem 1rem;
-  border-radius: 4px;
-  margin-top: 1.5rem;
-
-  .verification-icon {
-    color: #4caf50;
-    font-weight: bold;
-  }
-
-  .verification-text {
-    font-size: 0.9rem;
-    color: #2e7d32;
-  }
+.loading-spinner {
+  width: 40px;
+  height: 40px;
+  border: 4px solid #f3f3f3;
+  border-top: 4px solid #30C1B1;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin: 0 auto 20px;
 }
 
 @keyframes spin {
-  to { transform: rotate(360deg); }
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.error-message {
+  color: #e74c3c;
+  margin-bottom: 20px;
+  font-size: 1.1rem;
+}
+
+.btn-retry, .btn-primary {
+  background-color: #30C1B1;
+  color: white;
+  border: none;
+  padding: 12px 24px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 1rem;
+  font-weight: 500;
+  text-decoration: none;
+  display: inline-block;
+  transition: background-color 0.3s ease;
+}
+
+.btn-retry:hover, .btn-primary:hover {
+  background-color: #27a496;
+}
+
+.progress-content {
+  display: flex;
+  flex-direction: column;
+  gap: 40px;
+}
+
+/* Daily Progress Section */
+.daily-progress-section {
+  background: white;
+  border-radius: 12px;
+  padding: 30px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+}
+
+.daily-progress-section h2 {
+  color: #2c3e50;
+  margin-bottom: 20px;
+  font-size: 1.8rem;
+  font-weight: 600;
+}
+
+.date-selector {
+  margin-bottom: 30px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.date-selector label {
+  font-weight: 500;
+  color: #555;
+}
+
+.date-selector input {
+  padding: 8px 12px;
+  border: 2px solid #e0e0e0;
+  border-radius: 6px;
+  font-size: 1rem;
+}
+
+.progress-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 20px;
+}
+
+.progress-card {
+  background: #f8f9fa;
+  border-radius: 12px;
+  padding: 20px;
+  border-left: 4px solid #30C1B1;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.progress-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+}
+
+.progress-card.calories { border-left-color: #e74c3c; }
+.progress-card.protein { border-left-color: #3498db; }
+.progress-card.carbs { border-left-color: #f39c12; }
+.progress-card.fat { border-left-color: #9b59b6; }
+.progress-card.weight-goal { 
+  border-left-color: #8b5cf6; 
+  grid-column: 1 / -1; /* Span full width */
+  margin-top: 20px;
+}
+
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 15px;
+}
+
+.card-header h3 {
+  margin: 0;
+  color: #2c3e50;
+  font-size: 1.2rem;
+  font-weight: 600;
+}
+
+.progress-indicator {
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.progress-indicator.success { background: #d4edda; color: #155724; }
+.progress-indicator.warning { background: #fff3cd; color: #856404; }
+.progress-indicator.danger { background: #f8d7da; color: #721c24; }
+
+.progress-bar-container {
+  margin-bottom: 10px;
+}
+
+.progress-bar {
+  width: 100%;
+  height: 8px;
+  background: #e0e0e0;
+  border-radius: 4px;
+  overflow: hidden;
+  margin-bottom: 8px;
+}
+
+.progress-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.5s ease;
+}
+
+.calories-fill { background: linear-gradient(90deg, #e74c3c, #c0392b); }
+.protein-fill { background: linear-gradient(90deg, #3498db, #2980b9); }
+.carbs-fill { background: linear-gradient(90deg, #f39c12, #e67e22); }
+.fat-fill { background: linear-gradient(90deg, #9b59b6, #8e44ad); }
+
+.progress-labels {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.9rem;
+  color: #666;
+}
+
+.deficit-surplus {
+  text-align: center;
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+.deficit-surplus .success { color: #27ae60; }
+.deficit-surplus .warning { color: #f39c12; }
+.deficit-surplus .danger { color: #e74c3c; }
+.deficit-surplus .neutral { color: #7f8c8d; }
+
+/* Weekly Progress Section */
+.weekly-progress-section {
+  background: white;
+  border-radius: 12px;
+  padding: 30px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+}
+
+.weekly-progress-section h2 {
+  color: #2c3e50;
+  margin-bottom: 20px;
+  font-size: 1.8rem;
+  font-weight: 600;
+}
+
+.time-range-selector {
+  margin-bottom: 30px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.time-range-selector label {
+  font-weight: 500;
+  color: #555;
+}
+
+.time-range-selector select {
+  padding: 8px 12px;
+  border: 2px solid #e0e0e0;
+  border-radius: 6px;
+  font-size: 1rem;
+  background: white;
+}
+
+.weekly-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 20px;
+}
+
+.summary-card {
+  background: #f8f9fa;
+  border-radius: 12px;
+  padding: 20px;
+  text-align: center;
+  border-top: 4px solid #30C1B1;
+}
+
+.summary-card h3 {
+  margin: 0 0 15px 0;
+  color: #2c3e50;
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+.summary-value {
+  font-size: 1.8rem;
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+
+.summary-value.success { color: #27ae60; }
+.summary-value.warning { color: #f39c12; }
+.summary-value.danger { color: #e74c3c; }
+
+.summary-target, .summary-label {
+  color: #7f8c8d;
+  font-size: 0.9rem;
+  margin-bottom: 5px;
+}
+
+.summary-difference {
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+.summary-difference.success { color: #27ae60; }
+.summary-difference.warning { color: #f39c12; }
+.summary-difference.danger { color: #e74c3c; }
+
+/* Trend Analysis Section */
+.trend-analysis-section {
+  background: white;
+  border-radius: 12px;
+  padding: 30px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+}
+
+.trend-analysis-section h2 {
+  color: #2c3e50;
+  margin-bottom: 20px;
+  font-size: 1.8rem;
+  font-weight: 600;
+}
+
+.chart-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 30px;
+  margin-bottom: 30px;
+  align-items: center;
+}
+
+.chart-type-selector label:first-child,
+.time-period-selector label {
+  font-weight: 500;
+  color: #555;
+  margin-right: 10px;
+}
+
+.radio-group {
+  display: flex;
+  gap: 15px;
+}
+
+.radio-group label {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  cursor: pointer;
+  color: #666;
+}
+
+.time-period-selector select {
+  padding: 8px 12px;
+  border: 2px solid #e0e0e0;
+  border-radius: 6px;
+  font-size: 1rem;
+  background: white;
+}
+
+.chart-container {
+  height: 400px;
+  margin-bottom: 30px;
+  position: relative;
+}
+
+.chart-insights {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 20px;
+}
+
+.insight-card {
+  background: #f8f9fa;
+  border-radius: 8px;
+  padding: 20px;
+  border-left: 4px solid #30C1B1;
+}
+
+.insight-card h4 {
+  margin: 0 0 10px 0;
+  color: #2c3e50;
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+.insight-card p {
+  margin: 0;
+  font-weight: 600;
+  font-size: 1.1rem;
+}
+
+.insight-card p.success { color: #27ae60; }
+.insight-card p.warning { color: #f39c12; }
+.insight-card p.danger { color: #e74c3c; }
+
+.insight-note {
+  display: block;
+  font-weight: normal;
+  font-size: 0.9rem;
+  color: #666;
+  margin-top: 5px;
+}
+
+/* Historical Progress Section */
+.historical-progress-section {
+  background: white;
+  border-radius: 12px;
+  padding: 30px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+}
+
+.historical-progress-section h2 {
+  color: #2c3e50;
+  margin-bottom: 20px;
+  font-size: 1.8rem;
+  font-weight: 600;
+}
+
+.progress-history-table {
+  overflow-x: auto;
+}
+
+.progress-history-table table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.95rem;
+}
+
+.progress-history-table th,
+.progress-history-table td {
+  padding: 12px;
+  text-align: left;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.progress-history-table th {
+  background: #f8f9fa;
+  color: #2c3e50;
+  font-weight: 600;
+  position: sticky;
+  top: 0;
+}
+
+.progress-history-table tr:hover {
+  background: #f8f9fa;
+}
+
+.achievement-indicator {
+  display: inline-block;
+  padding: 4px 8px;
+  border-radius: 12px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.achievement-indicator.excellent { background: #d4edda; color: #155724; }
+.achievement-indicator.good { background: #d1ecf1; color: #0c5460; }
+.achievement-indicator.fair { background: #fff3cd; color: #856404; }
+.achievement-indicator.poor { background: #f8d7da; color: #721c24; }
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .progress-container {
+    padding: 15px;
+  }
+  
+  .page-header h1 {
+    font-size: 2rem;
+  }
+  
+  .progress-cards {
+    grid-template-columns: 1fr;
+  }
+  
+  .weekly-summary {
+    grid-template-columns: 1fr;
+  }
+  
+  .chart-controls {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 15px;
+  }
+  
+  .radio-group {
+    flex-direction: column;
+    gap: 10px;
+  }
+  
+  .chart-insights {
+    grid-template-columns: 1fr;
+  }
+  
+  .progress-history-table {
+    font-size: 0.85rem;
+  }
+  
+  .progress-history-table th,
+  .progress-history-table td {
+    padding: 8px;
+  }
+}
+
+@media (max-width: 480px) {
+  .page-header h1 {
+    font-size: 1.75rem;
+  }
+  
+  .chart-container {
+    height: 300px;
+  }
+  
+  .daily-progress-section,
+  .weekly-progress-section,
+  .trend-analysis-section,
+  .historical-progress-section {
+    padding: 20px;
+  }
+}
+
+.weight-chart-container {
+  margin-top: 20px;
 }
 </style>

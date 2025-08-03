@@ -54,6 +54,7 @@
           :activity-score="formattedWellnessScore?.components?.activity?.score || 0"
           :progress-score="formattedWellnessScore?.components?.progress?.score || 0"
           :habits-score="formattedWellnessScore?.components?.habits?.score || 0"
+          :nutrition-score="formattedWellnessScore?.components?.nutrition?.score || 0"
           :score-breakdown="formattedWellnessScore?.breakdown"
           @recalculate="recalculateWellnessScore"
         />
@@ -86,6 +87,13 @@
           :weight-change="weightChange"
           @add-weight="showAddWeightModal = true"
           @weight-goal-achieved="onWeightGoalAchieved"
+        />
+
+        <!-- Meal Planning Card -->
+        <meal-planning-card
+          class="dashboard-card"
+          :nutrition-profile="nutritionProfile"
+          @navigate-to-meal-planning="navigateToMealPlanning"
         />
 
         <!-- AI Insights Card - Enhanced -->
@@ -121,11 +129,6 @@
         :milestones="achievedMilestones"
         @close="closeMilestoneModal"
       />
-
-      <meal-planning-card
-        class="dashboard-card"
-        @navigate-to-meal-planning="$router.push('/meal-planning')"
-      />
     </div>
   </div>
 </template>
@@ -145,16 +148,16 @@ import AiInsightsCard from '../components/dashboard/AiInsightsCard.vue';
 import AddWeightModal from '../components/dashboard/AddWeightModal.vue';
 import MilestonesCard from '../components/dashboard/MilestonesCard.vue';
 import ActivitiesCard from '../components/dashboard/ActivitiesCard.vue';
+import MealPlanningCard from '../components/dashboard/MealPlanningCard.vue';
 import MilestoneAchievementModal from '../components/dashboard/MilestoneAchievementModal.vue';
-import MealPlanningCard from "@/components/dashboard/MealPlanningCard.vue";
 
 export default {
   name: 'Dashboard',
   components: {
-    MealPlanningCard,
     WellnessScoreCard,
     BmiStatusCard,
     ActivityLevelCard,
+    MealPlanningCard,
     WeightHistoryCard,
     AiInsightsCard,
     MilestonesCard,
@@ -184,7 +187,8 @@ export default {
       showMilestoneModal: false,
       newWeight: null,
       weightLoading: false,
-      weightError: null
+      weightError: null,
+      nutritionProfile: null
     };
   },
   computed: {
@@ -203,7 +207,9 @@ export default {
         bmi: this.bmi,
         recentActivities: Array.isArray(this.activities) ? this.activities.length : 0,
         recentMilestones: Array.isArray(this.recentMilestones) ? this.recentMilestones.length : 0,
-        restrictions: this.getUserRestrictions()
+        restrictions: this.getUserRestrictions(),
+        nutritionProfile: this.nutritionProfile,
+        hasNutritionProfile: !!this.nutritionProfile
       };
     }
   },
@@ -243,11 +249,21 @@ export default {
 
     async fetchHealthData() {
   try {
-    // Fetch profile and weight history
+    // Fetch profile, weight history, and nutrition profile
     const [profileResponse, weightResponse] = await Promise.all([
       HealthProfileService.getHealthProfile(),
       HealthProfileService.getWeightHistory()
     ]);
+
+    // Fetch nutrition profile separately (might not exist yet)
+    try {
+      const { mealPlanningApi } = await import('@/services/mealPlanningApi');
+      const nutritionResponse = await mealPlanningApi.getNutritionProfile();
+      this.nutritionProfile = nutritionResponse.data;
+    } catch (nutritionError) {
+      console.warn('Nutrition profile not found:', nutritionError);
+      this.nutritionProfile = null;
+    }
 
     this.profile = profileResponse.data;
 
@@ -334,6 +350,27 @@ export default {
 
       } catch (error) {
         console.error('Error calculating wellness score:', error);
+        
+        // Provide fallback wellness score data
+        this.rawWellnessScore = {
+          total_score: 0,
+          components: {
+            bmi: { score: 0, status: 'Not Available' },
+            activity: { score: 0, status: 'Not Available' },
+            progress: { score: 0, status: 'Not Available' },
+            habits: { score: 0, status: 'Not Available' },
+            nutrition: { score: 0, status: 'Not Available' }
+          },
+          breakdown: {
+            message: 'Unable to calculate wellness score. Please check your network connection and try again.',
+            last_updated: new Date().toISOString()
+          }
+        };
+        
+        // Show user-friendly error message
+        if (this.$toast) {
+          this.$toast.error('Unable to calculate wellness score. Some features may not work properly.');
+        }
       }
     },
 
@@ -558,6 +595,10 @@ export default {
       } finally {
         this.insightsLoading = false;
       }
+    },
+
+    navigateToMealPlanning() {
+      this.$router.push('/meal-planning');
     }
   }
 };

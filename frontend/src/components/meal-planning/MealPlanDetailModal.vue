@@ -241,14 +241,14 @@
 
                   <div class="meal-actions">
                     <button
-                      @click="toggleSaveRecipe(meal.recipe)"
+                                                @click="toggleRecipeSave(meal.recipe || meal)"
                       class="btn btn-sm"
-                      :class="meal.recipe?.is_saved_by_user ? 'btn-outline-danger' : 'btn-primary'"
-                      :disabled="savingRecipe === meal.recipe?.id"
+                      :class="(meal.recipe || meal)?.is_saved_by_user ? 'btn-outline-danger' : 'btn-primary'"
+                      :disabled="savingRecipe === (meal.recipe || meal)?.id"
                     >
-                      <i v-if="savingRecipe === meal.recipe?.id" class="fas fa-spinner fa-spin"></i>
-                      <i v-else :class="meal.recipe?.is_saved_by_user ? 'fas fa-heart' : 'far fa-heart'"></i>
-                      {{ savingRecipe === meal.recipe?.id ? (meal.recipe?.is_saved_by_user ? 'Removing...' : 'Saving...') : (meal.recipe?.is_saved_by_user ? 'Remove' : 'Save') }}
+                      <i v-if="savingRecipe === (meal.recipe || meal)?.id" class="fas fa-spinner fa-spin"></i>
+                      <i v-else :class="(meal.recipe || meal)?.is_saved_by_user ? 'fas fa-heart' : 'far fa-heart'"></i>
+                      {{ savingRecipe === (meal.recipe || meal)?.id ? ((meal.recipe || meal)?.is_saved_by_user ? 'Removing...' : 'Saving...') : ((meal.recipe || meal)?.is_saved_by_user ? 'Remove' : 'Save') }}
                     </button>
                     <button
                       @click="regenerateMeal(date, meal.meal_type || inferMealTypeFromTime(new Date()))"
@@ -265,7 +265,7 @@
                       Alternatives
                     </button>
                     <button
-                      @click="viewRecipeDetails(meal.recipe)"
+                      @click="viewRecipeDetails(meal)"
                       class="btn btn-sm btn-info"
                     >
                       <i class="fas fa-info-circle"></i>
@@ -324,6 +324,7 @@
 <script>
 import RecipeDetailModal from './RecipeDetailModal.vue'
 import ShoppingListModal from './ShoppingListModal.vue'
+import { makeShoppingListRequest } from '@/utils/fetchUtils'
 
 export default {
   name: 'MealPlanDetailModal',
@@ -417,6 +418,14 @@ export default {
       }
     }
     console.log('=====================================')
+    
+    // Add escape key listener
+    document.addEventListener('keydown', this.handleEscapeKey)
+  },
+
+  beforeUnmount() {
+    // Remove escape key listener
+    document.removeEventListener('keydown', this.handleEscapeKey)
   },
   methods: {
     formatPlanType(type) {
@@ -695,9 +704,9 @@ export default {
       })
     },
 
-    async toggleSaveRecipe(recipe) {
-      if (!recipe) {
-        console.warn('No recipe provided to toggle')
+    async toggleRecipeSave(recipe) {
+      // Check if we're already processing this recipe
+      if (this.savingRecipe === (recipe.id || recipe.spoonacular_id)) {
         return
       }
 
@@ -706,40 +715,64 @@ export default {
       try {
         console.log('Toggling save status for recipe:', recipe)
         
+        // Check if this is a fallback recipe that cannot be saved
+        const recipeId = recipe.spoonacular_id || recipe.id
+        if (recipeId && String(recipeId).startsWith('fallback_')) {
+          this.$toast?.error?.('This is a temporary recipe that cannot be saved to your collection.') ||
+          alert('This is a temporary recipe that cannot be saved to your collection.')
+          return
+        }
+        
         // Import the API service
         const { mealPlanningApi } = await import('@/services/mealPlanningApi')
         
+        let response
+        
         if (recipe.is_saved_by_user) {
           // Remove from saved recipes
-          await mealPlanningApi.removeRecipeFromMyCollection(recipe.id)
+          if (!recipe.id) {
+            throw new Error('Cannot remove recipe: No recipe ID found')
+          }
+          
+          // Check if this is a fallback recipe ID
+          const isFallbackRecipe = recipe.id.toString().startsWith('fallback_')
+          if (isFallbackRecipe) {
+            throw new Error('Cannot remove fallback recipe: Not saved in database')
+          }
+          
+          response = await mealPlanningApi.removeRecipeFromMyCollection(recipe.id)
           
           // Update local state
           recipe.is_saved_by_user = false
           
-          this.$toast?.success?.('Recipe removed from your collection!') ||
-          alert('Recipe removed from your collection!')
+          const message = response.data?.message || 'Recipe removed from your collection!'
+          this.$toast?.success?.(message) || alert(message)
           
         } else {
-          // Save recipe
-          // Prepare recipe data for saving
+          // Save recipe - validate we have essential data
+          if (!recipe.title && !recipe.name) {
+            throw new Error('Recipe must have a title to be saved')
+          }
+          
+          // Prepare recipe data for saving with better validation
           const recipeData = {
             title: recipe.title || recipe.name || 'Untitled Recipe',
             summary: recipe.summary || '',
             cuisine: recipe.cuisine || '',
             meal_type: recipe.meal_type || 'dinner',
             servings: recipe.servings || 4,
-            prep_time_minutes: recipe.prep_time || 0,
-            cook_time_minutes: recipe.cook_time || 0,
-            total_time_minutes: recipe.total_time || 0,
+            prep_time_minutes: recipe.prep_time || recipe.prep_time_minutes || 30,
+            cook_time_minutes: recipe.cook_time || recipe.cook_time_minutes || 0,
+            total_time_minutes: recipe.total_time || recipe.total_time_minutes || 30,
             difficulty_level: recipe.difficulty_level || 'medium',
             spoonacular_id: recipe.spoonacular_id || recipe.id,
-            ingredients_data: recipe.ingredients || [],
+            ingredients_data: recipe.ingredients || recipe.ingredients_data || [],
             instructions: recipe.instructions || [],
-            calories_per_serving: this.getNutritionValue(recipe, 'calories'),
-            protein_per_serving: this.getNutritionValue(recipe, 'protein'),
-            carbs_per_serving: this.getNutritionValue(recipe, 'carbs'),
-            fat_per_serving: this.getNutritionValue(recipe, 'fat'),
-            fiber_per_serving: 0,
+            calories_per_serving: this.getNutritionValue(recipe, 'calories') || 300,
+            protein_per_serving: this.getNutritionValue(recipe, 'protein') || 15,
+            carbs_per_serving: this.getNutritionValue(recipe, 'carbs') || 30,
+            fat_per_serving: this.getNutritionValue(recipe, 'fat') || 10,
+            fiber_per_serving: this.getNutritionValue(recipe, 'fiber') || 0,
             dietary_tags: recipe.dietary_tags || [],
             allergens: recipe.allergens || [],
             image_url: recipe.image_url || recipe.image || '',
@@ -747,27 +780,61 @@ export default {
             source_type: 'spoonacular'
           }
           
-          const response = await mealPlanningApi.saveRecipeFromMealPlan(recipeData)
+          response = await mealPlanningApi.saveRecipeFromMealPlan(recipeData)
           
           // Update local state
           recipe.is_saved_by_user = true
           
           // Show success message
-          const message = response.data.message || 'Recipe saved to your collection!'
+          const message = response.data?.message || 'Recipe saved to your collection!'
           this.$toast?.success?.(message) || alert(message)
         }
         
       } catch (error) {
         console.error('Error toggling recipe save status:', error)
-        const errorMessage = error.response?.data?.message || error.message || 'Failed to update recipe'
+        
+        let errorMessage = 'An error occurred while saving the recipe'
+        
+        if (!navigator.onLine) {
+          errorMessage = 'No internet connection. Please check your network and try again.'
+        } else if (error.response?.status === 400) {
+          // Handle specific backend errors
+          const backendError = error.response.data
+          if (backendError.error === 'Cannot save fallback recipe') {
+            errorMessage = backendError.message || 'This is a temporary recipe that cannot be saved.'
+          } else {
+            errorMessage = backendError.message || 'Invalid recipe data. Please try again.'
+          }
+        } else if (error.response?.status === 404) {
+          errorMessage = 'Recipe not found. This may be a temporary recipe that cannot be saved.'
+        } else if (error.response?.status === 403) {
+          errorMessage = 'You don\'t have permission to perform this action. Please log in again.'
+        } else if (error.response?.status === 500) {
+          const backendError = error.response.data
+          errorMessage = backendError.details ? 
+            `Server error: ${backendError.details}` : 
+            'A server error occurred. Please try again later.'
+        } else if (error.message) {
+          errorMessage = error.message
+        }
+        
         this.$toast?.error?.(errorMessage) || alert(errorMessage)
+        
       } finally {
         this.savingRecipe = null
       }
     },
 
-    viewRecipeDetails(recipe) {
-      if (recipe) {
+    viewRecipeDetails(meal) {
+      if (meal) {
+        // If meal has a recipe property, use that; otherwise use the meal itself as the recipe
+        const recipe = meal.recipe || meal
+        
+        // Ensure the recipe has the required fields for the modal
+        if (!recipe.is_saved_by_user) {
+          recipe.is_saved_by_user = false
+        }
+        
         this.selectedRecipe = recipe
         this.showRecipeModal = true
       }
@@ -779,23 +846,14 @@ export default {
         this.shoppingListError = null
         this.showShoppingListModal = true
 
-        const response = await fetch(`/api/meal-planning/meal-plans/${this.mealPlan.id}/generate_shopping_list/`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${this.$store.state.auth.token}`
-          },
-          body: JSON.stringify({
+        const data = await makeShoppingListRequest(
+          `/api/meal-planning/meal-plans/${this.mealPlan.id}/generate_shopping_list/`,
+          {
             exclude_items: [],
             group_by_category: true
-          })
-        })
-
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`)
-        }
-
-        const data = await response.json()
+          },
+          this.$store.state.auth.token
+        )
         this.shoppingListData = data.shopping_list
         this.shoppingListLoading = false
 
@@ -805,6 +863,50 @@ export default {
 
       } catch (error) {
         console.error('Error generating shopping list:', error)
+        
+        // Try to provide a fallback shopping list if the API fails
+        if (error.message.includes('JSON') || error.message.includes('Empty response')) {
+          console.log('Attempting fallback shopping list generation...')
+          try {
+            // Generate basic shopping list from meal plan recipes
+            const ingredients = []
+            if (this.mealPlan?.meals) {
+              this.mealPlan.meals.forEach(meal => {
+                if (meal.recipe?.ingredients) {
+                  meal.recipe.ingredients.forEach(ingredient => {
+                    ingredients.push({
+                      ingredient: ingredient.formatted || ingredient.original || 'Unknown ingredient',
+                      quantity: ingredient.amount || 1,
+                      unit: ingredient.unit || '',
+                      category: 'Other'
+                    })
+                  })
+                }
+              })
+            }
+            
+            this.shoppingListData = {
+              recipe_title: this.mealPlan?.title || 'Meal Plan',
+              total_servings: 1,
+              metadata: {
+                total_items: ingredients.length,
+                generated_from: 'fallback'
+              },
+              categories: {
+                'Other': {
+                  items: ingredients
+                }
+              }
+            }
+            this.shoppingListLoading = false
+            this.$toast?.warning?.('Shopping list generated with basic ingredients (API unavailable)') ||
+            console.log('Fallback shopping list generated')
+            return
+          } catch (fallbackError) {
+            console.error('Fallback generation also failed:', fallbackError)
+          }
+        }
+        
         this.shoppingListError = error.message || 'Failed to generate shopping list'
         this.shoppingListLoading = false
         
@@ -831,6 +933,7 @@ export default {
       this.showShoppingListModal = false
       this.shoppingListData = null
       this.shoppingListError = null
+      this.shoppingListLoading = false  // Reset loading state
     },
 
     async onRecipeSaved(savedRecipe) {
@@ -838,13 +941,34 @@ export default {
       // Show success message
       this.$toast?.success?.('Recipe saved to your collection!') ||
       alert('Recipe saved to your collection!')
+    },
+
+    handleEscapeKey(event) {
+      if (event.key === 'Escape') {
+        this.$emit('close')
+      }
     }
   }
 }
 </script>
 
 <style lang="scss" scoped>
-@import '@/assets/styles/_variables.scss';
+
+@import '@/assets/styles/_variables';
+
+$primary: #007bff;
+$secondary: #6c757d;
+$success: #28a745;
+$danger: #dc3545;
+$warning: #ffc107;
+$info: #17a2b8;
+$light: #f8f9fa;
+$dark: #343a40;
+$white: #ffffff;
+$gray: #6c757d;
+$gray-light: #adb5bd;
+$gray-lighter: #e9ecef;
+
 
 .modal-overlay {
   position: fixed;
@@ -1544,6 +1668,455 @@ export default {
       width: 100%;
       justify-content: center;
     }
+  }
+}
+
+// Add improved readability styles
+.modal-content {
+  max-width: 90vw;
+  width: 1200px;
+  max-height: 90vh;
+  padding: 0;
+  border-radius: 16px;
+  box-shadow: 0 25px 50px rgba(0, 0, 0, 0.2);
+  overflow: hidden;
+  background: linear-gradient(135deg, #fff 0%, #f8f9fa 100%);
+}
+
+.modal-header {
+  padding: 24px 32px;
+  background: linear-gradient(135deg, $primary 0%, $primary-dark 100%);
+  color: white;
+  border-bottom: none;
+  
+  h2 {
+    margin: 0;
+    font-size: 1.75rem;
+    font-weight: 600;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  }
+  
+  .ai-generation-info {
+    margin-top: 8px;
+    display: flex;
+    gap: 12px;
+    
+    .ai-badge, .model-badge {
+      padding: 4px 12px;
+      background: rgba(255, 255, 255, 0.2);
+      border-radius: 20px;
+      font-size: 0.85rem;
+      font-weight: 500;
+      backdrop-filter: blur(10px);
+    }
+  }
+  
+  .close-btn {
+    color: white;
+    background: rgba(255, 255, 255, 0.2);
+    border: none;
+    border-radius: 50%;
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+    backdrop-filter: blur(10px);
+    
+    &:hover {
+      background: rgba(255, 255, 255, 0.3);
+      transform: scale(1.05);
+    }
+  }
+}
+
+.modal-body {
+  padding: 32px;
+  max-height: 70vh;
+  overflow-y: auto;
+  scroll-behavior: smooth;
+  
+  // Custom scrollbar
+  &::-webkit-scrollbar {
+    width: 8px;
+  }
+  
+  &::-webkit-scrollbar-track {
+    background: $gray-lightest;
+    border-radius: 4px;
+  }
+  
+  &::-webkit-scrollbar-thumb {
+    background: $gray-light;
+    border-radius: 4px;
+    
+    &:hover {
+      background: $gray;
+    }
+  }
+}
+
+.plan-overview {
+  background: white;
+  border-radius: 12px;
+  padding: 24px;
+  margin-bottom: 32px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+  border: 1px solid rgba($primary, 0.1);
+}
+
+.overview-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 20px;
+  margin-bottom: 24px;
+  
+  .stat-item {
+    padding: 16px;
+    background: linear-gradient(135deg, $gray-lightest 0%, white 100%);
+    border-radius: 8px;
+    border-left: 4px solid $primary;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    
+    &:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.1);
+    }
+    
+    .stat-label {
+      font-size: 0.9rem;
+      color: $gray;
+      font-weight: 500;
+      margin-bottom: 4px;
+      display: block;
+    }
+    
+    .stat-value {
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: $secondary;
+    }
+  }
+}
+
+.nutrition-overview {
+  background: white;
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 24px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  
+  h4 {
+    margin: 0 0 16px 0;
+    font-size: 1.2rem;
+    color: $secondary;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    
+    &::before {
+      content: "🍎";
+      font-size: 1.1rem;
+    }
+  }
+  
+  .nutrition-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 12px;
+  }
+  
+  .nutrition-item {
+    padding: 12px 16px;
+    background: linear-gradient(135deg, rgba($success, 0.1) 0%, rgba($success, 0.05) 100%);
+    border-radius: 8px;
+    border: 1px solid rgba($success, 0.2);
+    text-align: center;
+    transition: transform 0.2s ease;
+    
+    &:hover {
+      transform: scale(1.02);
+    }
+    
+    .nutrition-label {
+      font-size: 0.85rem;
+      color: $gray;
+      font-weight: 500;
+      margin-bottom: 4px;
+      display: block;
+    }
+    
+    .nutrition-value {
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: $success-dark;
+    }
+  }
+}
+
+.quality-scores {
+  background: white;
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 24px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  
+  h4 {
+    margin: 0 0 20px 0;
+    font-size: 1.2rem;
+    color: $secondary;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    
+    &::before {
+      content: "📊";
+      font-size: 1.1rem;
+    }
+  }
+  
+  .score-item {
+    margin-bottom: 16px;
+    padding: 12px;
+    background: $gray-lightest;
+    border-radius: 8px;
+    
+    .score-label {
+      font-size: 0.95rem;
+      color: $gray-dark;
+      font-weight: 500;
+      margin-bottom: 8px;
+      display: block;
+    }
+    
+    .score-bar {
+      height: 10px;
+      background: rgba($gray-light, 0.3);
+      border-radius: 6px;
+      overflow: hidden;
+      margin-bottom: 4px;
+      
+      .score-fill {
+        height: 100%;
+        background: linear-gradient(90deg, $primary 0%, $primary-light 100%);
+        border-radius: 6px;
+        transition: width 0.5s ease;
+        box-shadow: 0 2px 4px rgba($primary, 0.3);
+      }
+    }
+    
+    .score-value {
+      font-size: 0.9rem;
+      font-weight: 600;
+      color: $primary-dark;
+      text-align: right;
+      display: block;
+    }
+  }
+}
+
+.meals-section {
+  h3 {
+    font-size: 1.4rem;
+    color: $secondary;
+    font-weight: 600;
+    margin-bottom: 24px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    
+    &::before {
+      content: "🍽️";
+      font-size: 1.2rem;
+    }
+  }
+}
+
+.day-section {
+  background: white;
+  border-radius: 12px;
+  padding: 24px;
+  margin-bottom: 24px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+  border: 1px solid rgba($primary, 0.1);
+  
+  h4 {
+    font-size: 1.2rem;
+    color: $primary-dark;
+    font-weight: 600;
+    margin-bottom: 20px;
+    padding-bottom: 8px;
+    border-bottom: 2px solid rgba($primary, 0.2);
+  }
+}
+
+.meals-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 20px;
+}
+
+.meal-card {
+  background: linear-gradient(135deg, white 0%, $gray-lightest 100%);
+  border-radius: 12px;
+  padding: 20px;
+  border: 1px solid rgba($gray-light, 0.5);
+  transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
+  
+  &::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 4px;
+    background: linear-gradient(90deg, $primary 0%, $primary-light 100%);
+  }
+  
+  &:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+    border-color: rgba($primary, 0.3);
+  }
+  
+  .meal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 16px;
+    
+    .meal-info {
+      flex: 1;
+      
+      .meal-title {
+        font-size: 1.1rem;
+        font-weight: 600;
+        color: $secondary;
+        margin-bottom: 4px;
+        line-height: 1.3;
+      }
+      
+      .meal-time {
+        font-size: 0.9rem;
+        color: $gray;
+        font-weight: 500;
+        
+        &::before {
+          content: "🕐";
+          margin-right: 4px;
+        }
+      }
+    }
+  }
+  
+  .meal-actions {
+    display: flex;
+    gap: 8px;
+    flex-shrink: 0;
+    
+    .btn {
+      padding: 8px 12px;
+      border-radius: 6px;
+      border: none;
+      font-size: 0.85rem;
+      font-weight: 500;
+      transition: all 0.2s ease;
+      cursor: pointer;
+      
+      &.btn-outline {
+        background: transparent;
+        border: 1px solid $gray-light;
+        color: $gray-dark;
+        
+        &:hover {
+          background: $gray-light;
+          color: white;
+        }
+      }
+      
+      &.btn-primary {
+        background: linear-gradient(135deg, $primary 0%, $primary-dark 100%);
+        color: white;
+        
+        &:hover {
+          transform: scale(1.05);
+          box-shadow: 0 4px 12px rgba($primary, 0.3);
+        }
+        
+        &:disabled {
+          opacity: 0.6;
+          cursor: not-allowed;
+          transform: none;
+        }
+      }
+    }
+  }
+}
+
+// Enhanced responsive design
+@media (max-width: 768px) {
+  .modal-content {
+    width: 95vw;
+    margin: 2.5vh auto;
+  }
+  
+  .modal-header {
+    padding: 20px 24px;
+    
+    h2 {
+      font-size: 1.4rem;
+    }
+  }
+  
+  .modal-body {
+    padding: 20px;
+  }
+  
+  .overview-stats {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+  
+  .nutrition-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  
+  .meals-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+// Improved loading states
+.loading-placeholder {
+  background: linear-gradient(90deg, $gray-lighter 25%, rgba($gray-lighter, 0.5) 50%, $gray-lighter 75%);
+  background-size: 200% 100%;
+  animation: loading 1.5s infinite;
+  border-radius: 8px;
+  height: 20px;
+  
+  &.loading-title {
+    height: 24px;
+    width: 60%;
+    margin-bottom: 12px;
+  }
+  
+  &.loading-text {
+    height: 16px;
+    width: 80%;
+  }
+}
+
+@keyframes loading {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
   }
 }
 </style>

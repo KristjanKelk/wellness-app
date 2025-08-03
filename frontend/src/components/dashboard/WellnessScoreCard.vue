@@ -17,7 +17,7 @@
         <div class="score-component">
           <div class="component-info">
             <span class="component-label">BMI Score</span>
-            <span class="component-value">{{ bmiScore }}% ({{ (bmiScore * 0.3).toFixed(1) }}pts)</span>
+            <span class="component-value">{{ bmiScore }}% ({{ (bmiScore * 0.25).toFixed(1) }}pts)</span>
           </div>
           <div class="progress-bar">
             <div class="progress" :style="{ width: bmiScore + '%' }"></div>
@@ -27,7 +27,7 @@
         <div class="score-component">
           <div class="component-info">
             <span class="component-label">Activity</span>
-            <span class="component-value">{{ activityScore }}% ({{ (activityScore * 0.3).toFixed(1) }}pts)</span>
+            <span class="component-value">{{ activityScore }}% ({{ (activityScore * 0.25).toFixed(1) }}pts)</span>
           </div>
           <div class="progress-bar">
             <div class="progress" :style="{ width: activityScore + '%' }"></div>
@@ -37,7 +37,7 @@
         <div class="score-component">
           <div class="component-info">
             <span class="component-label">Progress</span>
-            <span class="component-value">{{ progressScore }}% ({{ (progressScore * 0.2).toFixed(1) }}pts)</span>
+            <span class="component-value">{{ progressScore }}% ({{ (progressScore * 0.15).toFixed(1) }}pts)</span>
           </div>
           <div class="progress-bar">
             <div class="progress" :style="{ width: progressScore + '%' }"></div>
@@ -47,10 +47,20 @@
         <div class="score-component">
           <div class="component-info">
             <span class="component-label">Habits</span>
-            <span class="component-value">{{ habitsScore }}% ({{ (habitsScore * 0.2).toFixed(1) }}pts)</span>
+            <span class="component-value">{{ habitsScore }}% ({{ (habitsScore * 0.15).toFixed(1) }}pts)</span>
           </div>
           <div class="progress-bar">
             <div class="progress" :style="{ width: habitsScore + '%' }"></div>
+          </div>
+        </div>
+
+        <div class="score-component">
+          <div class="component-info">
+            <span class="component-label">Nutrition</span>
+            <span class="component-value">{{ nutritionScore }}% ({{ (nutritionScore * 0.20).toFixed(1) }}pts)</span>
+          </div>
+          <div class="progress-bar">
+            <div class="progress nutrition-progress" :style="{ width: nutritionScore + '%' }"></div>
           </div>
         </div>
       </div>
@@ -89,6 +99,10 @@ export default {
       default: 0
     },
     habitsScore: {
+      type: Number,
+      default: 0
+    },
+    nutritionScore: {
       type: Number,
       default: 0
     }
@@ -144,6 +158,10 @@ export default {
         border-radius: 3px;
         background-color: $primary;
         transition: width 0.6s ease-in-out;
+
+        &.nutrition-progress {
+          background-color: #28a745; // Green color for nutrition
+        }
       }
     }
   }
