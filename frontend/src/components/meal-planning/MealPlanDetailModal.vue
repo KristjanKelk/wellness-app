@@ -241,14 +241,14 @@
 
                   <div class="meal-actions">
                     <button
-                      @click="toggleSaveRecipe(meal.recipe)"
+                      @click="toggleSaveRecipe(meal.recipe || meal)"
                       class="btn btn-sm"
-                      :class="meal.recipe?.is_saved_by_user ? 'btn-outline-danger' : 'btn-primary'"
-                      :disabled="savingRecipe === meal.recipe?.id"
+                      :class="(meal.recipe || meal)?.is_saved_by_user ? 'btn-outline-danger' : 'btn-primary'"
+                      :disabled="savingRecipe === (meal.recipe || meal)?.id"
                     >
-                      <i v-if="savingRecipe === meal.recipe?.id" class="fas fa-spinner fa-spin"></i>
-                      <i v-else :class="meal.recipe?.is_saved_by_user ? 'fas fa-heart' : 'far fa-heart'"></i>
-                      {{ savingRecipe === meal.recipe?.id ? (meal.recipe?.is_saved_by_user ? 'Removing...' : 'Saving...') : (meal.recipe?.is_saved_by_user ? 'Remove' : 'Save') }}
+                      <i v-if="savingRecipe === (meal.recipe || meal)?.id" class="fas fa-spinner fa-spin"></i>
+                      <i v-else :class="(meal.recipe || meal)?.is_saved_by_user ? 'fas fa-heart' : 'far fa-heart'"></i>
+                      {{ savingRecipe === (meal.recipe || meal)?.id ? ((meal.recipe || meal)?.is_saved_by_user ? 'Removing...' : 'Saving...') : ((meal.recipe || meal)?.is_saved_by_user ? 'Remove' : 'Save') }}
                     </button>
                     <button
                       @click="regenerateMeal(date, meal.meal_type || inferMealTypeFromTime(new Date()))"
@@ -265,7 +265,7 @@
                       Alternatives
                     </button>
                     <button
-                      @click="viewRecipeDetails(meal.recipe)"
+                      @click="viewRecipeDetails(meal)"
                       class="btn btn-sm btn-info"
                     >
                       <i class="fas fa-info-circle"></i>
@@ -725,6 +725,12 @@ export default {
             throw new Error('Cannot remove recipe: No recipe ID found')
           }
           
+          // Check if this is a fallback recipe ID
+          const isFallbackRecipe = recipe.id.toString().startsWith('fallback_')
+          if (isFallbackRecipe) {
+            throw new Error('Cannot remove fallback recipe: Not saved in database')
+          }
+          
           response = await mealPlanningApi.removeRecipeFromMyCollection(recipe.id)
           
           // Update local state
@@ -774,30 +780,49 @@ export default {
       } catch (error) {
         console.error('Error toggling recipe save status:', error)
         
-        let errorMessage = 'An error occurred'
+        let errorMessage = 'An error occurred while saving the recipe'
         
-        if (error.response?.status === 404) {
-          errorMessage = 'Recipe not found. It may have been removed.'
+        if (!navigator.onLine) {
+          errorMessage = 'No internet connection. Please check your network and try again.'
+        } else if (error.response?.status === 404) {
+          errorMessage = 'Recipe not found. This may be a temporary recipe that cannot be saved.'
         } else if (error.response?.status === 403) {
-          errorMessage = 'You don\'t have permission to perform this action.'
+          errorMessage = 'You don\'t have permission to perform this action. Please log in again.'
         } else if (error.response?.status === 500) {
-          errorMessage = 'Server error. Please try again later.'
+          errorMessage = 'Server error. Please try again in a moment.'
+        } else if (error.response?.status === 400) {
+          errorMessage = error.response?.data?.message || 'Invalid recipe data. Please try again.'
         } else if (error.response?.data?.error) {
           errorMessage = error.response.data.error
         } else if (error.response?.data?.message) {
           errorMessage = error.response.data.message
+        } else if (error.message?.includes('Network Error')) {
+          errorMessage = 'Network error. Please check your connection and try again.'
         } else if (error.message) {
           errorMessage = error.message
         }
         
         this.$toast?.error?.(errorMessage) || alert(`Error: ${errorMessage}`)
+        
+        // Reset the save state if it was changed optimistically
+        if (recipe.is_saved_by_user) {
+          recipe.is_saved_by_user = false
+        }
       } finally {
         this.savingRecipe = null
       }
     },
 
-    viewRecipeDetails(recipe) {
-      if (recipe) {
+    viewRecipeDetails(meal) {
+      if (meal) {
+        // If meal has a recipe property, use that; otherwise use the meal itself as the recipe
+        const recipe = meal.recipe || meal
+        
+        // Ensure the recipe has the required fields for the modal
+        if (!recipe.is_saved_by_user) {
+          recipe.is_saved_by_user = false
+        }
+        
         this.selectedRecipe = recipe
         this.showRecipeModal = true
       }
