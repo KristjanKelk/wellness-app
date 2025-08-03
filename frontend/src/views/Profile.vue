@@ -12,7 +12,7 @@
           :class="{ 'active': activeTab === 'general' }"
         >
           <i class="fas fa-user"></i>
-          General Profile
+          General
         </button>
         <button
           @click="activeTab = 'nutrition'"
@@ -20,7 +20,7 @@
           :class="{ 'active': activeTab === 'nutrition' }"
         >
           <i class="fas fa-utensils"></i>
-          Nutrition Profile
+          Nutrition
         </button>
       </nav>
 
@@ -1088,17 +1088,20 @@ textarea {
 
 .tabs-nav {
   display: flex;
-  background: $gray-light;
-  border-bottom: 1px solid $gray-lighter;
+  background: $gray-lighter;
+  border-bottom: 1px solid $gray-light;
+  padding: $spacing-2;
+  gap: $spacing-2;
 }
 
 .tab-button {
   flex: 1;
-  padding: $spacing-4 $spacing-6;
+  max-width: 200px;
+  padding: $spacing-3 $spacing-4;
   border: none;
   background: transparent;
   color: $gray;
-  font-size: 1rem;
+  font-size: 0.95rem;
   font-weight: 500;
   cursor: pointer;
   transition: all 0.3s ease;
@@ -1106,6 +1109,8 @@ textarea {
   align-items: center;
   justify-content: center;
   gap: $spacing-2;
+  border-radius: $border-radius;
+  white-space: nowrap;
 
   i {
     font-size: 0.9rem;
@@ -1119,7 +1124,7 @@ textarea {
   &.active {
     background: $primary;
     color: $white;
-    box-shadow: inset 0 -3px 0 rgba($white, 0.3);
+    box-shadow: $shadow-sm;
   }
 }
 
@@ -1143,15 +1148,20 @@ textarea {
   }
 }
 
-// Responsive design for tabs
+// Responsive design for tabs - keep horizontal layout on all screen sizes
 @media (max-width: 768px) {
   .tabs-nav {
-    flex-direction: column;
+    padding: $spacing-2;
+    gap: $spacing-1;
   }
 
   .tab-button {
-    justify-content: flex-start;
-    padding: $spacing-3 $spacing-4;
+    padding: $spacing-2 $spacing-3;
+    font-size: 0.85rem;
+    
+    i {
+      font-size: 0.8rem;
+    }
   }
 
   .tab-panel {
