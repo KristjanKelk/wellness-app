@@ -3,7 +3,7 @@
     <h1>Profile Settings</h1>
     <p class="profile-description">Complete your profile to receive personalized recommendations and insights.</p>
 
-    <!-- Tab Navigation - Moved to top and restructured -->
+    <!-- Tab Navigation - Top Menu Bar -->
     <div class="profile-tabs">
       <div class="tabs-nav">
         <button
@@ -21,6 +21,22 @@
         >
           <i class="fas fa-utensils"></i>
           Nutrition
+        </button>
+        <button
+          @click="activeTab = 'activity'"
+          class="tab-button"
+          :class="{ 'active': activeTab === 'activity' }"
+        >
+          <i class="fas fa-dumbbell"></i>
+          Activity
+        </button>
+        <button
+          @click="activeTab = 'goals'"
+          class="tab-button"
+          :class="{ 'active': activeTab === 'goals' }"
+        >
+          <i class="fas fa-target"></i>
+          Goals
         </button>
       </div>
 
@@ -112,63 +128,42 @@
               </div>
             </section>
 
-            <!-- Lifestyle & Goals Section -->
-            <section class="form-section">
-              <h2>Lifestyle & Goals</h2>
-              <p class="section-description">Tell us about your lifestyle and what you want to achieve.</p>
 
-              <div class="form-group">
-                <label for="occupation">Occupation Type</label>
-                <input
-                  type="text"
-                  id="occupation"
-                  v-model="profile.occupation_type"
-                  placeholder="e.g., Office worker, Construction, etc."
-                >
-              </div>
 
-              <div class="form-group">
-                <label for="activity">Activity Level</label>
-                <select id="activity" v-model="profile.activity_level">
-                  <option value="sedentary">Sedentary (little or no exercise)</option>
-                  <option value="light">Lightly Active (light exercise 1-3 days/week)</option>
-                  <option value="moderate">Moderately Active (moderate exercise 3-5 days/week)</option>
-                  <option value="active">Active (hard exercise 6-7 days/week)</option>
-                  <option value="very_active">Very Active (very hard exercise & physical job)</option>
-                </select>
-                <small class="help-text">Choose the option that best describes your typical week.</small>
-              </div>
+            <!-- Submit Section -->
+            <div v-if="message" class="alert" :class="successful ? 'alert-success' : 'alert-danger'">
+              <span v-if="successful">✓</span>
+              <span v-else>!</span>
+              {{ message }}
+            </div>
 
-              <div class="form-group">
-                <label for="goal">Fitness Goal</label>
-                <select id="goal" v-model="profile.fitness_goal">
-                  <option value="weight_loss">Weight Loss</option>
-                  <option value="muscle_gain">Muscle Gain</option>
-                  <option value="general_fitness">General Fitness</option>
-                  <option value="endurance">Endurance</option>
-                  <option value="flexibility">Flexibility</option>
-                </select>
-              </div>
+            <div class="form-actions">
+              <button type="button" class="btn btn-secondary" @click="resetForm" :disabled="saveLoading">
+                Reset
+              </button>
+              <button type="submit" class="btn btn-primary" :disabled="saveLoading || Object.keys(validationErrors).length > 0">
+                <span v-if="saveLoading">
+                  <span class="spinner"></span>
+                  Saving...
+                </span>
+                <span v-else>Save Profile</span>
+              </button>
+            </div>
+          </form>
+        </div>
 
-              <div class="form-group" v-if="profile.fitness_goal === 'weight_loss' || profile.fitness_goal === 'muscle_gain'">
-                <label for="target_weight">Target Weight (kg)</label>
-                <input
-                  type="number"
-                  id="target_weight"
-                  v-model.number="profile.target_weight_kg"
-                  placeholder="Your target weight in kg"
-                  min="30"
-                  max="300"
-                  step="0.1"
-                >
-                <small v-if="validationErrors.target_weight_kg" class="error-text">{{ validationErrors.target_weight_kg }}</small>
-              </div>
+        <!-- Nutrition Profile Tab -->
+        <div v-if="activeTab === 'nutrition'" class="tab-panel">
+          <nutrition-profile-setup
+            :profile="nutritionProfile"
+            :loading="nutritionProfileLoading"
+            @profile-updated="onNutritionProfileUpdated"
+          />
+        </div>
 
-              <div v-if="isGoalAchieved" class="goal-achieved-message">
-                <p><strong>Congratulations!</strong> You've reached your weight goal of {{ profile.target_weight_kg }}kg!</p>
-              </div>
-            </section>
-
+        <!-- Activity Tab -->
+        <div v-if="activeTab === 'activity'" class="tab-panel">
+          <div class="profile-form">
             <!-- Fitness Assessment Section -->
             <section class="form-section">
               <h2>Fitness Assessment</h2>
@@ -312,6 +307,81 @@
               </div>
             </section>
 
+            <div class="form-actions">
+              <button type="button" class="btn btn-secondary" @click="resetForm" :disabled="saveLoading">
+                Reset
+              </button>
+              <button type="button" class="btn btn-primary" @click="saveProfile" :disabled="saveLoading || Object.keys(validationErrors).length > 0">
+                <span v-if="saveLoading">
+                  <span class="spinner"></span>
+                  Saving...
+                </span>
+                <span v-else>Save Profile</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Goals Tab -->
+        <div v-if="activeTab === 'goals'" class="tab-panel">
+          <div class="profile-form">
+            <!-- Lifestyle & Goals Section -->
+            <section class="form-section">
+              <h2>Lifestyle & Goals</h2>
+              <p class="section-description">Tell us about your lifestyle and what you want to achieve.</p>
+
+              <div class="form-group">
+                <label for="occupation">Occupation Type</label>
+                <input
+                  type="text"
+                  id="occupation"
+                  v-model="profile.occupation_type"
+                  placeholder="e.g., Office worker, Construction, etc."
+                >
+              </div>
+
+              <div class="form-group">
+                <label for="activity">Activity Level</label>
+                <select id="activity" v-model="profile.activity_level">
+                  <option value="sedentary">Sedentary (little or no exercise)</option>
+                  <option value="light">Lightly Active (light exercise 1-3 days/week)</option>
+                  <option value="moderate">Moderately Active (moderate exercise 3-5 days/week)</option>
+                  <option value="active">Active (hard exercise 6-7 days/week)</option>
+                  <option value="very_active">Very Active (very hard exercise & physical job)</option>
+                </select>
+                <small class="help-text">Choose the option that best describes your typical week.</small>
+              </div>
+
+              <div class="form-group">
+                <label for="goal">Fitness Goal</label>
+                <select id="goal" v-model="profile.fitness_goal">
+                  <option value="weight_loss">Weight Loss</option>
+                  <option value="muscle_gain">Muscle Gain</option>
+                  <option value="general_fitness">General Fitness</option>
+                  <option value="endurance">Endurance</option>
+                  <option value="flexibility">Flexibility</option>
+                </select>
+              </div>
+
+              <div class="form-group" v-if="profile.fitness_goal === 'weight_loss' || profile.fitness_goal === 'muscle_gain'">
+                <label for="target_weight">Target Weight (kg)</label>
+                <input
+                  type="number"
+                  id="target_weight"
+                  v-model.number="profile.target_weight_kg"
+                  placeholder="Your target weight in kg"
+                  min="30"
+                  max="300"
+                  step="0.1"
+                >
+                <small v-if="validationErrors.target_weight_kg" class="error-text">{{ validationErrors.target_weight_kg }}</small>
+              </div>
+
+              <div v-if="isGoalAchieved" class="goal-achieved-message">
+                <p><strong>Congratulations!</strong> You've reached your weight goal of {{ profile.target_weight_kg }}kg!</p>
+              </div>
+            </section>
+
             <!-- Dietary Preferences Section -->
             <section class="form-section">
               <h2>Dietary Preferences</h2>
@@ -383,18 +453,11 @@
               </div>
             </section>
 
-            <!-- Submit Section -->
-            <div v-if="message" class="alert" :class="successful ? 'alert-success' : 'alert-danger'">
-              <span v-if="successful">✓</span>
-              <span v-else>!</span>
-              {{ message }}
-            </div>
-
             <div class="form-actions">
               <button type="button" class="btn btn-secondary" @click="resetForm" :disabled="saveLoading">
                 Reset
               </button>
-              <button type="submit" class="btn btn-primary" :disabled="saveLoading || Object.keys(validationErrors).length > 0">
+              <button type="button" class="btn btn-primary" @click="saveProfile" :disabled="saveLoading || Object.keys(validationErrors).length > 0">
                 <span v-if="saveLoading">
                   <span class="spinner"></span>
                   Saving...
@@ -402,16 +465,7 @@
                 <span v-else>Save Profile</span>
               </button>
             </div>
-          </form>
-        </div>
-
-        <!-- Nutrition Profile Tab -->
-        <div v-if="activeTab === 'nutrition'" class="tab-panel">
-          <nutrition-profile-setup
-            :profile="nutritionProfile"
-            :loading="nutritionProfileLoading"
-            @profile-updated="onNutritionProfileUpdated"
-          />
+          </div>
         </div>
       </div>
     </div>
@@ -1078,59 +1132,91 @@ textarea {
   color: darken($success, 10%);
 }
 
-// Tab Styles - Horizontal layout at the top
+// Tab Styles - Top Menu Bar Layout
 .profile-tabs {
   background: $white;
   border-radius: $border-radius-lg;
-  box-shadow: $shadow;
+  box-shadow: $shadow-lg;
   overflow: hidden;
   margin-bottom: $spacing-6;
   width: 100%;
+  border: 1px solid $gray-lighter;
 }
 
 .tabs-nav {
   display: flex;
-  background: $gray-lighter;
-  border-bottom: 1px solid $gray-light;
-  padding: $spacing-2;
-  gap: $spacing-2;
+  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+  border-bottom: 3px solid $primary;
+  padding: $spacing-3 $spacing-4;
+  gap: $spacing-1;
   justify-content: flex-start;
   width: 100%;
   flex-wrap: nowrap;
+  position: relative;
+  
+  &::before {
+    content: '';
+    position: absolute;
+    bottom: -3px;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, $primary 0%, lighten($primary, 15%) 100%);
+  }
 }
 
 .tab-button {
   flex: 0 0 auto;
-  min-width: 140px;
-  max-width: 200px;
+  min-width: 120px;
+  max-width: 160px;
   padding: $spacing-3 $spacing-4;
-  border: none;
-  background: transparent;
-  color: $gray;
+  border: 2px solid transparent;
+  background: $white;
+  color: $gray-dark;
   font-size: 0.95rem;
-  font-weight: 500;
+  font-weight: 600;
   cursor: pointer;
   transition: all 0.3s ease;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: $spacing-2;
-  border-radius: $border-radius;
+  border-radius: $border-radius-lg $border-radius-lg 0 0;
   white-space: nowrap;
+  position: relative;
+  margin-bottom: -3px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
 
   i {
-    font-size: 0.9rem;
+    font-size: 1rem;
+    margin-right: $spacing-1;
   }
 
-  &:hover {
-    background: rgba($primary, 0.1);
-    color: $primary;
+  &:hover:not(.active) {
+    background: lighten($primary, 45%);
+    color: $primary-dark;
+    border-color: lighten($primary, 30%);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.15);
   }
 
   &.active {
     background: $primary;
     color: $white;
-    box-shadow: $shadow-sm;
+    border-color: $primary;
+    box-shadow: 0 4px 12px rgba($primary, 0.3);
+    transform: translateY(-3px);
+    z-index: 10;
+    
+    &::after {
+      content: '';
+      position: absolute;
+      bottom: -3px;
+      left: 0;
+      right: 0;
+      height: 3px;
+      background: $primary;
+    }
   }
 }
 
@@ -1160,24 +1246,41 @@ textarea {
 @media (max-width: 768px) {
   .profile-tabs {
     margin-bottom: $spacing-4;
+    border-radius: $border-radius;
   }
 
   .tabs-nav {
-    padding: $spacing-2;
+    padding: $spacing-2 $spacing-3;
     gap: $spacing-1;
     justify-content: flex-start;
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+    
+    &::-webkit-scrollbar {
+      display: none;
+    }
   }
 
   .tab-button {
     padding: $spacing-2 $spacing-3;
     font-size: 0.85rem;
-    min-width: 120px;
+    min-width: 100px;
+    max-width: 130px;
     flex-shrink: 0;
     
     i {
-      font-size: 0.8rem;
+      font-size: 0.85rem;
+      margin-right: $spacing-1;
+    }
+    
+    &:hover:not(.active) {
+      transform: translateY(-1px);
+    }
+    
+    &.active {
+      transform: translateY(-2px);
     }
   }
 
