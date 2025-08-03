@@ -350,6 +350,27 @@ export default {
 
       } catch (error) {
         console.error('Error calculating wellness score:', error);
+        
+        // Provide fallback wellness score data
+        this.rawWellnessScore = {
+          total_score: 0,
+          components: {
+            bmi: { score: 0, status: 'Not Available' },
+            activity: { score: 0, status: 'Not Available' },
+            progress: { score: 0, status: 'Not Available' },
+            habits: { score: 0, status: 'Not Available' },
+            nutrition: { score: 0, status: 'Not Available' }
+          },
+          breakdown: {
+            message: 'Unable to calculate wellness score. Please check your network connection and try again.',
+            last_updated: new Date().toISOString()
+          }
+        };
+        
+        // Show user-friendly error message
+        if (this.$toast) {
+          this.$toast.error('Unable to calculate wellness score. Some features may not work properly.');
+        }
       }
     },
 
