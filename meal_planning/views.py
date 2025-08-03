@@ -1021,6 +1021,176 @@ class RecipeViewSet(viewsets.ModelViewSet):
         )
 
     @action(detail=True, methods=['post'])
+    def adjust_portions(self, request, pk=None):
+        """Get recipe with adjusted portions for ingredients and nutrition"""
+        try:
+            recipe = self.get_object()
+            servings = request.data.get('servings', recipe.servings)
+            
+            if servings <= 0:
+                return Response(
+                    {'error': 'Servings must be a positive number'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Calculate multiplier
+            multiplier = servings / recipe.servings
+            
+            # Adjust nutrition values
+            adjusted_nutrition = {
+                'calories_per_serving': recipe.calories_per_serving,
+                'protein_per_serving': recipe.protein_per_serving,
+                'carbs_per_serving': recipe.carbs_per_serving,
+                'fat_per_serving': recipe.fat_per_serving,
+                'fiber_per_serving': recipe.fiber_per_serving,
+                'total_calories': recipe.calories_per_serving * servings,
+                'total_protein': recipe.protein_per_serving * servings,
+                'total_carbs': recipe.carbs_per_serving * servings,
+                'total_fat': recipe.fat_per_serving * servings,
+                'total_fiber': recipe.fiber_per_serving * servings,
+            }
+            
+            # Adjust ingredients
+            adjusted_ingredients = []
+            for ingredient in recipe.ingredients_data:
+                adjusted_ingredient = self._adjust_ingredient_quantity(ingredient, multiplier)
+                adjusted_ingredients.append(adjusted_ingredient)
+            
+            return Response({
+                'recipe_id': recipe.id,
+                'original_servings': recipe.servings,
+                'adjusted_servings': servings,
+                'multiplier': multiplier,
+                'nutrition': adjusted_nutrition,
+                'ingredients': adjusted_ingredients
+            }, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            logger.error(f"Error adjusting recipe portions: {str(e)}")
+            return Response(
+                {'error': 'Failed to adjust recipe portions', 'details': str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    def _adjust_ingredient_quantity(self, ingredient, multiplier):
+        """Helper method to adjust ingredient quantities"""
+        import re
+        
+        if isinstance(ingredient, str):
+            return self._adjust_string_ingredient(ingredient, multiplier)
+        
+        # Handle dictionary ingredient format
+        adjusted = ingredient.copy()
+        
+        # Adjust the 'original' field if it exists
+        if 'original' in adjusted:
+            adjusted['original'] = self._adjust_string_ingredient(adjusted['original'], multiplier)
+        
+        # Adjust numeric quantity fields
+        for field in ['amount', 'quantity']:
+            if field in adjusted and adjusted[field]:
+                try:
+                    value = float(adjusted[field])
+                    adjusted[field] = self._round_quantity(value * multiplier)
+                except (ValueError, TypeError):
+                    pass
+        
+        return adjusted
+    
+    def _adjust_string_ingredient(self, ingredient_str, multiplier):
+        """Adjust quantities in string ingredient descriptions"""
+        import re
+        
+        if not ingredient_str or multiplier == 1:
+            return ingredient_str
+        
+        # Patterns to match quantities
+        patterns = [
+            r'^(\d+(?:\.\d+)?(?:/\d+)?(?:\s+\d+/\d+)?)',  # Numbers and fractions
+            r'^(\d+-\d+)',  # Ranges like 2-3
+        ]
+        
+        for pattern in patterns:
+            match = re.match(pattern, ingredient_str.strip())
+            if match:
+                original_quantity = match.group(1)
+                try:
+                    if '/' in original_quantity:
+                        # Handle fractions
+                        adjusted_quantity = self._adjust_fraction(original_quantity, multiplier)
+                    elif '-' in original_quantity:
+                        # Handle ranges
+                        parts = original_quantity.split('-')
+                        min_val = float(parts[0]) * multiplier
+                        max_val = float(parts[1]) * multiplier
+                        adjusted_quantity = f"{self._round_quantity(min_val)}-{self._round_quantity(max_val)}"
+                    else:
+                        # Handle regular numbers
+                        value = float(original_quantity) * multiplier
+                        adjusted_quantity = str(self._round_quantity(value))
+                    
+                    return ingredient_str.replace(original_quantity, adjusted_quantity, 1)
+                except (ValueError, TypeError):
+                    pass
+        
+        return ingredient_str
+    
+    def _adjust_fraction(self, fraction_str, multiplier):
+        """Convert fraction to decimal, multiply, and convert back to readable format"""
+        parts = fraction_str.strip().split()
+        decimal_value = 0
+        
+        for part in parts:
+            if '/' in part:
+                numerator, denominator = part.split('/')
+                decimal_value += int(numerator) / int(denominator)
+            else:
+                decimal_value += int(part)
+        
+        adjusted_value = decimal_value * multiplier
+        return self._decimal_to_readable(adjusted_value)
+    
+    def _decimal_to_readable(self, decimal_value):
+        """Convert decimal to readable fraction or mixed number"""
+        # If close to a whole number, return whole number
+        if abs(decimal_value - round(decimal_value)) < 0.1:
+            return str(round(decimal_value))
+        
+        # Common fractions
+        fractions = [
+            (0.125, '1/8'), (0.25, '1/4'), (0.333, '1/3'), (0.375, '3/8'),
+            (0.5, '1/2'), (0.625, '5/8'), (0.667, '2/3'), (0.75, '3/4'), (0.875, '7/8')
+        ]
+        
+        whole_part = int(decimal_value)
+        fractional_part = decimal_value - whole_part
+        
+        # Find closest fraction
+        for frac_decimal, frac_str in fractions:
+            if abs(fractional_part - frac_decimal) < 0.1:
+                if whole_part > 0:
+                    return f"{whole_part} {frac_str}"
+                else:
+                    return frac_str
+        
+        # If no close fraction found, use decimal
+        if whole_part > 0:
+            return f"{decimal_value:.1f}"
+        else:
+            return f"{decimal_value:.2f}"
+    
+    def _round_quantity(self, quantity):
+        """Round quantity to appropriate precision"""
+        if quantity < 0.1:
+            return round(quantity, 2)
+        elif quantity < 1:
+            return round(quantity, 1)
+        elif quantity < 10:
+            return round(quantity * 4) / 4  # Round to nearest quarter
+        else:
+            return round(quantity)
+
+    @action(detail=True, methods=['post'])
     def generate_shopping_list(self, request, pk=None):
         """Generate shopping list for a single recipe"""
         try:

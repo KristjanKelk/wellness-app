@@ -150,6 +150,10 @@ export const mealPlanningApi = {
     return api.delete(`/recipes/${recipeId}/`)
   },
 
+  adjustRecipePortions(recipeId, servings) {
+    return api.post(`/recipes/${recipeId}/adjust_portions/`, { servings })
+  },
+
   getMyRecipes(params = {}) {
     // Get only user's saved recipes
     const cleanParams = { ...params, my_recipes: 'true' }

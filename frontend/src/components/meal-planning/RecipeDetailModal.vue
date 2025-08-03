@@ -43,22 +43,34 @@
           
           <!-- Nutrition Information -->
           <div class="nutrition-panel">
-            <h3>Nutrition per Serving</h3>
+            <h3>Nutrition Information</h3>
+            <div class="nutrition-toggle">
+              <label class="toggle-label">
+                <input 
+                  type="checkbox" 
+                  v-model="showTotalNutrition"
+                  class="nutrition-toggle-input"
+                />
+                <span class="toggle-text">
+                  {{ showTotalNutrition ? 'Total for ' + adjustedServings + ' servings' : 'Per serving' }}
+                </span>
+              </label>
+            </div>
             <div class="nutrition-grid">
               <div class="nutrition-item calories">
-                <div class="nutrition-value">{{ Math.round(recipe.calories_per_serving) || 'N/A' }}</div>
+                <div class="nutrition-value">{{ calculatedNutrition.calories || 'N/A' }}</div>
                 <div class="nutrition-label">Calories</div>
               </div>
               <div class="nutrition-item protein">
-                <div class="nutrition-value">{{ Math.round(recipe.protein_per_serving) || 0 }}g</div>
+                <div class="nutrition-value">{{ calculatedNutrition.protein }}g</div>
                 <div class="nutrition-label">Protein</div>
               </div>
               <div class="nutrition-item carbs">
-                <div class="nutrition-value">{{ Math.round(recipe.carbs_per_serving) || 0 }}g</div>
+                <div class="nutrition-value">{{ calculatedNutrition.carbs }}g</div>
                 <div class="nutrition-label">Carbs</div>
               </div>
               <div class="nutrition-item fat">
-                <div class="nutrition-value">{{ Math.round(recipe.fat_per_serving) || 0 }}g</div>
+                <div class="nutrition-value">{{ calculatedNutrition.fat }}g</div>
                 <div class="nutrition-label">Fat</div>
               </div>
             </div>
@@ -68,6 +80,50 @@
               <span v-for="tag in recipe.dietary_tags" :key="tag" class="dietary-tag">
                 {{ formatTag(tag) }}
               </span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Serving Size Adjustment -->
+        <div class="serving-adjustment-section">
+          <h3>
+            <i class="fas fa-utensils"></i>
+            Adjust Serving Size
+          </h3>
+          <div class="serving-controls">
+            <div class="serving-input-group">
+              <label for="serving-input">Number of Servings:</label>
+              <div class="serving-input-wrapper">
+                <button 
+                  class="serving-btn decrease" 
+                  @click="decreaseServings"
+                  :disabled="adjustedServings <= 1"
+                >
+                  <i class="fas fa-minus"></i>
+                </button>
+                <input 
+                  id="serving-input"
+                  type="number" 
+                  v-model.number="adjustedServings" 
+                  min="1" 
+                  max="20"
+                  class="serving-input"
+                  @input="validateServings"
+                />
+                <button 
+                  class="serving-btn increase" 
+                  @click="increaseServings"
+                  :disabled="adjustedServings >= 20"
+                >
+                  <i class="fas fa-plus"></i>
+                </button>
+              </div>
+              <div class="serving-info">
+                <span class="original-info">Original: {{ recipe.servings }} {{ recipe.servings === 1 ? 'serving' : 'servings' }}</span>
+                <span v-if="servingMultiplier !== 1" class="multiplier-info">
+                  ({{ servingMultiplier.toFixed(2) }}x {{ servingMultiplier > 1 ? 'larger' : 'smaller' }})
+                </span>
+              </div>
             </div>
           </div>
         </div>
@@ -83,14 +139,20 @@
           <h3>
             <i class="fas fa-list-ul"></i>
             Ingredients
+            <span v-if="servingMultiplier !== 1" class="ingredients-multiplier">
+              (adjusted for {{ adjustedServings }} {{ adjustedServings === 1 ? 'serving' : 'servings' }})
+            </span>
           </h3>
           <div class="ingredients-grid">
             <div 
-              v-for="(ing, idx) in recipe.ingredients_data" 
+              v-for="(ing, idx) in adjustedIngredients" 
               :key="idx"
               class="ingredient-item"
             >
-              <span class="ingredient-text">{{ formatIngredient(ing) }}</span>
+              <span class="ingredient-text">{{ ing.formatted }}</span>
+              <span v-if="servingMultiplier !== 1 && ing.original !== ing.formatted" class="ingredient-original">
+                Original: {{ ing.original }}
+              </span>
             </div>
           </div>
         </div>
@@ -181,23 +243,64 @@ export default {
       shoppingListData: null,
       shoppingListLoading: false,
       shoppingListError: null,
-      localRecipe: null  // Local copy to avoid mutating props
+      localRecipe: null,  // Local copy to avoid mutating props
+      adjustedServings: 4,  // Default serving size
+      showTotalNutrition: false  // Toggle between per serving and total nutrition
     }
   },
   mounted() {
     // Create a local copy of the recipe to avoid mutating props
     this.localRecipe = { ...this.recipe }
+    // Initialize serving size to recipe's original serving size
+    this.adjustedServings = this.recipe.servings || 4
   },
   watch: {
     recipe: {
       handler(newRecipe) {
         // Update local copy when prop changes
         this.localRecipe = { ...newRecipe }
+        // Reset serving size to recipe's original serving size
+        this.adjustedServings = newRecipe.servings || 4
       },
       immediate: true
     }
   },
   computed: {
+    servingMultiplier() {
+      const originalServings = this.recipe.servings || 4
+      return this.adjustedServings / originalServings
+    },
+
+    calculatedNutrition() {
+      const multiplier = this.showTotalNutrition ? this.adjustedServings : 1
+      const baseMultiplier = this.servingMultiplier * multiplier
+      
+      return {
+        calories: Math.round((this.recipe.calories_per_serving || 0) * baseMultiplier),
+        protein: Math.round((this.recipe.protein_per_serving || 0) * baseMultiplier),
+        carbs: Math.round((this.recipe.carbs_per_serving || 0) * baseMultiplier),
+        fat: Math.round((this.recipe.fat_per_serving || 0) * baseMultiplier),
+        fiber: Math.round((this.recipe.fiber_per_serving || 0) * baseMultiplier)
+      }
+    },
+
+    adjustedIngredients() {
+      if (!this.recipe.ingredients_data || !Array.isArray(this.recipe.ingredients_data)) {
+        return []
+      }
+
+      return this.recipe.ingredients_data.map(ingredient => {
+        const original = this.formatIngredient(ingredient)
+        const adjusted = this.adjustIngredientQuantity(ingredient)
+        
+        return {
+          original: original,
+          formatted: adjusted,
+          raw: ingredient
+        }
+      })
+    },
+
     normalizedInstructions() {
       const instr = this.recipe.instructions || []
       
@@ -250,6 +353,167 @@ export default {
       }
       
       return name || 'Ingredient'
+    },
+
+    adjustIngredientQuantity(ingredient) {
+      if (typeof ingredient === 'string') {
+        return this.adjustStringIngredient(ingredient)
+      }
+
+      // Handle different ingredient formats
+      if (ingredient.original) {
+        return this.adjustStringIngredient(ingredient.original)
+      }
+
+      const amount = ingredient.amount || ingredient.quantity || ''
+      const unit = ingredient.unit || ''
+      const name = ingredient.name || ingredient.ingredient || ''
+
+      if (amount && !isNaN(parseFloat(amount))) {
+        const adjustedAmount = this.adjustQuantity(parseFloat(amount))
+        if (unit) {
+          return `${adjustedAmount} ${unit} ${name}`.trim()
+        } else {
+          return `${adjustedAmount} ${name}`.trim()
+        }
+      }
+
+      return name || 'Ingredient'
+    },
+
+    adjustStringIngredient(ingredientStr) {
+      if (!ingredientStr || this.servingMultiplier === 1) {
+        return ingredientStr
+      }
+
+      // Regular expressions to match different quantity patterns
+      const patterns = [
+        // Fractions: 1/2, 3/4, etc.
+        /^(\d+\/\d+|\d+\s+\d+\/\d+)/,
+        // Decimals: 1.5, 2.25, etc.
+        /^(\d+\.?\d*)/,
+        // Ranges: 2-3, 1-2, etc.
+        /^(\d+)-(\d+)/
+      ]
+
+      for (const pattern of patterns) {
+        const match = ingredientStr.match(pattern)
+        if (match) {
+          const originalQuantity = match[0]
+          let adjustedQuantity
+
+          if (originalQuantity.includes('/')) {
+            // Handle fractions
+            adjustedQuantity = this.adjustFraction(originalQuantity)
+          } else if (originalQuantity.includes('-')) {
+            // Handle ranges
+            const [min, max] = originalQuantity.split('-').map(num => parseFloat(num))
+            const adjustedMin = this.adjustQuantity(min)
+            const adjustedMax = this.adjustQuantity(max)
+            adjustedQuantity = `${adjustedMin}-${adjustedMax}`
+          } else {
+            // Handle regular numbers
+            adjustedQuantity = this.adjustQuantity(parseFloat(originalQuantity))
+          }
+
+          return ingredientStr.replace(originalQuantity, adjustedQuantity)
+        }
+      }
+
+      return ingredientStr
+    },
+
+    adjustQuantity(quantity) {
+      const adjusted = quantity * this.servingMultiplier
+      
+      // Round to appropriate precision
+      if (adjusted < 0.1) {
+        return adjusted.toFixed(2)
+      } else if (adjusted < 1) {
+        return adjusted.toFixed(1)
+      } else if (adjusted < 10) {
+        return Math.round(adjusted * 4) / 4  // Round to nearest quarter
+      } else {
+        return Math.round(adjusted)
+      }
+    },
+
+    adjustFraction(fractionStr) {
+      // Convert fraction to decimal, adjust, then convert back to fraction if reasonable
+      const parts = fractionStr.trim().split(/\s+/)
+      let decimal = 0
+
+      for (const part of parts) {
+        if (part.includes('/')) {
+          const [num, den] = part.split('/').map(n => parseInt(n))
+          decimal += num / den
+        } else {
+          decimal += parseInt(part)
+        }
+      }
+
+      const adjusted = decimal * this.servingMultiplier
+      return this.decimalToFraction(adjusted)
+    },
+
+    decimalToFraction(decimal) {
+      // Convert decimal back to a readable fraction or mixed number
+      const tolerance = 1.0E-6
+      let num = decimal
+      let den = 1
+
+      // Find the fraction representation
+      while (Math.abs(num - Math.round(num)) > tolerance) {
+        num *= 10
+        den *= 10
+      }
+
+      num = Math.round(num)
+
+      // Simplify the fraction
+      const gcd = this.findGCD(num, den)
+      num /= gcd
+      den /= gcd
+
+      // Convert to mixed number if appropriate
+      if (num >= den) {
+        const whole = Math.floor(num / den)
+        const remainder = num % den
+        if (remainder === 0) {
+          return whole.toString()
+        } else {
+          return `${whole} ${remainder}/${den}`
+        }
+      } else if (den === 1) {
+        return num.toString()
+      } else {
+        return `${num}/${den}`
+      }
+    },
+
+    findGCD(a, b) {
+      // Greatest Common Divisor using Euclidean algorithm
+      return b === 0 ? a : this.findGCD(b, a % b)
+    },
+
+    increaseServings() {
+      if (this.adjustedServings < 20) {
+        this.adjustedServings++
+      }
+    },
+
+    decreaseServings() {
+      if (this.adjustedServings > 1) {
+        this.adjustedServings--
+      }
+    },
+
+    validateServings() {
+      if (this.adjustedServings < 1) {
+        this.adjustedServings = 1
+      } else if (this.adjustedServings > 20) {
+        this.adjustedServings = 20
+      }
     },
 
     formatTime(minutes) {
@@ -424,12 +688,12 @@ export default {
         
         if (isFallbackRecipe) {
           // Generate shopping list from recipe data directly for fallback recipes
-          const ingredients = this.localRecipe?.ingredients_data || this.localRecipe?.ingredients || []
+          const ingredients = this.adjustedIngredients || []
           this.shoppingListData = {
             recipe_title: this.localRecipe.title || 'Recipe',
-            total_servings: 1,
+            total_servings: this.adjustedServings,
             items: ingredients.map(ingredient => ({
-              ingredient: ingredient.original || ingredient.name || 'Unknown ingredient',
+              ingredient: ingredient.formatted || ingredient.original || 'Unknown ingredient',
               quantity: 1,
               unit: '',
               category: 'Other'
@@ -448,7 +712,8 @@ export default {
             'Authorization': `Bearer ${this.$store.state.auth.token}`
           },
           body: JSON.stringify({
-            servings_multiplier: 1.0
+            servings_multiplier: this.servingMultiplier,
+            adjusted_servings: this.adjustedServings
           })
         })
 
@@ -657,6 +922,29 @@ export default {
     font-size: 1.2rem;
     color: $primary-dark;
   }
+
+  .nutrition-toggle {
+    margin-bottom: 16px;
+
+    .toggle-label {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+      font-size: 0.9rem;
+      color: $gray-dark;
+
+      .nutrition-toggle-input {
+        width: 16px;
+        height: 16px;
+        cursor: pointer;
+      }
+
+      .toggle-text {
+        font-weight: 500;
+      }
+    }
+  }
 }
 
 .nutrition-grid {
@@ -707,6 +995,103 @@ export default {
   }
 }
 
+.serving-adjustment-section {
+  padding: 24px 32px;
+  border-bottom: 1px solid $gray-lighter;
+
+  h3 {
+    margin: 0 0 16px 0;
+    font-size: 1.3rem;
+    color: $primary-dark;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+
+    i {
+      color: $primary;
+    }
+  }
+}
+
+.serving-controls {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  margin-top: 10px;
+
+  .serving-input-group {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+
+    label {
+      font-size: 0.9rem;
+      color: $gray-dark;
+      font-weight: 600;
+    }
+
+    .serving-input-wrapper {
+      display: flex;
+      align-items: center;
+      border: 1px solid $gray-light;
+      border-radius: 8px;
+      overflow: hidden;
+      width: 120px;
+
+      .serving-btn {
+        background: $gray-light;
+        border: none;
+        padding: 8px 12px;
+        cursor: pointer;
+        color: $gray-dark;
+        font-size: 1rem;
+        transition: all 0.2s ease;
+        flex: 1;
+
+        &:hover:not(:disabled) {
+          background: $gray;
+          color: $white;
+        }
+
+        &:disabled {
+          opacity: 0.5;
+          cursor: not-allowed;
+        }
+
+        i {
+          font-size: 0.8rem;
+        }
+      }
+
+      .serving-input {
+        flex: 1;
+        border: none;
+        padding: 8px 10px;
+        text-align: center;
+        font-size: 1rem;
+        font-weight: 600;
+        color: $gray-dark;
+        background: transparent;
+        outline: none;
+      }
+    }
+
+    .serving-info {
+      font-size: 0.8rem;
+      color: $gray;
+      margin-top: 5px;
+
+      .original-info {
+        margin-right: 5px;
+      }
+
+      .multiplier-info {
+        font-style: italic;
+      }
+    }
+  }
+}
+
 .summary-section,
 .ingredients-section,
 .instructions-section,
@@ -724,6 +1109,14 @@ export default {
 
     i {
       color: $primary;
+    }
+
+    .ingredients-multiplier {
+      font-size: 0.9rem;
+      font-weight: 400;
+      color: $primary;
+      font-style: italic;
+      margin-left: 8px;
     }
   }
 }
@@ -746,10 +1139,19 @@ export default {
   background: $gray-lighter;
   border-radius: 8px;
   border-left: 3px solid $primary;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 
   .ingredient-text {
     font-weight: 500;
     color: $gray-dark;
+  }
+
+  .ingredient-original {
+    font-size: 0.8rem;
+    color: $gray;
+    font-style: italic;
   }
 }
 
