@@ -54,6 +54,7 @@
           :activity-score="formattedWellnessScore?.components?.activity?.score || 0"
           :progress-score="formattedWellnessScore?.components?.progress?.score || 0"
           :habits-score="formattedWellnessScore?.components?.habits?.score || 0"
+          :nutrition-score="formattedWellnessScore?.components?.nutrition?.score || 0"
           :score-breakdown="formattedWellnessScore?.breakdown"
           @recalculate="recalculateWellnessScore"
         />
@@ -86,6 +87,13 @@
           :weight-change="weightChange"
           @add-weight="showAddWeightModal = true"
           @weight-goal-achieved="onWeightGoalAchieved"
+        />
+
+        <!-- Meal Planning Card -->
+        <meal-planning-card
+          class="dashboard-card"
+          :nutrition-profile="nutritionProfile"
+          @navigate-to-meal-planning="navigateToMealPlanning"
         />
 
         <!-- AI Insights Card - Enhanced -->
@@ -140,6 +148,7 @@ import AiInsightsCard from '../components/dashboard/AiInsightsCard.vue';
 import AddWeightModal from '../components/dashboard/AddWeightModal.vue';
 import MilestonesCard from '../components/dashboard/MilestonesCard.vue';
 import ActivitiesCard from '../components/dashboard/ActivitiesCard.vue';
+import MealPlanningCard from '../components/dashboard/MealPlanningCard.vue';
 import MilestoneAchievementModal from '../components/dashboard/MilestoneAchievementModal.vue';
 
 export default {
@@ -148,6 +157,7 @@ export default {
     WellnessScoreCard,
     BmiStatusCard,
     ActivityLevelCard,
+    MealPlanningCard,
     WeightHistoryCard,
     AiInsightsCard,
     MilestonesCard,
@@ -177,7 +187,8 @@ export default {
       showMilestoneModal: false,
       newWeight: null,
       weightLoading: false,
-      weightError: null
+      weightError: null,
+      nutritionProfile: null
     };
   },
   computed: {
@@ -196,7 +207,9 @@ export default {
         bmi: this.bmi,
         recentActivities: Array.isArray(this.activities) ? this.activities.length : 0,
         recentMilestones: Array.isArray(this.recentMilestones) ? this.recentMilestones.length : 0,
-        restrictions: this.getUserRestrictions()
+        restrictions: this.getUserRestrictions(),
+        nutritionProfile: this.nutritionProfile,
+        hasNutritionProfile: !!this.nutritionProfile
       };
     }
   },
@@ -236,11 +249,20 @@ export default {
 
     async fetchHealthData() {
   try {
-    // Fetch profile and weight history
+    // Fetch profile, weight history, and nutrition profile
     const [profileResponse, weightResponse] = await Promise.all([
       HealthProfileService.getHealthProfile(),
       HealthProfileService.getWeightHistory()
     ]);
+
+    // Fetch nutrition profile separately (might not exist yet)
+    try {
+      const nutritionResponse = await HealthProfileService.getNutritionProfile();
+      this.nutritionProfile = nutritionResponse.data;
+    } catch (nutritionError) {
+      console.warn('Nutrition profile not found:', nutritionError);
+      this.nutritionProfile = null;
+    }
 
     this.profile = profileResponse.data;
 
@@ -551,6 +573,10 @@ export default {
       } finally {
         this.insightsLoading = false;
       }
+    },
+
+    navigateToMealPlanning() {
+      this.$router.push('/meal-planning');
     }
   }
 };

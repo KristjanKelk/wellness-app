@@ -9,6 +9,13 @@ import logging
 from .models import Milestone, WellnessScore
 from health_profiles.models import HealthProfile, WeightHistory, Activity
 
+# Import nutrition models for enhanced wellness scoring
+try:
+    from meal_planning.models import NutritionProfile, NutritionLog
+    NUTRITION_AVAILABLE = True
+except ImportError:
+    NUTRITION_AVAILABLE = False
+
 logger = logging.getLogger(__name__)
 
 class MilestoneService:
@@ -316,12 +323,15 @@ class WellnessScoreService:
             activity_score = WellnessScoreService.calculate_activity_score(health_profile, user)
             progress_score = WellnessScoreService.calculate_progress_score(health_profile, user)
             habits_score = WellnessScoreService.calculate_habits_score(health_profile, user)
+            nutrition_score = WellnessScoreService.calculate_nutrition_score(health_profile, user)
 
+            # Adjust weights to include nutrition component
             total_score = (
-                    float(bmi_score) * 0.3 +
-                    float(activity_score) * 0.3 +
-                    float(progress_score) * 0.2 +
-                    float(habits_score) * 0.2
+                    float(bmi_score) * 0.25 +
+                    float(activity_score) * 0.25 +
+                    float(progress_score) * 0.15 +
+                    float(habits_score) * 0.15 +
+                    float(nutrition_score) * 0.20
             )
 
             return {
@@ -329,6 +339,7 @@ class WellnessScoreService:
                 'activity_score': round(activity_score, 2),
                 'progress_score': round(progress_score, 2),
                 'habits_score': round(habits_score, 2),
+                'nutrition_score': round(nutrition_score, 2),
                 'total_score': round(total_score, 2)
             }
 
@@ -339,6 +350,7 @@ class WellnessScoreService:
                 'activity_score': 50.0,
                 'progress_score': 50.0,
                 'habits_score': 50.0,
+                'nutrition_score': 50.0,
                 'total_score': 50.0
             }
 
@@ -791,3 +803,96 @@ class WellnessScoreService:
         except Exception as e:
             logger.error(f"Error calculating activity regularity: {str(e)}")
             return 0
+
+    @staticmethod
+    def calculate_nutrition_score(health_profile, user):
+        """
+        Calculate nutrition score based on:
+        - Having a nutrition profile (20 points)
+        - Recent nutrition logging consistency (30 points)
+        - Meeting nutrition goals (30 points)
+        - Nutrition plan adherence (20 points)
+        """
+        try:
+            if not NUTRITION_AVAILABLE:
+                return 50.0  # Default score when nutrition module not available
+
+            base_score = 0.0
+
+            # Check if user has a nutrition profile (20 points)
+            try:
+                nutrition_profile = NutritionProfile.objects.get(user=user)
+                base_score += 20.0
+                
+                # Recent nutrition logging (30 points max)
+                thirty_days_ago = timezone.now() - timedelta(days=30)
+                recent_logs = NutritionLog.objects.filter(
+                    user=user,
+                    date__gte=thirty_days_ago.date()
+                ).count()
+                
+                if recent_logs >= 20:  # Daily logging
+                    logging_score = 30.0
+                elif recent_logs >= 15:  # Most days
+                    logging_score = 25.0
+                elif recent_logs >= 10:  # Half the days
+                    logging_score = 20.0
+                elif recent_logs >= 5:  # Some logging
+                    logging_score = 15.0
+                else:  # Minimal logging
+                    logging_score = 5.0
+                    
+                base_score += logging_score
+
+                # Goal achievement analysis (30 points max)
+                # Check recent logs for goal adherence
+                recent_week_logs = NutritionLog.objects.filter(
+                    user=user,
+                    date__gte=(timezone.now() - timedelta(days=7)).date()
+                )
+                
+                if recent_week_logs.exists():
+                    goal_adherence_score = 0.0
+                    total_days = recent_week_logs.count()
+                    
+                    calorie_target = nutrition_profile.calorie_target
+                    protein_target = nutrition_profile.protein_target
+                    
+                    on_target_days = 0
+                    for log in recent_week_logs:
+                        calorie_diff = abs((log.total_calories or 0) - calorie_target) / calorie_target if calorie_target > 0 else 1
+                        protein_diff = abs((log.total_protein or 0) - protein_target) / protein_target if protein_target > 0 else 1
+                        
+                        # Consider "on target" if within 15% of goals
+                        if calorie_diff <= 0.15 and protein_diff <= 0.20:
+                            on_target_days += 1
+                    
+                    adherence_rate = on_target_days / total_days if total_days > 0 else 0
+                    goal_adherence_score = adherence_rate * 30.0
+                    
+                    base_score += goal_adherence_score
+                else:
+                    base_score += 10.0  # Partial credit for having profile but no recent data
+
+                # Nutrition profile completeness (20 points max)
+                completeness_factors = [
+                    nutrition_profile.calorie_target > 0,
+                    nutrition_profile.protein_target > 0,
+                    nutrition_profile.carb_target > 0,
+                    nutrition_profile.fat_target > 0,
+                    len(nutrition_profile.dietary_preferences or []) > 0,
+                    nutrition_profile.meals_per_day > 0,
+                ]
+                
+                completeness_score = (sum(completeness_factors) / len(completeness_factors)) * 20.0
+                base_score += completeness_score
+
+            except NutritionProfile.DoesNotExist:
+                # No nutrition profile - encourage setup
+                base_score = 25.0
+
+            return min(100.0, max(0.0, base_score))
+
+        except Exception as e:
+            logger.error(f"Error calculating nutrition score: {str(e)}")
+            return 50.0
