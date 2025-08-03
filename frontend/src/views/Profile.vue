@@ -3,9 +3,9 @@
     <h1>Profile Settings</h1>
     <p class="profile-description">Complete your profile to receive personalized recommendations and insights.</p>
 
-    <!-- Tab Navigation -->
+    <!-- Tab Navigation - Moved to top and restructured -->
     <div class="profile-tabs">
-      <nav class="tabs-nav">
+      <div class="tabs-nav">
         <button
           @click="activeTab = 'general'"
           class="tab-button"
@@ -22,7 +22,7 @@
           <i class="fas fa-utensils"></i>
           Nutrition
         </button>
-      </nav>
+      </div>
 
       <div class="tab-content">
         <!-- General Profile Tab -->
@@ -845,6 +845,7 @@ select, input[type="text"], input[type="number"] {
   border-radius: $border-radius-lg;
   padding: 2rem;
   box-shadow: $shadow;
+  margin-top: $spacing-4;
 }
 
 .form-section {
@@ -1077,13 +1078,14 @@ textarea {
   color: darken($success, 10%);
 }
 
-// Tab Styles
+// Tab Styles - Horizontal layout at the top
 .profile-tabs {
   background: $white;
   border-radius: $border-radius-lg;
   box-shadow: $shadow;
   overflow: hidden;
-  margin-top: $spacing-4;
+  margin-bottom: $spacing-6;
+  width: 100%;
 }
 
 .tabs-nav {
@@ -1092,10 +1094,14 @@ textarea {
   border-bottom: 1px solid $gray-light;
   padding: $spacing-2;
   gap: $spacing-2;
+  justify-content: flex-start;
+  width: 100%;
+  flex-wrap: nowrap;
 }
 
 .tab-button {
-  flex: 1;
+  flex: 0 0 auto;
+  min-width: 140px;
   max-width: 200px;
   padding: $spacing-3 $spacing-4;
   border: none;
@@ -1130,10 +1136,12 @@ textarea {
 
 .tab-content {
   min-height: 600px;
+  width: 100%;
+  clear: both;
 }
 
 .tab-panel {
-  padding: $spacing-6;
+  padding: 0;
   animation: fadeIn 0.3s ease;
 }
 
@@ -1148,16 +1156,25 @@ textarea {
   }
 }
 
-// Responsive design for tabs - keep horizontal layout on all screen sizes
+// Responsive design for tabs - maintain horizontal layout at all screen sizes
 @media (max-width: 768px) {
+  .profile-tabs {
+    margin-bottom: $spacing-4;
+  }
+
   .tabs-nav {
     padding: $spacing-2;
     gap: $spacing-1;
+    justify-content: flex-start;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
   }
 
   .tab-button {
     padding: $spacing-2 $spacing-3;
     font-size: 0.85rem;
+    min-width: 120px;
+    flex-shrink: 0;
     
     i {
       font-size: 0.8rem;
@@ -1165,7 +1182,11 @@ textarea {
   }
 
   .tab-panel {
-    padding: $spacing-4;
+    padding: 0;
+  }
+
+  .profile-container {
+    padding: 1rem;
   }
 }
 </style>
