@@ -324,6 +324,7 @@
 <script>
 import RecipeDetailModal from './RecipeDetailModal.vue'
 import ShoppingListModal from './ShoppingListModal.vue'
+import { makeShoppingListRequest } from '@/utils/fetchUtils'
 
 export default {
   name: 'MealPlanDetailModal',
@@ -845,23 +846,14 @@ export default {
         this.shoppingListError = null
         this.showShoppingListModal = true
 
-        const response = await fetch(`/api/meal-planning/meal-plans/${this.mealPlan.id}/generate_shopping_list/`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${this.$store.state.auth.token}`
-          },
-          body: JSON.stringify({
+        const data = await makeShoppingListRequest(
+          `/api/meal-planning/meal-plans/${this.mealPlan.id}/generate_shopping_list/`,
+          {
             exclude_items: [],
             group_by_category: true
-          })
-        })
-
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`)
-        }
-
-        const data = await response.json()
+          },
+          this.$store.state.auth.token
+        )
         this.shoppingListData = data.shopping_list
         this.shoppingListLoading = false
 
@@ -871,6 +863,50 @@ export default {
 
       } catch (error) {
         console.error('Error generating shopping list:', error)
+        
+        // Try to provide a fallback shopping list if the API fails
+        if (error.message.includes('JSON') || error.message.includes('Empty response')) {
+          console.log('Attempting fallback shopping list generation...')
+          try {
+            // Generate basic shopping list from meal plan recipes
+            const ingredients = []
+            if (this.mealPlan?.meals) {
+              this.mealPlan.meals.forEach(meal => {
+                if (meal.recipe?.ingredients) {
+                  meal.recipe.ingredients.forEach(ingredient => {
+                    ingredients.push({
+                      ingredient: ingredient.formatted || ingredient.original || 'Unknown ingredient',
+                      quantity: ingredient.amount || 1,
+                      unit: ingredient.unit || '',
+                      category: 'Other'
+                    })
+                  })
+                }
+              })
+            }
+            
+            this.shoppingListData = {
+              recipe_title: this.mealPlan?.title || 'Meal Plan',
+              total_servings: 1,
+              metadata: {
+                total_items: ingredients.length,
+                generated_from: 'fallback'
+              },
+              categories: {
+                'Other': {
+                  items: ingredients
+                }
+              }
+            }
+            this.shoppingListLoading = false
+            this.$toast?.warning?.('Shopping list generated with basic ingredients (API unavailable)') ||
+            console.log('Fallback shopping list generated')
+            return
+          } catch (fallbackError) {
+            console.error('Fallback generation also failed:', fallbackError)
+          }
+        }
+        
         this.shoppingListError = error.message || 'Failed to generate shopping list'
         this.shoppingListLoading = false
         
