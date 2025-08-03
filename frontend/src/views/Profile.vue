@@ -399,7 +399,7 @@
                   <span class="spinner"></span>
                   Saving...
                 </span>
-                <span v-else">Save Profile</span>
+                <span v-else>Save Profile</span>
               </button>
             </div>
           </form>
