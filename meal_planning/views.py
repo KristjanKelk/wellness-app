@@ -911,40 +911,73 @@ class RecipeViewSet(viewsets.ModelViewSet):
         """Save a recipe from meal plan data to user's collection"""
         try:
             recipe_data = request.data
+            logger.info(f"Attempting to save recipe from meal plan: {recipe_data.get('title', 'Unknown')}")
+            
+            # Check if this is a fallback recipe that cannot be saved
+            recipe_id = recipe_data.get('spoonacular_id') or recipe_data.get('id')
+            if recipe_id and str(recipe_id).startswith('fallback_'):
+                logger.warning(f"Cannot save fallback recipe: {recipe_id}")
+                return Response(
+                    {'error': 'Cannot save fallback recipe', 'message': 'This is a temporary recipe that cannot be saved to your collection.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
             
             # Check if user already has this recipe saved by spoonacular_id
             spoonacular_id = recipe_data.get('spoonacular_id') or recipe_data.get('id')
-            if spoonacular_id:
-                existing_recipe = Recipe.objects.filter(
-                    created_by=request.user,
-                    spoonacular_id=spoonacular_id
-                ).first()
-                
-                if existing_recipe:
-                    return Response(
-                        {'message': 'Recipe already in your collection', 'recipe_id': str(existing_recipe.id)},
-                        status=status.HTTP_200_OK
-                    )
             
-            # Extract and normalize the data
+            # Only check for existing recipes if we have a valid spoonacular_id (not fallback)
+            if spoonacular_id and not str(spoonacular_id).startswith('fallback_'):
+                try:
+                    # Convert to int if it's a valid spoonacular ID
+                    spoonacular_id_int = int(spoonacular_id)
+                    existing_recipe = Recipe.objects.filter(
+                        created_by=request.user,
+                        spoonacular_id=spoonacular_id_int
+                    ).first()
+                    
+                    if existing_recipe:
+                        return Response(
+                            {'message': 'Recipe already in your collection', 'recipe_id': str(existing_recipe.id)},
+                            status=status.HTTP_200_OK
+                        )
+                except (ValueError, TypeError):
+                    # If spoonacular_id is not a valid integer, treat as None
+                    spoonacular_id_int = None
+            else:
+                spoonacular_id_int = None
+            
+            # Validate and normalize required fields with proper defaults
+            def safe_int(value, default=0):
+                try:
+                    return int(value) if value is not None else default
+                except (ValueError, TypeError):
+                    return default
+                    
+            def safe_float(value, default=0.0):
+                try:
+                    return float(value) if value is not None else default
+                except (ValueError, TypeError):
+                    return default
+            
+            # Extract and normalize the data with proper validation
             saved_recipe = Recipe.objects.create(
                 title=recipe_data.get('title', 'Untitled Recipe'),
                 summary=recipe_data.get('summary', ''),
                 cuisine=recipe_data.get('cuisine', ''),
                 meal_type=recipe_data.get('meal_type', 'dinner'),
-                servings=recipe_data.get('servings', 4),
-                prep_time_minutes=recipe_data.get('prep_time_minutes', 0),
-                cook_time_minutes=recipe_data.get('cook_time_minutes', 0),
-                total_time_minutes=recipe_data.get('total_time_minutes', 0),
+                servings=safe_int(recipe_data.get('servings'), 4),
+                prep_time_minutes=safe_int(recipe_data.get('prep_time_minutes'), 30),  # Default 30 min prep
+                cook_time_minutes=safe_int(recipe_data.get('cook_time_minutes'), 0),
+                total_time_minutes=safe_int(recipe_data.get('total_time_minutes'), 30),  # Default 30 min total
                 difficulty_level=recipe_data.get('difficulty_level', 'medium'),
-                spoonacular_id=spoonacular_id,
+                spoonacular_id=spoonacular_id_int,  # Use the validated integer ID or None
                 ingredients_data=recipe_data.get('ingredients_data', []),
                 instructions=recipe_data.get('instructions', []),
-                calories_per_serving=recipe_data.get('calories_per_serving', 0),
-                protein_per_serving=recipe_data.get('protein_per_serving', 0),
-                carbs_per_serving=recipe_data.get('carbs_per_serving', 0),
-                fat_per_serving=recipe_data.get('fat_per_serving', 0),
-                fiber_per_serving=recipe_data.get('fiber_per_serving', 0),
+                calories_per_serving=safe_float(recipe_data.get('calories_per_serving'), 300),  # Default 300 calories
+                protein_per_serving=safe_float(recipe_data.get('protein_per_serving'), 15),    # Default 15g protein
+                carbs_per_serving=safe_float(recipe_data.get('carbs_per_serving'), 30),       # Default 30g carbs
+                fat_per_serving=safe_float(recipe_data.get('fat_per_serving'), 10),          # Default 10g fat
+                fiber_per_serving=safe_float(recipe_data.get('fiber_per_serving'), 0),
                 dietary_tags=recipe_data.get('dietary_tags', []),
                 allergens=recipe_data.get('allergens', []),
                 image_url=recipe_data.get('image_url', ''),
@@ -954,6 +987,8 @@ class RecipeViewSet(viewsets.ModelViewSet):
                 created_by=request.user
             )
             
+            logger.info(f"Successfully saved recipe: {saved_recipe.title} (ID: {saved_recipe.id})")
+            
             serializer = self.get_serializer(saved_recipe)
             return Response({
                 'message': 'Recipe saved to your collection!',
@@ -962,8 +997,9 @@ class RecipeViewSet(viewsets.ModelViewSet):
             
         except Exception as e:
             logger.error(f"Error saving recipe from meal plan: {str(e)}")
+            logger.error(f"Recipe data: {recipe_data}")
             return Response(
-                {'error': 'Failed to save recipe'},
+                {'error': 'Failed to save recipe', 'details': str(e)},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 

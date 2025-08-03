@@ -241,7 +241,7 @@
 
                   <div class="meal-actions">
                     <button
-                      @click="toggleSaveRecipe(meal.recipe || meal)"
+                                                @click="toggleRecipeSave(meal.recipe || meal)"
                       class="btn btn-sm"
                       :class="(meal.recipe || meal)?.is_saved_by_user ? 'btn-outline-danger' : 'btn-primary'"
                       :disabled="savingRecipe === (meal.recipe || meal)?.id"
@@ -703,9 +703,9 @@ export default {
       })
     },
 
-    async toggleSaveRecipe(recipe) {
-      if (!recipe) {
-        console.warn('No recipe provided to toggle')
+    async toggleRecipeSave(recipe) {
+      // Check if we're already processing this recipe
+      if (this.savingRecipe === (recipe.id || recipe.spoonacular_id)) {
         return
       }
 
@@ -713,6 +713,14 @@ export default {
 
       try {
         console.log('Toggling save status for recipe:', recipe)
+        
+        // Check if this is a fallback recipe that cannot be saved
+        const recipeId = recipe.spoonacular_id || recipe.id
+        if (recipeId && String(recipeId).startsWith('fallback_')) {
+          this.$toast?.error?.('This is a temporary recipe that cannot be saved to your collection.') ||
+          alert('This is a temporary recipe that cannot be saved to your collection.')
+          return
+        }
         
         // Import the API service
         const { mealPlanningApi } = await import('@/services/mealPlanningApi')
@@ -740,26 +748,30 @@ export default {
           this.$toast?.success?.(message) || alert(message)
           
         } else {
-          // Save recipe
-          // Prepare recipe data for saving
+          // Save recipe - validate we have essential data
+          if (!recipe.title && !recipe.name) {
+            throw new Error('Recipe must have a title to be saved')
+          }
+          
+          // Prepare recipe data for saving with better validation
           const recipeData = {
             title: recipe.title || recipe.name || 'Untitled Recipe',
             summary: recipe.summary || '',
             cuisine: recipe.cuisine || '',
             meal_type: recipe.meal_type || 'dinner',
             servings: recipe.servings || 4,
-            prep_time_minutes: recipe.prep_time || 0,
-            cook_time_minutes: recipe.cook_time || 0,
-            total_time_minutes: recipe.total_time || 0,
+            prep_time_minutes: recipe.prep_time || recipe.prep_time_minutes || 30,
+            cook_time_minutes: recipe.cook_time || recipe.cook_time_minutes || 0,
+            total_time_minutes: recipe.total_time || recipe.total_time_minutes || 30,
             difficulty_level: recipe.difficulty_level || 'medium',
             spoonacular_id: recipe.spoonacular_id || recipe.id,
-            ingredients_data: recipe.ingredients || [],
+            ingredients_data: recipe.ingredients || recipe.ingredients_data || [],
             instructions: recipe.instructions || [],
-            calories_per_serving: this.getNutritionValue(recipe, 'calories'),
-            protein_per_serving: this.getNutritionValue(recipe, 'protein'),
-            carbs_per_serving: this.getNutritionValue(recipe, 'carbs'),
-            fat_per_serving: this.getNutritionValue(recipe, 'fat'),
-            fiber_per_serving: 0,
+            calories_per_serving: this.getNutritionValue(recipe, 'calories') || 300,
+            protein_per_serving: this.getNutritionValue(recipe, 'protein') || 15,
+            carbs_per_serving: this.getNutritionValue(recipe, 'carbs') || 30,
+            fat_per_serving: this.getNutritionValue(recipe, 'fat') || 10,
+            fiber_per_serving: this.getNutritionValue(recipe, 'fiber') || 0,
             dietary_tags: recipe.dietary_tags || [],
             allergens: recipe.allergens || [],
             image_url: recipe.image_url || recipe.image || '',
@@ -784,30 +796,29 @@ export default {
         
         if (!navigator.onLine) {
           errorMessage = 'No internet connection. Please check your network and try again.'
+        } else if (error.response?.status === 400) {
+          // Handle specific backend errors
+          const backendError = error.response.data
+          if (backendError.error === 'Cannot save fallback recipe') {
+            errorMessage = backendError.message || 'This is a temporary recipe that cannot be saved.'
+          } else {
+            errorMessage = backendError.message || 'Invalid recipe data. Please try again.'
+          }
         } else if (error.response?.status === 404) {
           errorMessage = 'Recipe not found. This may be a temporary recipe that cannot be saved.'
         } else if (error.response?.status === 403) {
           errorMessage = 'You don\'t have permission to perform this action. Please log in again.'
         } else if (error.response?.status === 500) {
-          errorMessage = 'Server error. Please try again in a moment.'
-        } else if (error.response?.status === 400) {
-          errorMessage = error.response?.data?.message || 'Invalid recipe data. Please try again.'
-        } else if (error.response?.data?.error) {
-          errorMessage = error.response.data.error
-        } else if (error.response?.data?.message) {
-          errorMessage = error.response.data.message
-        } else if (error.message?.includes('Network Error')) {
-          errorMessage = 'Network error. Please check your connection and try again.'
+          const backendError = error.response.data
+          errorMessage = backendError.details ? 
+            `Server error: ${backendError.details}` : 
+            'A server error occurred. Please try again later.'
         } else if (error.message) {
           errorMessage = error.message
         }
         
-        this.$toast?.error?.(errorMessage) || alert(`Error: ${errorMessage}`)
+        this.$toast?.error?.(errorMessage) || alert(errorMessage)
         
-        // Reset the save state if it was changed optimistically
-        if (recipe.is_saved_by_user) {
-          recipe.is_saved_by_user = false
-        }
       } finally {
         this.savingRecipe = null
       }
