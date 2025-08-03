@@ -234,7 +234,7 @@ export const mealPlanningApi = {
   // Nutrition Profile endpoints with improved error handling
   async getNutritionProfile() {
     try {
-      return await api.get('/nutrition-profile/current/')
+      return await api.get('/nutrition-profile/my_profile/')
     } catch (error) {
       if (error.response?.status === 404) {
         // Return a default profile structure if none exists
@@ -257,12 +257,12 @@ export const mealPlanningApi = {
   async updateNutritionProfile(profileData) {
     try {
       // Try PATCH first (most RESTful)
-      return await api.patch('/nutrition-profile/current/', profileData)
+      return await api.patch('/nutrition-profile/my_profile/', profileData)
     } catch (error) {
       if (error.response?.status === 405) {
         // If PATCH not allowed, try PUT
         try {
-          return await api.put('/nutrition-profile/current/', profileData)
+          return await api.put('/nutrition-profile/my_profile/', profileData)
         } catch (putError) {
           if (putError.response?.status === 405) {
             // If PUT also not allowed, try POST

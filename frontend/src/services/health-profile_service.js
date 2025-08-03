@@ -94,34 +94,6 @@ class HealthProfileService {
         return apiClient.delete(`weight-history/${entryId}/`);
     }
 
-    // Nutrition Profile Methods
-
-    /**
-     * Get the current user's nutrition profile
-     * @returns {Promise} - Promise resolving to nutrition profile data
-     */
-    getNutritionProfile() {
-        return apiClient.get('meal-planning/api/nutrition-profile/my_profile/');
-    }
-
-    /**
-     * Update the current user's nutrition profile
-     * @param {Object} profileData - Nutrition profile data to update
-     * @returns {Promise} - Promise resolving to updated nutrition profile data
-     */
-    updateNutritionProfile(profileData) {
-        return apiClient.put('meal-planning/api/nutrition-profile/my_profile/', profileData);
-    }
-
-    /**
-     * Create a new nutrition profile
-     * @param {Object} profileData - Nutrition profile data
-     * @returns {Promise} - Promise resolving to created nutrition profile data
-     */
-    createNutritionProfile(profileData) {
-        return apiClient.post('meal-planning/api/nutrition-profile/', profileData);
-    }
-
     // Nutrition Log Methods
 
     /**

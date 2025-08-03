@@ -367,7 +367,8 @@ export default {
         healthProfile.value = healthResponse.data;
 
         // Fetch nutrition profile
-        const nutritionResponse = await HealthProfileService.getNutritionProfile();
+        const { mealPlanningApi } = await import('@/services/mealPlanningApi');
+        const nutritionResponse = await mealPlanningApi.getNutritionProfile();
         nutritionProfile.value = nutritionResponse.data;
 
         await Promise.all([
