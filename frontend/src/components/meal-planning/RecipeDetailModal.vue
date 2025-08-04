@@ -254,6 +254,7 @@ export default {
     this.localRecipe = { ...this.recipe }
     // Initialize serving size to recipe's original serving size
     this.adjustedServings = this.recipe.servings || 4
+
   },
   watch: {
     recipe: {
@@ -262,6 +263,7 @@ export default {
         this.localRecipe = { ...newRecipe }
         // Reset serving size to recipe's original serving size
         this.adjustedServings = newRecipe.servings || 4
+
       },
       immediate: true
     }
@@ -638,6 +640,7 @@ export default {
           this.$toast?.success?.(message) || alert(message)
           
           // Emit the saved recipe
+
           this.$emit('recipe-saved', response.data.recipe || this.localRecipe)
         }
         
@@ -691,14 +694,25 @@ export default {
           // Generate shopping list from recipe data directly for fallback recipes
           const ingredients = this.adjustedIngredients || []
           this.shoppingListData = {
-            recipe_title: this.localRecipe.title || 'Recipe',
-            total_servings: this.adjustedServings,
-            items: ingredients.map(ingredient => ({
-              ingredient: ingredient.formatted || ingredient.original || 'Unknown ingredient',
-              quantity: 1,
-              unit: '',
-              category: 'Other'
-            }))
+            metadata: {
+              total_items: ingredients.length,
+              generated_from: 'recipe',
+              recipe_names: [this.localRecipe.title || 'Recipe']
+            },
+            categories: {
+              'other': {
+                name: 'Other Items',
+                icon: '🛒',
+                order: 1,
+                item_count: ingredients.length,
+                items: ingredients.map(ingredient => ({
+                  name: ingredient.formatted || ingredient.original || ingredient.name || 'Unknown ingredient',
+                  quantity: `${ingredient.amount || 1} ${ingredient.unit || ''}`.trim(),
+                  checked: false,
+                  notes: []
+                }))
+              }
+            }
           }
           this.shoppingListLoading = false
           this.$toast?.success?.('Shopping list generated successfully!') ||
@@ -731,19 +745,22 @@ export default {
             // Generate shopping list from recipe data directly as fallback
             const ingredients = this.adjustedIngredients || []
             this.shoppingListData = {
-              recipe_title: this.localRecipe?.title || this.recipe?.title || 'Recipe',
-              total_servings: this.adjustedServings,
               metadata: {
                 total_items: ingredients.length,
-                generated_from: 'fallback'
+                generated_from: 'recipe',
+                recipe_names: [this.localRecipe?.title || this.recipe?.title || 'Recipe']
               },
               categories: {
-                'Other': {
+                'other': {
+                  name: 'Other Items',
+                  icon: '🛒',
+                  order: 1,
+                  item_count: ingredients.length,
                   items: ingredients.map(ingredient => ({
-                    ingredient: ingredient.formatted || ingredient.original || 'Unknown ingredient',
-                    quantity: ingredient.amount || 1,
-                    unit: ingredient.unit || '',
-                    category: 'Other'
+                    name: ingredient.formatted || ingredient.original || ingredient.name || 'Unknown ingredient',
+                    quantity: `${ingredient.amount || 1} ${ingredient.unit || ''}`.trim(),
+                    checked: false,
+                    notes: []
                   }))
                 }
               }

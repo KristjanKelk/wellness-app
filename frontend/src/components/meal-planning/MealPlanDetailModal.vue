@@ -870,30 +870,79 @@ export default {
           try {
             // Generate basic shopping list from meal plan recipes
             const ingredients = []
-            if (this.mealPlan?.meals) {
-              this.mealPlan.meals.forEach(meal => {
-                if (meal.recipe?.ingredients) {
-                  meal.recipe.ingredients.forEach(ingredient => {
+            const recipeNames = []
+            
+            console.log('MealPlan structure:', this.mealPlan)
+            console.log('MealPlan meal_plan_data:', this.mealPlan?.meal_plan_data)
+            
+            if (this.mealPlan?.meal_plan_data?.meals) {
+              // Handle the new meal plan structure
+              Object.entries(this.mealPlan.meal_plan_data.meals).forEach(([date, meals]) => {
+                console.log(`Processing meals for ${date}:`, meals)
+                meals.forEach(meal => {
+                  if (meal.title) {
+                    recipeNames.push(meal.title)
+                  }
+                  
+                  // Check different possible ingredient structures
+                  let mealIngredients = []
+                  
+                  if (meal.extendedIngredients && Array.isArray(meal.extendedIngredients)) {
+                    // Spoonacular format
+                    mealIngredients = meal.extendedIngredients
+                  } else if (meal.ingredients && Array.isArray(meal.ingredients)) {
+                    // Fallback format - simple string array
+                    mealIngredients = meal.ingredients.map(ing => ({
+                      name: ing,
+                      amount: 1,
+                      unit: ''
+                    }))
+                  } else if (meal.recipe?.extendedIngredients) {
+                    // Recipe nested format
+                    mealIngredients = meal.recipe.extendedIngredients
+                  } else if (meal.recipe?.ingredients) {
+                    // Recipe nested format with simple ingredients
+                    mealIngredients = meal.recipe.ingredients.map(ing => ({
+                      name: typeof ing === 'string' ? ing : (ing.name || ing.original || 'Unknown'),
+                      amount: ing.amount || 1,
+                      unit: ing.unit || ''
+                    }))
+                  }
+                  
+                  console.log(`Found ${mealIngredients.length} ingredients for meal:`, meal.title)
+                  
+                  mealIngredients.forEach(ingredient => {
                     ingredients.push({
-                      ingredient: ingredient.formatted || ingredient.original || 'Unknown ingredient',
-                      quantity: ingredient.amount || 1,
-                      unit: ingredient.unit || '',
-                      category: 'Other'
+                      name: ingredient.name || ingredient.original || 'Unknown ingredient',
+                      quantity: `${ingredient.amount || 1} ${ingredient.unit || ''}`.trim(),
+                      checked: false,
+                      notes: []
                     })
                   })
-                }
+                })
               })
             }
             
+            console.log(`Total ingredients found: ${ingredients.length}`)
+            console.log('Recipe names:', recipeNames)
+            
+            const startDate = this.mealPlan?.meal_plan_data?.start_date || new Date().toISOString()
+            const endDate = this.mealPlan?.meal_plan_data?.end_date || new Date().toISOString()
+            
             this.shoppingListData = {
-              recipe_title: this.mealPlan?.title || 'Meal Plan',
-              total_servings: 1,
               metadata: {
                 total_items: ingredients.length,
-                generated_from: 'fallback'
+                generated_from: 'meal_plan',
+                start_date: startDate,
+                end_date: endDate,
+                recipe_names: recipeNames
               },
               categories: {
-                'Other': {
+                'other': {
+                  name: 'Other Items',
+                  icon: '🛒',
+                  order: 1,
+                  item_count: ingredients.length,
                   items: ingredients
                 }
               }
@@ -953,7 +1002,8 @@ export default {
 </script>
 
 <style lang="scss" scoped>
-@import '@/assets/styles/variables';
+
+@import '@/assets/styles/_variables';
 
 $primary: #007bff;
 $secondary: #6c757d;
@@ -967,6 +1017,7 @@ $white: #ffffff;
 $gray: #6c757d;
 $gray-light: #adb5bd;
 $gray-lighter: #e9ecef;
+
 
 .modal-overlay {
   position: fixed;
@@ -1535,11 +1586,11 @@ $gray-lighter: #e9ecef;
   }
 
   &.btn-danger {
-    background: $danger;
+    background: $error;
     color: $white;
 
     &:hover {
-      background: darken($danger, 10%);
+      background: darken($error, 10%);
     }
   }
 

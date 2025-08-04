@@ -201,13 +201,13 @@ export default {
       // Initialize collapsed state for categories
       Object.keys(this.shoppingList.categories).forEach(categoryKey => {
         if (!(categoryKey in this.collapsedCategories)) {
-          this.$set(this.collapsedCategories, categoryKey, false)
+          this.collapsedCategories[categoryKey] = false
         }
       })
     },
     
     toggleCategory(categoryKey) {
-      this.$set(this.collapsedCategories, categoryKey, !this.collapsedCategories[categoryKey])
+      this.collapsedCategories[categoryKey] = !this.collapsedCategories[categoryKey]
     },
     
     updateProgress() {
