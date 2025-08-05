@@ -106,23 +106,12 @@ class RegisterView(ResilientThrottleMixin, APIView):
             serializer = UserRegistrationSerializer(data=request.data)
             if serializer.is_valid():
                 user = serializer.save()
-
-                # Generate verification token
-                token = AuthHelper.generate_token()
-                user.email_verification_token = token
-                user.email_verification_sent_at = timezone.now()
-                user.save()
-
-                # Send verification email (make this resilient too)
-                try:
-                    AuthHelper.send_verification_email(user, token)
-                    logger.info(f"User registered successfully: {user.username}")
-                except Exception as email_error:
-                    logger.warning(f"Email sending failed for user {user.username}: {email_error}")
-                    # Still return success - user is created, email can be resent later
+                
+                # Email verification removed - users can login immediately
+                logger.info(f"User registered successfully: {user.username}")
 
                 return Response(
-                    {"message": "User registered successfully. Please verify your email."},
+                    {"message": "User registered successfully. You can now login."},
                     status=status.HTTP_201_CREATED
                 )
             
