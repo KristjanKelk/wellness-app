@@ -24,7 +24,7 @@ class ConversationManager:
             raise ValueError("OpenAI API key is not configured. Please set OPENAI_API_KEY in your environment variables.")
         
         self.client = OpenAI(api_key=settings.OPENAI_API_KEY)
-        self.model = "gpt-4o-mini"  # Using GPT-4o mini for efficiency
+        self.model = "gpt-3.5-turbo"  # Using GPT-3.5-turbo for wider availability
         self.max_tokens = 4096
         self.temperature = 0.7
         self.top_p = 0.9

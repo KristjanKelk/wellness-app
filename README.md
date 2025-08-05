@@ -49,7 +49,7 @@ A comprehensive health and fitness tracking application that leverages artificia
 - **Framework**: Django 5.2 with Django REST Framework 3.16
 - **Database**: PostgreSQL with optimized queries
 - **Authentication**: JWT with SimpleJWT, OAuth2 integration
-- **AI Integration**: OpenAI GPT-4O-mini for conversational assistant and health insights
+- **AI Integration**: OpenAI GPT-3.5-turbo for conversational assistant and health insights
 - **Recipe API**: Spoonacular API for meal planning and nutrition data
 - **Security**: 2FA with TOTP, email verification, rate limiting
 - **NLP**: OpenAI function calling for structured data access

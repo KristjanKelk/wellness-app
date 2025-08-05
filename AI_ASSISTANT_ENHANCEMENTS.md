@@ -156,7 +156,7 @@ A comprehensive test script (`test_ai_assistant_enhanced.py`) is provided that:
 - Auto-compress after: 20 messages (default)
 
 ### Model Configuration
-- Model: GPT-4o-mini
+- Model: GPT-3.5-turbo
 - Temperature: 0.7
 - Max tokens: 4096
 
