@@ -24,15 +24,12 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = config('SECRET_KEY')
 
 #OpenAI api key
-OPENAI_API_KEY = config('OPENAI_API_KEY')
+OPENAI_API_KEY = config('OPENAI_API_KEY', default='')
 AI_INSIGHT_DAILY_LIMIT = 3
 
 # Spoonacular API Configuration (ADD THIS TO YOUR .env FILE)
 SPOONACULAR_API_KEY = config('SPOONACULAR_API_KEY')
 SPOONACULAR_BASE_URL = 'https://api.spoonacular.com'
-
-# OpenAI API Configuration
-OPENAI_API_KEY = config('OPENAI_API_KEY', default='')
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = False
