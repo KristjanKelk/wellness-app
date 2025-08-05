@@ -1373,7 +1373,7 @@ class MealPlanViewSet(viewsets.ModelViewSet):
                 end_date=end_date,
                 meal_plan_data=meal_plan_data,
                 total_calories=meal_plan_data.get('nutrition', {}).get('calories', 0),
-                avg_daily_calories=meal_plan_data.get('nutrition', {}).get('calories', 0),
+                avg_daily_calories=meal_plan_data.get('nutrition', {}).get('avg_daily_calories', 0),
                 total_protein=meal_plan_data.get('nutrition', {}).get('protein', 0),
                 total_carbs=meal_plan_data.get('nutrition', {}).get('carbs', 0),
                 total_fat=meal_plan_data.get('nutrition', {}).get('fat', 0),
