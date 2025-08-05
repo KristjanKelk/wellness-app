@@ -31,6 +31,9 @@ AI_INSIGHT_DAILY_LIMIT = 3
 SPOONACULAR_API_KEY = config('SPOONACULAR_API_KEY')
 SPOONACULAR_BASE_URL = 'https://api.spoonacular.com'
 
+# OpenAI API Configuration
+OPENAI_API_KEY = config('OPENAI_API_KEY', default='')
+
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = False
 
@@ -85,6 +88,7 @@ INSTALLED_APPS = [
     'health_profiles',
     'analytics',
     'meal_planning',
+    'ai_assistant',
 
 ]
 

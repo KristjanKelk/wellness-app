@@ -21,6 +21,7 @@ A comprehensive health and fitness tracking application that leverages artificia
 - ** Data Visualization**: Interactive charts for weight tracking, progress monitoring, and activity analysis
 - ** Activity Tracking**: Log workouts, track different exercise types, monitor calories and distances
 - ** Goal Management**: Set and track fitness goals with progress indicators and achievement notifications
+- ** AI Assistant**: Conversational interface for natural language health queries and personalized guidance
 
 ### Meal Planning & Nutrition
 - ** Recipe Database**: Browse thousands of recipes with detailed nutritional information
@@ -38,6 +39,9 @@ A comprehensive health and fitness tracking application that leverages artificia
 - ** Data Export**: Export all personal health data in JSON format
 - ** Milestone Tracking**: Automatic achievement detection and celebration
 - ** Service Hibernation Handling**: Intelligent backend wakeup for seamless user experience
+- ** Natural Language Processing**: AI-powered chat interface with context-aware responses
+- ** Smart Visualizations**: Generate charts from natural language requests
+- ** Conversation Memory**: Multi-turn conversations with context retention
 
 ## 🛠 Technical Stack
 
@@ -45,9 +49,10 @@ A comprehensive health and fitness tracking application that leverages artificia
 - **Framework**: Django 5.2 with Django REST Framework 3.16
 - **Database**: PostgreSQL with optimized queries
 - **Authentication**: JWT with SimpleJWT, OAuth2 integration
-- **AI Integration**: OpenAI GPT-3.5-turbo for health insights
+- **AI Integration**: OpenAI GPT-4O-mini for conversational assistant and health insights
 - **Recipe API**: Spoonacular API for meal planning and nutrition data
 - **Security**: 2FA with TOTP, email verification, rate limiting
+- **NLP**: OpenAI function calling for structured data access
 - **API Documentation**: RESTful APIs with proper serialization
 - **Deployment**: Render.com with environment-based configuration
 

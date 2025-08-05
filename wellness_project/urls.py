@@ -75,4 +75,7 @@ urlpatterns = [
 
     #Meal planning
     path('meal-planning/', include('meal_planning.urls')),
+    
+    # AI Assistant
+    path('api/ai-assistant/', include('ai_assistant.urls')),
 ]

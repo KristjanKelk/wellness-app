@@ -12,6 +12,7 @@
     "axios": "^1.8.4",
     "chart.js": "^4.4.9",
     "core-js": "^3.8.3",
+    "plotly.js-basic-dist": "^2.27.1",
     "vue": "^3.2.13",
     "vue-chartjs": "^3.1.1",
     "vue-router": "^4.5.0",
