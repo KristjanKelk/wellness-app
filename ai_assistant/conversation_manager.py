@@ -18,6 +18,11 @@ class ConversationManager:
         self.user = user
         self.service = AIAssistantService(user)
         self.conversation = self._get_or_create_conversation(conversation_id)
+        
+        # Check if OpenAI API key is set
+        if not settings.OPENAI_API_KEY:
+            raise ValueError("OpenAI API key is not configured. Please set OPENAI_API_KEY in your environment variables.")
+        
         self.client = OpenAI(api_key=settings.OPENAI_API_KEY)
         self.model = "gpt-4o-mini"  # Using GPT-4o mini for efficiency
         self.max_tokens = 4096
@@ -205,15 +210,24 @@ class ConversationManager:
             functions = self.service.get_available_functions()
             
             # Call OpenAI
-            response = self.client.chat.completions.create(
-                model=self.model,
-                messages=messages,
-                functions=functions,
-                function_call="auto",
-                temperature=self.temperature,
-                top_p=self.top_p,
-                max_tokens=min(2000, self.max_tokens - context_tokens)
-            )
+            try:
+                response = self.client.chat.completions.create(
+                    model=self.model,
+                    messages=messages,
+                    functions=functions,
+                    function_call="auto",
+                    temperature=self.temperature,
+                    top_p=self.top_p,
+                    max_tokens=min(2000, self.max_tokens - context_tokens)
+                )
+            except openai.AuthenticationError as e:
+                raise Exception("OpenAI API authentication failed. Please check your API key.")
+            except openai.RateLimitError as e:
+                raise Exception("OpenAI API rate limit exceeded. Please try again later.")
+            except openai.APIError as e:
+                raise Exception(f"OpenAI API error: {str(e)}")
+            except Exception as e:
+                raise Exception(f"Unexpected error calling OpenAI API: {str(e)}")
             
             # Process response
             assistant_message = response.choices[0].message

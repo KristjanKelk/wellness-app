@@ -49,6 +49,10 @@ class ConversationViewSet(viewsets.ModelViewSet):
             return Response(result)
             
         except Exception as e:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Error in send_message: {str(e)}", exc_info=True)
+            
             return Response(
                 {"error": f"An error occurred: {str(e)}"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
