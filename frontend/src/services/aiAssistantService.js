@@ -1,5 +1,5 @@
 // services/aiAssistantService.js
-import api from './api';
+import api from './http.service';
 
 const AI_ASSISTANT_BASE_URL = '/ai-assistant';
 
