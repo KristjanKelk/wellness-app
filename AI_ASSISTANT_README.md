@@ -251,7 +251,7 @@ Toggle between:
 
 ## Model Selection and Configuration
 
-- **Model**: GPT-4O-mini for efficiency and cost-effectiveness
+- **Model**: GPT-3.5-turbo for efficiency and cost-effectiveness
 - **Temperature**: 0.7 for balanced creativity and accuracy
 - **Top-p**: 0.9 for response diversity
 - **Max Tokens**: 4096 for context window

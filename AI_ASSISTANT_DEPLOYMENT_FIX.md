@@ -97,7 +97,7 @@ curl -X GET https://wellness-app-tx2c.onrender.com/api/ai-assistant/preferences/
 **Issue**: OpenAI API errors
 - Verify API key has sufficient credits
 - Check rate limits
-- Ensure the key has access to the required models (gpt-4o-mini)
+- Ensure the key has access to the required models (gpt-3.5-turbo)
 
 ### 8. Emergency Rollback
 
