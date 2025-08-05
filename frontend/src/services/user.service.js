@@ -10,26 +10,27 @@ class UserService {
         return apiClient.get('users/me/');
     }
 
-    /**
-     * Verify user email with token
-     * @param {string} token - Email verification token
-     * @returns {Promise} - Promise resolving to response data
-     */
-    verifyEmail(token) {
-        return apiClient.post('users/verify-email/', { token });
-    }
+    // Email verification methods - disabled as email verification is no longer required
+    // /**
+    //  * Verify user email with token
+    //  * @param {string} token - Email verification token
+    //  * @returns {Promise} - Promise resolving to response data
+    //  */
+    // verifyEmail(token) {
+    //     return apiClient.post('users/verify-email/', { token });
+    // }
 
-    /**
-     * Request a new verification email
-     * @param {string} email - Optional email parameter
-     * @returns {Promise} - Promise resolving to response data
-     */
-    resendVerificationEmail(email) {
-        if (email) {
-            return apiClient.post('users/resend-verification/', { email });
-        }
-        return apiClient.post('users/resend-verification/');
-    }
+    // /**
+    //  * Request a new verification email
+    //  * @param {string} email - Optional email parameter
+    //  * @returns {Promise} - Promise resolving to response data
+    //  */
+    // resendVerificationEmail(email) {
+    //     if (email) {
+    //         return apiClient.post('users/resend-verification/', { email });
+    //     }
+    //     return apiClient.post('users/resend-verification/');
+    // }
 
     /**
      * Generate a new 2FA secret and QR code

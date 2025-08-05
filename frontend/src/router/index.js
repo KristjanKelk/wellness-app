@@ -6,9 +6,9 @@ import Register from '../views/Register.vue'
 import Dashboard from '../views/Dashboard.vue'
 import Profile from '../views/Profile.vue'
 import Settings from '../views/Settings.vue'
-import VerifyEmail from '../views/VerifyEmail.vue'
+// import VerifyEmail from '../views/VerifyEmail.vue'  // Email verification removed
 import ResetPassword from '../views/ResetPassword.vue'
-import VerifyPrompt from '../views/VerifyPrompt.vue'
+// import VerifyPrompt from '../views/VerifyPrompt.vue'  // Email verification removed
 import Activities from '../views/Activities.vue';
 import store from '../store'
 import OAuthCallback from '../views/OAuthCallback.vue'
@@ -61,20 +61,21 @@ const routes = [
             requiresAuth: true
         }
     },
-    {
-        path: '/verify-email/:token',
-        name: 'VerifyEmail',
-        component: VerifyEmail,
-        props: true
-    },
-    {
-        path: '/verify-prompt',
-        name: 'VerifyPrompt',
-        component: VerifyPrompt,
-        meta: {
-            requiresAuth: true
-        }
-    },
+    // Email verification routes - disabled as email verification is no longer required
+    // {
+    //     path: '/verify-email/:token',
+    //     name: 'VerifyEmail',
+    //     component: VerifyEmail,
+    //     props: true
+    // },
+    // {
+    //     path: '/verify-prompt',
+    //     name: 'VerifyPrompt',
+    //     component: VerifyPrompt,
+    //     meta: {
+    //         requiresAuth: true
+    //     }
+    // },
     {
         path: '/reset-password',
         name: 'RequestPasswordReset',
@@ -179,10 +180,7 @@ router.beforeEach((to, from, next) => {
     if (!loggedIn) {
       next({ path: '/login' });
     } else {
-      if (!store.getters['auth/isEmailVerified'] && to.name !== 'VerifyPrompt') {
-        next({ path: '/verify-prompt' });
-        return;
-      }
+      // Email verification check removed - users can access all routes immediately
       next();
     }
   }

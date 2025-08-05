@@ -101,7 +101,7 @@ export default {
         password2: this.password2
       }).then(
           data => {
-            this.message = data.message || "Registration successful! Please check your email for verification.";
+            this.message = data.message || "Registration successful! You can now login.";
             this.successful = true;
             this.loading = false;
 
