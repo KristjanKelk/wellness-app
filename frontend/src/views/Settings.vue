@@ -11,8 +11,8 @@
     <div class="settings-card">
       <h2>Security Settings</h2>
 
-      <!-- Email Verification Status -->
-      <div class="setting-item">
+      <!-- Email Verification Status - Disabled as email verification is no longer required -->
+      <!-- <div class="setting-item">
         <div class="setting-info">
           <h3>Email Verification</h3>
           <p>Verify your email address to access all platform features</p>
@@ -25,7 +25,7 @@
             {{ loading.verification ? 'Sending...' : 'Resend Email' }}
           </button>
         </div>
-      </div>
+      </div> -->
 
       <!-- Two-Factor Authentication -->
       <div class="setting-item">
@@ -300,18 +300,19 @@ export default {
       }
     },
 
-    async resendVerificationEmail() {
-      this.loading.verification = true;
-      try {
-        await UserService.resendVerificationEmail();
-        this.showToast('Verification email sent successfully. Please check your inbox.', 'success', 5000);
-      } catch (error) {
-        console.error('Error sending verification email:', error);
-        this.showToast('Failed to send verification email. Please try again later.', 'error', 5000);
-      } finally {
-        this.loading.verification = false;
-      }
-    },
+    // Email verification method - no longer needed
+    // async resendVerificationEmail() {
+    //   this.loading.verification = true;
+    //   try {
+    //     await UserService.resendVerificationEmail();
+    //     this.showToast('Verification email sent successfully. Please check your inbox.', 'success', 5000);
+    //   } catch (error) {
+    //     console.error('Error sending verification email:', error);
+    //     this.showToast('Failed to send verification email. Please try again later.', 'error', 5000);
+    //   } finally {
+    //     this.loading.verification = false;
+    //   }
+    // },
 
     async setupTwoFactor() {
       this.loading.twoFactor = true;

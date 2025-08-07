@@ -40,6 +40,13 @@ run_migrations() {
         sleep 5
         python manage.py migrate --noinput
     }
+    
+    # Ensure AI Assistant migrations are applied
+    echo "🤖 Checking AI Assistant migrations..."
+    python manage.py migrate ai_assistant --noinput || {
+        echo "⚠️  AI Assistant migration failed, feature may be unavailable"
+    }
+    
     echo "✅ Migrations completed"
 }
 

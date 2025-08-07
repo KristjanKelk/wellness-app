@@ -4,16 +4,24 @@
     <main class="main-content">
       <router-view></router-view>
     </main>
+    <AIAssistant v-if="isAuthenticated" />
   </div>
 </template>
 
 <script>
 import AppHeader from './components/AppHeader.vue'
+import AIAssistant from './components/AIAssistant.vue'
 
 export default {
   name: 'App',
   components: {
-    AppHeader
+    AppHeader,
+    AIAssistant
+  },
+  computed: {
+    isAuthenticated() {
+      return this.$store.state.auth?.status?.loggedIn || false;
+    }
   },
   created() {
     const userStr = localStorage.getItem('user') || sessionStorage.getItem('user');

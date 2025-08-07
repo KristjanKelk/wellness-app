@@ -40,13 +40,14 @@
           />
         </div>
 
-      <div v-if="activeTab === 'analytics'" class="tab-panel">
+      <!-- <div v-if="activeTab === 'analytics'" class="tab-panel">
         <coming-soon-card
           title="Nutrition Analytics"
           description="Detailed nutrition analytics coming soon!"
           icon="fas fa-chart-line"
         />
       </div>
+    -->
     </div>
   </div>
   <recipe-detail-modal
@@ -61,7 +62,7 @@
 <script>
 import RecipeBrowser from '../components/meal-planning/RecipeBrowser.vue'
 import MealPlanManager from '../components/meal-planning/MealPlanManager.vue'
-import ComingSoonCard from '../components/meal-planning/ComingSoonCard.vue'
+//import ComingSoonCard from '../components/meal-planning/ComingSoonCard.vue'
 import RecipeDetailModal from '../components/meal-planning/RecipeDetailModal.vue'
 import { mealPlanningApi } from '@/services/mealPlanningApi'
 
@@ -70,7 +71,7 @@ export default {
   components: {
     RecipeBrowser,
     MealPlanManager,
-    ComingSoonCard,
+    //ComingSoonCard,
     RecipeDetailModal
   },
   data() {
@@ -78,8 +79,8 @@ export default {
       activeTab: 'recipes',
       tabs: [
         { id: 'recipes', name: 'My Recipes', icon: 'fas fa-utensils' },
-        { id: 'meal-plans', name: 'Meal Plans', icon: 'fas fa-calendar-alt' },
-        { id: 'analytics', name: 'Analytics', icon: 'fas fa-chart-line' }
+        { id: 'meal-plans', name: 'Meal Plans', icon: 'fas fa-calendar-alt' }
+        //{ id: 'analytics', name: 'Analytics', icon: 'fas fa-chart-line' }
       ],
       recipes: [],
       nutritionProfile: null,
