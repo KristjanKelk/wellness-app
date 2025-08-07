@@ -475,40 +475,48 @@ Remember to be helpful, accurate, and encouraging while maintaining appropriate 
             start_date = today
             end_date = today + timedelta(days=6)
         
-        # Get meal plans
+        # Get active meal plans that cover this date range
         meal_plans = MealPlan.objects.filter(
             user=self.user,
-            date__range=[start_date, end_date]
-        ).order_by('date', 'meal_type')
+            is_active=True,
+            start_date__lte=end_date,
+            end_date__gte=start_date
+        ).order_by('-created_at')
         
-        result = {"meal_plans": []}
+        result: Dict[str, Any] = {"time_frame": time_frame, "meals": []}
         
+        # Iterate plans and collect meals from JSON structure
         for plan in meal_plans:
-            if meal_type != "all" and plan.meal_type != meal_type:
+            data = plan.meal_plan_data or {}
+            meals_by_date = data.get('meals', {})
+            if not isinstance(meals_by_date, dict):
                 continue
             
-            meal_data = {
-                "date": plan.date.isoformat(),
-                "meal_type": plan.meal_type,
-                "recipe": {
-                    "name": plan.recipe.title,
-                    "id": plan.recipe.id,
-                    "ready_in_minutes": plan.recipe.ready_in_minutes,
-                    "servings": plan.recipe.servings
-                } if plan.recipe else None,
-                "status": plan.status
-            }
-            
-            # Add basic nutrition info
-            if plan.recipe:
-                meal_data["nutrition_summary"] = {
-                    "calories": plan.recipe.calories,
-                    "protein": plan.recipe.protein,
-                    "carbs": plan.recipe.carbs,
-                    "fat": plan.recipe.fat
-                }
-            
-            result["meal_plans"].append(meal_data)
+            current = start_date
+            while current <= end_date:
+                date_key = current.isoformat()
+                day_meals = meals_by_date.get(date_key, [])
+                for m in day_meals:
+                    mt = (m.get('meal_type') or m.get('type') or '').lower()
+                    if meal_type != "all" and mt != meal_type:
+                        continue
+                    result["meals"].append({
+                        "date": date_key,
+                        "meal_type": mt or None,
+                        "title": m.get('title'),
+                        "ready_in_minutes": m.get('readyInMinutes') or m.get('ready_in_minutes'),
+                        "servings": m.get('servings'),
+                        "nutrition_summary": {
+                            "calories": m.get('calories_per_serving') or m.get('calories'),
+                            "protein": m.get('protein_per_serving') or m.get('protein'),
+                            "carbs": m.get('carbs_per_serving') or m.get('carbs'),
+                            "fat": m.get('fat_per_serving') or m.get('fat')
+                        }
+                    })
+                current += timedelta(days=1)
+        
+        if not result["meals"]:
+            return {"message": "No meals found for the selected time frame.", "time_frame": time_frame, "meals": []}
         
         return result
     
@@ -608,38 +616,36 @@ Remember to be helpful, accurate, and encouraging while maintaining appropriate 
         recipe = None
         
         # Check if it's a reference to a meal time
-        if "dinner" in recipe_identifier.lower() or "tonight" in recipe_identifier.lower():
-            today = timezone.now().date()
-            meal_plan = MealPlan.objects.filter(
+        ident = recipe_identifier.lower()
+        target_meal_type = None
+        if "dinner" in ident or "tonight" in ident:
+            target_meal_type = "dinner"
+        elif "lunch" in ident:
+            target_meal_type = "lunch"
+        elif "breakfast" in ident:
+            target_meal_type = "breakfast"
+        
+        if target_meal_type:
+            today = timezone.now().date().isoformat()
+            # Look for the latest active plan covering today, then pull from JSON meals
+            plan = MealPlan.objects.filter(
                 user=self.user,
-                date=today,
-                meal_type="dinner"
-            ).first()
-            if meal_plan and meal_plan.recipe:
-                recipe = meal_plan.recipe
-        elif "lunch" in recipe_identifier.lower():
-            today = timezone.now().date()
-            meal_plan = MealPlan.objects.filter(
-                user=self.user,
-                date=today,
-                meal_type="lunch"
-            ).first()
-            if meal_plan and meal_plan.recipe:
-                recipe = meal_plan.recipe
-        elif "breakfast" in recipe_identifier.lower():
-            today = timezone.now().date()
-            meal_plan = MealPlan.objects.filter(
-                user=self.user,
-                date=today,
-                meal_type="breakfast"
-            ).first()
-            if meal_plan and meal_plan.recipe:
-                recipe = meal_plan.recipe
-        else:
-            # Try to find by name
-            recipe = Recipe.objects.filter(
-                title__icontains=recipe_identifier
-            ).first()
+                is_active=True,
+                start_date__lte=timezone.now().date(),
+                end_date__gte=timezone.now().date()
+            ).order_by('-created_at').first()
+            if plan and isinstance(plan.meal_plan_data, dict):
+                day_meals = (plan.meal_plan_data or {}).get('meals', {}).get(today, [])
+                for m in day_meals:
+                    mt = (m.get('meal_type') or m.get('type') or '').lower()
+                    if mt == target_meal_type:
+                        # Build a pseudo-recipe dict from meal JSON
+                        return self._format_meal_json_as_recipe(m, info_type)
+        
+        # Fallback: try to find by recipe name in DB
+        recipe = Recipe.objects.filter(
+            title__icontains=recipe_identifier
+        ).first()
         
         if not recipe:
             return {"error": f"Recipe not found for: {recipe_identifier}"}
@@ -670,6 +676,31 @@ Remember to be helpful, accurate, and encouraging while maintaining appropriate 
                 "sodium": recipe.sodium
             }
         
+        return result
+
+    def _format_meal_json_as_recipe(self, meal_json: Dict[str, Any], info_type: str) -> Dict[str, Any]:
+        """Convert a meal JSON entry from meal_plan_data into the standard recipe response shape."""
+        result = {
+            "recipe": {
+                "title": meal_json.get('title'),
+                "ready_in_minutes": meal_json.get('readyInMinutes') or meal_json.get('ready_in_minutes'),
+                "servings": meal_json.get('servings'),
+                "source_url": meal_json.get('sourceUrl') or meal_json.get('source_url')
+            }
+        }
+        if info_type in ["ingredients", "all"]:
+            # ingredients_data is a list of { original: str }
+            result["ingredients"] = meal_json.get('ingredients_data') or meal_json.get('ingredients') or []
+        if info_type in ["instructions", "all"]:
+            # instructions is a list of { step: str } or strings
+            result["instructions"] = meal_json.get('instructions') or []
+        if info_type in ["nutrition", "all"]:
+            result["nutrition"] = {
+                "calories": meal_json.get('calories_per_serving') or meal_json.get('calories'),
+                "protein": meal_json.get('protein_per_serving') or meal_json.get('protein'),
+                "carbs": meal_json.get('carbs_per_serving') or meal_json.get('carbs'),
+                "fat": meal_json.get('fat_per_serving') or meal_json.get('fat')
+            }
         return result
     
     def _get_activity_summary(self, time_period: str, activity_type: str = "all") -> Dict[str, Any]:

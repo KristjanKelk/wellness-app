@@ -295,8 +295,10 @@ export default {
           if (!this.isChatOpen) {
             this.hasNewMessage = true;
           }
+        } else if (response.message) {
+          this.showError(response.message);
         } else {
-          this.showError(response.message || 'An error occurred');
+          this.showError('An error occurred');
         }
       } catch (error) {
         console.error('Error sending message:', error);
@@ -345,7 +347,7 @@ export default {
       const errorMessage = {
         id: Date.now() + 2,
         role: 'assistant',
-        content: `❌ ${message}`,
+        content: `${message}`,
         created_at: new Date().toISOString()
       };
       this.messages.push(errorMessage);
