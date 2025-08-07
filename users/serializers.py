@@ -32,8 +32,10 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
         # Remove password2 from the data
         validated_data.pop('password2')
 
-        # Create user
+        # Create user; ensure email starts unverified
         user = User.objects.create_user(**validated_data)
+        user.email_verified = False
+        user.save(update_fields=['email_verified'])
         return user
 
 class ChangePasswordSerializer(serializers.Serializer):

@@ -6,9 +6,9 @@ import Register from '../views/Register.vue'
 import Dashboard from '../views/Dashboard.vue'
 import Profile from '../views/Profile.vue'
 import Settings from '../views/Settings.vue'
-// import VerifyEmail from '../views/VerifyEmail.vue'  // Email verification removed
+import VerifyEmail from '../views/VerifyEmail.vue'
 import ResetPassword from '../views/ResetPassword.vue'
-// import VerifyPrompt from '../views/VerifyPrompt.vue'  // Email verification removed
+import VerifyPrompt from '../views/VerifyPrompt.vue'
 import Activities from '../views/Activities.vue';
 import store from '../store'
 import OAuthCallback from '../views/OAuthCallback.vue'
@@ -61,21 +61,21 @@ const routes = [
             requiresAuth: true
         }
     },
-    // Email verification routes - disabled as email verification is no longer required
-    // {
-    //     path: '/verify-email/:token',
-    //     name: 'VerifyEmail',
-    //     component: VerifyEmail,
-    //     props: true
-    // },
-    // {
-    //     path: '/verify-prompt',
-    //     name: 'VerifyPrompt',
-    //     component: VerifyPrompt,
-    //     meta: {
-    //         requiresAuth: true
-    //     }
-    // },
+    {
+        path: '/verify-email/:token',
+        name: 'VerifyEmail',
+        component: VerifyEmail,
+        props: true,
+        meta: { guest: true }
+    },
+    {
+        path: '/verify-prompt',
+        name: 'VerifyPrompt',
+        component: VerifyPrompt,
+        meta: {
+            requiresAuth: true
+        }
+    },
     {
         path: '/reset-password',
         name: 'RequestPasswordReset',
@@ -103,11 +103,6 @@ const routes = [
         name: 'ProviderOAuthCallback',
         component: OAuthCallback,
         props: true
-    },
-    {
-        path: '/auth/success',
-        name: 'OAuthSuccess',
-        component: OAuthSuccess,
     },
     {
         path: '/auth/success',
@@ -180,8 +175,13 @@ router.beforeEach((to, from, next) => {
     if (!loggedIn) {
       next({ path: '/login' });
     } else {
-      // Email verification check removed - users can access all routes immediately
-      next();
+      // If user's email is not verified, redirect them to verification prompt
+      const user = AuthService.getCurrentUser();
+      if (user && user.email_verified === false && to.path !== '/verify-prompt') {
+        next({ path: '/verify-prompt' });
+      } else {
+        next();
+      }
     }
   }
   else if (to.matched.some(record => record.meta.guest)) {

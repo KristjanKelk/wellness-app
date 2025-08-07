@@ -127,14 +127,16 @@ class AuthService {
   async login(username, password, remember = false) {
     try {
       const response = await axios.post(API_URL + 'token/', { username, password });
-      const userData = response.data;
+      const data = response.data;
 
-      // If 2FA is not required, store user data
-      if (!userData.two_factor_enabled) {
-        this.storeUser(userData, remember);
+      // If authentication requires 2FA, return challenge info without storing
+      if (data.requires_2fa && data.two_factor_token) {
+        return { ...data, remember };
       }
 
-      return userData;
+      // Otherwise, store authenticated session
+      this.storeUser(data, remember);
+      return data;
     } catch (error) {
       console.error('Login error:', error);
       throw error;
@@ -150,24 +152,23 @@ class AuthService {
   async verifyTwoFactorLogin(code, tempAuthData) {
     try {
       // Make sure we have all required data
-      if (!code || !tempAuthData || !tempAuthData.access) {
+      if (!code || !tempAuthData || !tempAuthData.two_factor_token) {
         return Promise.reject(new Error('Missing required 2FA verification data'));
       }
 
       const response = await axios.post(API_URL + 'token/2fa-verify/', {
-        token: tempAuthData.access,
+        token: tempAuthData.two_factor_token,
         code: code
       });
 
       if (response.data && response.data.access) {
         const userData = {
-          ...tempAuthData,
           ...response.data,
           two_factor_verified: true
         };
 
-        // Store the complete user data
-        this.storeUser(userData, true);
+        // Store the complete user data using the same remember choice from login
+        this.storeUser(userData, !!tempAuthData.remember);
         return userData;
       } else {
         console.error('Incomplete 2FA response:', response.data);
@@ -180,10 +181,19 @@ class AuthService {
   }
 
   /**
-   * Log out the current user
+   * Log out the current user (server-side blacklist + local clear)
    */
-  logout() {
-    this.clearUser();
+  async logout() {
+    try {
+      const user = this.getCurrentUser();
+      if (user && user.refresh) {
+        await axios.post(API_URL + 'logout/', { refresh: user.refresh });
+      }
+    } catch (e) {
+      // Swallow errors to avoid trapping UI on logout
+    } finally {
+      this.clearUser();
+    }
   }
 
   /**

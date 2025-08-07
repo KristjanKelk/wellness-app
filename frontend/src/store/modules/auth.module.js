@@ -32,7 +32,7 @@ export default {
     login({ commit }, { username, password, remember }) {
       return AuthService.login(username, password, remember)
         .then(userData => {
-          if (!userData.two_factor_enabled) {
+          if (!(userData && userData.requires_2fa)) {
             commit('loginSuccess', userData);
           }
           return userData;
