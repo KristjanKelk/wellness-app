@@ -81,11 +81,16 @@ wellness-platform/
 │   │   ├── models.py             # Health profile & weight history
 │   │   ├── views.py              # Profile & activity tracking APIs
 │   │   └── serializers.py        # Health data serialization
-│   └── analytics/                 # AI insights & wellness scoring
-│       ├── models.py             # Wellness scores & milestones
-│       ├── views.py              # AI integration & analytics
-│       ├── services.py           # Business logic & calculations
-│       └── serializers.py        # Analytics data serialization
+│   ├── analytics/                 # AI insights & wellness scoring
+│   │   ├── models.py             # Wellness scores & milestones
+│   │   ├── views.py              # AI integration & analytics
+│   │   ├── services.py           # Business logic & calculations
+│   │   └── serializers.py        # Analytics data serialization
+│   └── assistant/                # Conversation + DAL for unified assistant
+│       ├── models.py             # Conversation sessions/messages
+│       ├── views.py              # Conversation endpoint + validation
+│       ├── services.py           # Data Access Layer
+│       └── serializers.py        # DTOs for requests/responses
 └── frontend/
     ├── src/
     │   ├── components/           # Reusable Vue components
@@ -221,6 +226,7 @@ GET/POST /api/recipes/                    # Browse recipes (paginated)
 POST /api/recipes/search/                 # Advanced recipe search
 POST /api/recipes/{id}/rate/              # Rate a recipe
 GET/POST /api/meal-plans/                 # Manage meal plans
+GET /api/meal-plans/today/                # Convenience: today’s plan (assistant)
 POST /api/meal-plans/generate/            # Generate meal plan with AI
 GET /api/shopping-lists/                  # Generate shopping lists
 POST /api/recipes/favorites/              # Manage favorite recipes
@@ -228,12 +234,63 @@ POST /api/recipes/favorites/              # Manage favorite recipes
 Recipe list and search endpoints support pagination. Clients may specify
 `page_size` to control results per page (default is 20).
 
-### Meal Planning System
-- **Recipe Integration**: Comprehensive database with 300k+ recipes
-- **Dietary Preferences**: Support for vegetarian, vegan, gluten-free, keto, and custom restrictions
-- **Nutritional Analysis**: Detailed macronutrient and micronutrient information
-- **Shopping List Generation**: Automatic ingredient consolidation and quantity calculation
-- **Meal Plan Customization**: Weekly planning with breakfast, lunch, dinner, and snack options
+### Assistant Endpoints
+```
+POST /api/assistant/message/              # Unified assistant conversation endpoint
+```
+- **Request**:
+  ```json
+  { "session_id": 123, "message": "What's my meal plan for the week?", "mode": "concise" }
+  ```
+- **Response**:
+  ```json
+  { "session_id": 123, "reply": "...", "mode": "concise", "context": {} }
+  ```
+
+## 🧠 System Prompt Engineering Strategy
+- Centralized in settings as `ASSISTANT_SYSTEM_PROMPT` and `ASSISTANT_RESPONSE_FORMATS`.
+- Guides consistent output structure with examples for metrics, progress, meal plans, recipes, and nutrition analysis.
+- Enforces safety boundaries: no sensitive PII beyond name; medical cautioning.
+
+## 🤖 AI Model Selection Rationale
+- Uses OpenAI Chat (configured in analytics and meal planning services) with:
+  - GPT-3.5/4-turbo for generation/analysis depending on task.
+  - Lower temperature for nutrition analysis, moderate for creative meal planning.
+- Concise/detailed modes supported at the conversation layer instead of randomizing with high temperature.
+
+## 💬 Conversation Management Approach
+- `assistant` app stores `ConversationSession` and `ConversationMessage` for multi-turn context.
+- Unified endpoint `/api/assistant/message/` routes intents to the Data Access Layer.
+- Maintains context across re-opens via persisted session history.
+
+## 🛡️ Error Handling Methods
+- Parameter validation with clear messages (e.g., period, days ranges).
+- Structured not-found errors when data is unavailable for a date or period.
+- Graceful fallbacks for AI outages (see analytics summary and AI insights).
+
+## 🧩 Function Calling Implementation Details
+- OpenAI function schemas defined in settings and used in `meal_planning/services/ai_nutrition_profile_service.py`.
+- Parameter validation enforced server-side before execution.
+
+## 🔍 Data Access Layer
+- `assistant/services.py` unifies health metrics, progress, meal plan retrieval, recipes, and nutrition analysis.
+- Ensures metric units are metric (kg, cm).
+- Prevents access to other users’ data; always scoped to authenticated user.
+
+## 🔐 Privacy & Security
+- Assistant blocks requests for emails, DOB, credentials; only uses user’s name.
+- Meal plans and analytics require JWT authentication.
+
+## 📈 Examples and Usage
+- **Health metrics**: “How are my weight and BMI doing?” → unified reply with both metrics and interpretation.
+- **Progress**: “How has my weight changed this month?” → trend with start/end/change and pattern.
+- **Meal plans**: “What’s my meal plan for today?” → list of meals with types and kcal.
+- **Recipe info**: “How do I prepare tonight’s dinner?” → ingredients and step-by-step instructions.
+- **Nutritional analysis**: “Have I been getting enough protein this week?” → average vs target and next steps.
+- **General wellness**: Handles follow-ups with session context.
+
+## 🔒 Safety and Limitations for Medical Advice
+- The assistant avoids diagnosis and recommends professional consultation for symptoms like chest pain during exercise.
 
 ## 🏗 Key Features Implementation
 
@@ -267,25 +324,6 @@ Automatic tracking and celebration of achievements:
 - **2FA Support**: TOTP-based two-factor authentication
 - **Data Export**: GDPR-compliant data portability
 
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Make your changes with proper tests
-4. Commit changes (`git commit -m 'Add amazing feature'`)
-5. Push to branch (`git push origin feature/amazing-feature`)
-6. Open a Pull Request
-
-
-## 🙏 Acknowledgments
-
-- OpenAI for AI-powered health insights
-- Spoonacular API for comprehensive recipe and nutrition data
-- Chart.js for beautiful data visualizations
-- Vue.js community for excellent documentation
-- Django REST Framework for robust API development
-- Render.com for reliable cloud hosting
-
 ---
 
 **🔗 Quick Links:**
@@ -294,3 +332,17 @@ Automatic tracking and celebration of achievements:
 - [Health Check](https://wellness-app-tx2c.onrender.com/api/health/)
 
 *Built with ❤️ for better health and wellness*
+
+## 🧪 Assistant: Setup & Usage
+- Ensure you are authenticated (JWT) when calling the assistant API.
+- Send messages to `/api/assistant/message/` with optional `session_id` to maintain multi-turn context.
+- Modes:
+  - `concise` (default) for brief answers
+  - `detailed` for more context and explanation
+- Example curl:
+  ```bash
+  curl -X POST http://localhost:8000/api/assistant/message/ \
+    -H "Authorization: Bearer <ACCESS_TOKEN>" \
+    -H "Content-Type: application/json" \
+    -d '{"message":"What\'s my meal plan for today?","mode":"concise"}'
+  ```

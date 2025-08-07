@@ -95,6 +95,13 @@
         >
           Refresh
         </button>
+        <button
+          @click="askAssistantProtein"
+          class="btn btn-text"
+          :disabled="loading"
+        >
+          Ask assistant: Is that enough protein?
+        </button>
       </div>
 
       <!-- Generation Info -->
@@ -114,6 +121,7 @@
 <script>
 import DashboardCard from './DashboardCard.vue';
 import AIInsightsService from '../../services/ai-insights.service';
+import AssistantService from '../../services/assistant.service';
 
 export default {
   name: 'AiInsightsCard',
@@ -209,6 +217,14 @@ export default {
 
     async refreshCachedInsights() {
       await this.loadInsights(false);
+    },
+
+    async askAssistantProtein() {
+      try {
+        await AssistantService.sendMessage({ message: 'Is that enough protein?' });
+      } catch (e) {
+        // no-op UI for now
+      }
     },
 
     generateFallbackInsights() {
