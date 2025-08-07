@@ -1805,6 +1805,16 @@ class MealPlanViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
+    @action(detail=False, methods=['get'], url_path='today')
+    def today(self, request):
+        """Get today's active meal plan in a simple structured format"""
+        from assistant.services import AssistantDAL, DataNotFound
+        try:
+            data = AssistantDAL.get_meal_plan_for_date(request.user)
+            return Response(data)
+        except DataNotFound as e:
+            return Response({'error': str(e)}, status=status.HTTP_404_NOT_FOUND)
+
 
 class UserRecipeRatingViewSet(viewsets.ModelViewSet):
     """Manage user recipe ratings"""

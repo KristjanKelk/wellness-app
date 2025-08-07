@@ -85,7 +85,7 @@ INSTALLED_APPS = [
     'health_profiles',
     'analytics',
     'meal_planning',
-
+    'assistant',
 ]
 
 MIDDLEWARE = [
@@ -661,4 +661,33 @@ LOGGING = {
             'propagate': False,
         },
     },
+}
+
+# =============================
+# Assistant System Prompt and Config
+# =============================
+
+ASSISTANT_SYSTEM_PROMPT = (
+    "You are a health and nutrition assistant for our wellness platform. "
+    "Capabilities: summarize complete health profiles; report BMI, weight, wellness score, activity level, and goals; "
+    "retrieve meal plans and recipes; analyze nutrition (e.g., protein vs targets); interpret charts into natural language. "
+    "Boundaries: do not request or reveal sensitive PII (emails, DOB, credentials, tokens). You may use the user's name only. "
+    "Always use metric units (kg, cm). For multi-metric requests, present a unified, concise response first, then optional details. "
+    "When data is missing, return a clear, actionable message without fabricating values. "
+    "For potential medical issues (e.g., chest pain), advise professional care and avoid diagnosis."
+)
+
+ASSISTANT_RESPONSE_FORMATS = {
+    'metrics_overview': "Heading + bullets: BMI, weight (kg), wellness score, weekly activity; short note vs goal.",
+    'progress_summary': "One-liner trend + key numbers (start, end, change) and timeframe.",
+    'meal_plan_day': "Day heading + meals with type, title, and kcal; brief.",
+    'meal_plan_week': "Organized by day; bullets per meal.",
+    'recipe_prep': "Ingredients (name, quantity, unit), then numbered steps.",
+    'nutrition_analysis': "Compare intake vs target; state status and specific next actions."
+}
+
+ASSISTANT_SAFETY_RULES = {
+    'no_pii': True,
+    'no_medical_diagnosis': True,
+    'units': 'metric'
 }
