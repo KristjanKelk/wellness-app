@@ -46,6 +46,9 @@ class ConversationViewSet(viewsets.ModelViewSet):
             if suggestions:
                 result['visualization_suggestions'] = suggestions
             
+            # Ensure consistent success shape
+            if 'success' not in result:
+                result['success'] = True
             return Response(result)
             
         except Exception as e:
@@ -54,7 +57,7 @@ class ConversationViewSet(viewsets.ModelViewSet):
             logger.error(f"Error in send_message: {str(e)}", exc_info=True)
             
             return Response(
-                {"error": f"An error occurred: {str(e)}"},
+                {"success": False, "message": f"An error occurred: {str(e)}"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
     
@@ -78,7 +81,7 @@ class ConversationViewSet(viewsets.ModelViewSet):
             
         except Exception as e:
             return Response(
-                {"error": str(e)},
+                {"success": False, "message": str(e)},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
     
@@ -144,7 +147,7 @@ class UserPreferenceViewSet(viewsets.ModelViewSet):
             if serializer.is_valid():
                 serializer.save()
                 return Response(serializer.data)
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"success": False, "message": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
         
         serializer = self.get_serializer(preferences)
         return Response(serializer.data)
@@ -171,13 +174,13 @@ class VisualizationViewSet(viewsets.ViewSet):
             chart_data = viz_service.generate_chart(chart_request, time_period)
             
             if 'error' in chart_data:
-                return Response(chart_data, status=status.HTTP_400_BAD_REQUEST)
+                return Response({"success": False, "message": chart_data.get('error')}, status=status.HTTP_400_BAD_REQUEST)
             
             return Response(chart_data)
             
         except Exception as e:
             return Response(
-                {"error": f"Failed to generate chart: {str(e)}"},
+                {"success": False, "message": f"Failed to generate chart: {str(e)}"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
     
