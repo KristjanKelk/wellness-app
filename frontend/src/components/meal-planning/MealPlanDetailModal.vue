@@ -184,6 +184,44 @@
                       </div>
                     </div>
 
+                    <!-- Portion Logger -->
+                    <div class="portion-logger">
+                      <div class="portion-controls">
+                        <label>Portion eaten (servings):</label>
+                        <input
+                          class="portion-input"
+                          type="number"
+                          min="0.25"
+                          step="0.25"
+                          :value="getPortionValue(date, index)"
+                          @input="setPortionValue(date, index, $event.target.value)"
+                        />
+                        <div class="quick-portion-buttons">
+                          <button type="button" class="btn btn-outline" @click="setPortionValue(date, index, 0.5)">1/2</button>
+                          <button type="button" class="btn btn-outline" @click="setPortionValue(date, index, 1)">1</button>
+                          <button type="button" class="btn btn-outline" @click="setPortionValue(date, index, 1.5)">1.5</button>
+                          <button type="button" class="btn btn-outline" @click="setPortionValue(date, index, 2)">2</button>
+                        </div>
+                      </div>
+
+                      <div class="portion-preview">
+                        <span class="preview-item">Adds: {{ Math.round(getPortionMacros(meal, getPortionValue(date, index)).calories) }} kcal</span>
+                        <span class="preview-item">Protein: {{ Math.round(getPortionMacros(meal, getPortionValue(date, index)).protein) }}g</span>
+                        <span class="preview-item">Carbs: {{ Math.round(getPortionMacros(meal, getPortionValue(date, index)).carbs) }}g</span>
+                        <span class="preview-item">Fat: {{ Math.round(getPortionMacros(meal, getPortionValue(date, index)).fat) }}g</span>
+                      </div>
+
+                      <button
+                        class="btn btn-primary"
+                        :disabled="isLogging(date, index)"
+                        @click="logMealIntake(date, meal, index)"
+                      >
+                        <i v-if="isLogging(date, index)" class="fas fa-spinner fa-spin"></i>
+                        <i v-else class="fas fa-plus"></i>
+                        {{ isLogging(date, index) ? 'Logging...' : 'Log Intake' }}
+                      </button>
+                    </div>
+
                     <!-- Ingredients -->
                     <div class="ingredients-section" v-if="getMealIngredients(meal).length">
                       <h6>Ingredients</h6>
@@ -241,7 +279,7 @@
 
                   <div class="meal-actions">
                     <button
-                                                @click="toggleRecipeSave(meal.recipe || meal)"
+                                            @click="toggleRecipeSave(meal.recipe || meal)"
                       class="btn btn-sm"
                       :class="(meal.recipe || meal)?.is_saved_by_user ? 'btn-outline-danger' : 'btn-primary'"
                       :disabled="savingRecipe === (meal.recipe || meal)?.id"
@@ -325,6 +363,7 @@
 import RecipeDetailModal from './RecipeDetailModal.vue'
 import ShoppingListModal from './ShoppingListModal.vue'
 import { makeShoppingListRequest } from '@/utils/fetchUtils'
+import HealthProfileService from '@/services/health-profile_service'
 
 export default {
   name: 'MealPlanDetailModal',
@@ -347,7 +386,9 @@ export default {
       showShoppingListModal: false,
       shoppingListData: null,
       shoppingListLoading: false,
-      shoppingListError: null
+      shoppingListError: null,
+      portionState: {},
+      loggingState: {}
     }
   },
   computed: {
@@ -428,6 +469,94 @@ export default {
     document.removeEventListener('keydown', this.handleEscapeKey)
   },
   methods: {
+    // Portion helpers
+    portionKey(date, index) {
+      return `${date}__${index}`
+    },
+    getPortionValue(date, index) {
+      const key = this.portionKey(date, index)
+      const val = this.portionState[key]
+      return val ? Number(val) : 1
+    },
+    setPortionValue(date, index, value) {
+      const key = this.portionKey(date, index)
+      const num = Number(value)
+      this.$set ? this.$set(this.portionState, key, num) : (this.portionState[key] = num)
+    },
+    isLogging(date, index) {
+      const key = this.portionKey(date, index)
+      return !!this.loggingState[key]
+    },
+    getPortionMacros(meal, portion) {
+      const recipe = this.getMealRecipe(meal)
+      const calories = this.getNutritionValue(recipe, 'calories') * (portion || 1)
+      const protein = this.getNutritionValue(recipe, 'protein') * (portion || 1)
+      const carbs = this.getNutritionValue(recipe, 'carbs') * (portion || 1)
+      const fat = this.getNutritionValue(recipe, 'fat') * (portion || 1)
+      return { calories, protein, carbs, fat }
+    },
+
+    async logMealIntake(date, meal, index) {
+      try {
+        const key = this.portionKey(date, index)
+        this.loggingState[key] = true
+
+        const portion = this.getPortionValue(date, index) || 1
+        const recipe = this.getMealRecipe(meal)
+        const added = this.getPortionMacros(meal, portion)
+
+        // Fetch existing log for date
+        const resp = await HealthProfileService.getNutritionLog(date)
+        const current = resp?.data || {}
+
+        // Safely read existing totals (support both snake_case and camelCase)
+        const getVal = (obj, snake, camel) => Number(obj?.[snake] ?? obj?.[camel] ?? 0)
+        const total_calories = getVal(current, 'total_calories', 'totalCalories') + added.calories
+        const total_protein = getVal(current, 'total_protein', 'totalProtein') + added.protein
+        const total_carbs = getVal(current, 'total_carbs', 'totalCarbs') + added.carbs
+        const total_fat = getVal(current, 'total_fat', 'totalFat') + added.fat
+        const total_fiber = getVal(current, 'total_fiber', 'totalFiber')
+
+        // Merge meals_data entries
+        const meals_data = { ...(current.meals_data || current.mealsData || {}) }
+        const entries = Array.isArray(meals_data.entries) ? meals_data.entries.slice() : []
+        entries.push({
+          date,
+          time: this.getMealTime(meal),
+          meal_type: meal.meal_type || 'meal',
+          recipe_title: this.getMealTitle(meal),
+          recipe_id: recipe?.database_id || recipe?.id || recipe?.spoonacular_id || null,
+          plan_id: this.mealPlan?.id || null,
+          portion,
+          calories: Math.round(added.calories),
+          protein: Math.round(added.protein),
+          carbs: Math.round(added.carbs),
+          fat: Math.round(added.fat)
+        })
+        meals_data.entries = entries
+
+        // Save updated log to backend (snake_case fields)
+        const payload = {
+          total_calories,
+          total_protein,
+          total_carbs,
+          total_fat,
+          total_fiber,
+          meals_data
+        }
+
+        await HealthProfileService.saveNutritionLog(date, payload)
+
+        this.$toast?.success?.('Intake logged to today\'s progress') || console.log('Intake logged')
+      } catch (e) {
+        console.error('Failed to log meal intake:', e)
+        this.$toast?.error?.('Failed to log intake') || alert('Failed to log intake')
+      } finally {
+        const key = this.portionKey(date, index)
+        this.loggingState[key] = false
+      }
+    },
+
     formatPlanType(type) {
       if (!type) return 'Unknown'
       return type.charAt(0).toUpperCase() + type.slice(1)
@@ -2167,5 +2296,43 @@ $gray-lighter: #e9ecef;
   100% {
     background-position: -200% 0;
   }
+}
+
+.portion-logger {
+  margin: 12px 0 16px 0;
+  padding: 12px;
+  background: rgba(48, 193, 177, 0.08);
+  border: 1px solid rgba(48, 193, 177, 0.2);
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.portion-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.portion-input {
+  width: 90px;
+  padding: 6px 8px;
+  border: 2px solid #e0e0e0;
+  border-radius: 6px;
+}
+
+.quick-portion-buttons {
+  display: flex;
+  gap: 6px;
+}
+
+.portion-preview {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  font-size: 0.9rem;
+  color: #555;
 }
 </style>

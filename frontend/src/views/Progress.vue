@@ -35,6 +35,31 @@
           >
         </div>
 
+        <!-- Quick Add Intake -->
+        <div class="quick-add-intake">
+          <div class="quick-add-grid">
+            <div class="qa-item">
+              <label>Calories</label>
+              <input type="number" min="0" v-model.number="quickAdd.calories" placeholder="kcal" />
+            </div>
+            <div class="qa-item">
+              <label>Protein (g)</label>
+              <input type="number" min="0" step="1" v-model.number="quickAdd.protein" placeholder="g" />
+            </div>
+            <div class="qa-item">
+              <label>Carbs (g)</label>
+              <input type="number" min="0" step="1" v-model.number="quickAdd.carbs" placeholder="g" />
+            </div>
+            <div class="qa-item">
+              <label>Fat (g)</label>
+              <input type="number" min="0" step="1" v-model.number="quickAdd.fat" placeholder="g" />
+            </div>
+            <div class="qa-actions">
+              <button class="btn-primary" :disabled="addingIntake" @click="quickAddIntake">{{ addingIntake ? 'Adding...' : 'Add Intake' }}</button>
+            </div>
+          </div>
+        </div>
+
         <div class="progress-cards">
           <!-- Calorie Progress Card -->
           <div class="progress-card calories">
@@ -323,6 +348,9 @@ export default {
       calorieDeficitSurplus: 0
     });
 
+    const quickAdd = ref({ calories: 0, protein: 0, carbs: 0, fat: 0 });
+    const addingIntake = ref(false);
+
     const weeklyAverages = ref({
       calories: 0,
       protein: 0,
@@ -436,6 +464,41 @@ export default {
         }
       } catch (err) {
         console.error('Error fetching daily data:', err);
+      }
+    };
+
+    const quickAddIntake = async () => {
+      try {
+        addingIntake.value = true;
+        // Fetch current log for date first
+        const resp = await HealthProfileService.getNutritionLog(selectedDate.value);
+        const current = resp?.data || {};
+        const curr = {
+          totalCalories: Number(current.totalCalories ?? current.total_calories ?? 0),
+          totalProtein: Number(current.totalProtein ?? current.total_protein ?? 0),
+          totalCarbs: Number(current.totalCarbs ?? current.total_carbs ?? 0),
+          totalFat: Number(current.totalFat ?? current.total_fat ?? 0),
+          totalFiber: Number(current.totalFiber ?? current.total_fiber ?? 0),
+          mealsData: current.mealsData || current.meals_data || {}
+        };
+
+        const payload = {
+          total_calories: curr.totalCalories + (quickAdd.value.calories || 0),
+          total_protein: curr.totalProtein + (quickAdd.value.protein || 0),
+          total_carbs: curr.totalCarbs + (quickAdd.value.carbs || 0),
+          total_fat: curr.totalFat + (quickAdd.value.fat || 0),
+          total_fiber: curr.totalFiber,
+          meals_data: curr.mealsData
+        };
+        await HealthProfileService.saveNutritionLog(selectedDate.value, payload);
+        // Refresh
+        await Promise.all([fetchDailyData(), fetchWeeklyData(), fetchProgressHistory()]);
+        // Reset quick add
+        quickAdd.value = { calories: 0, protein: 0, carbs: 0, fat: 0 };
+      } catch (err) {
+        console.error('Failed to add intake:', err);
+      } finally {
+        addingIntake.value = false;
       }
     };
 
@@ -971,7 +1034,12 @@ export default {
       weightHistoryData,
       weightGoal,
       getWeightGoalStatusClass,
-      getWeightGoalStatusText
+      getWeightGoalStatusText,
+
+      // Quick add
+      quickAdd,
+      addingIntake,
+      quickAddIntake
     };
   }
 };
@@ -1482,4 +1550,22 @@ export default {
 .weight-chart-container {
   margin-top: 20px;
 }
+
+.quick-add-intake {
+  margin-bottom: 20px;
+  padding: 12px;
+  background: #f6fffd;
+  border: 1px solid #d6f3ef;
+  border-radius: 8px;
+}
+.quick-add-grid { 
+  display: grid; 
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); 
+  gap: 10px; 
+}
+.quick-add-intake .qa-item label { font-size: 0.9rem; color: #555; display:block; margin-bottom: 6px; }
+.quick-add-intake .qa-item input { width: 100%; padding: 8px; border: 2px solid #e0e0e0; border-radius: 6px; }
+.quick-add-intake .qa-actions { display:flex; align-items:end; }
+.quick-add-intake .btn-primary { padding: 10px 14px; border: none; border-radius: 8px; background:#30C1B1; color:#fff; cursor:pointer; }
+.quick-add-intake .btn-primary:disabled { opacity: 0.7; cursor: not-allowed; }
 </style>
