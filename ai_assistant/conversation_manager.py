@@ -28,7 +28,15 @@ class ConversationManager:
         self.max_tokens = 4096
         self.temperature = 0.7
         self.top_p = 0.9
-        
+    
+    def _is_disallowed_request(self, text: str) -> bool:
+        """Detect attempts to obtain sensitive PII, admin access, or other users' data."""
+        lower = (text or "").lower()
+        pii_terms = ["email", "e-mail", "address", "phone", "dob", "date of birth", "ssn", "social security", "passport", "driver's license", "password", "passcode", "otp", "one-time", "2fa", "two-factor", "token", "api key", "apikey", "credential"]
+        other_user_terms = ["other user", "other users", "another user", "all users", "user id", "users with", "show everyone", "admin mode", "be admin", "elevated access", "override"]
+        jailbreak_terms = ["ignore previous", "system prompt", "act as", "developer mode"]
+        return any(t in lower for t in pii_terms + other_user_terms + jailbreak_terms)
+    
     def _get_or_create_conversation(self, conversation_id: Optional[str]) -> Conversation:
         """Get existing conversation or create new one"""
         if conversation_id:
@@ -174,6 +182,12 @@ class ConversationManager:
     def send_message(self, user_message: str) -> Dict[str, Any]:
         """Send a message to the AI assistant and get response"""
         try:
+            # Pre-validate input
+            if not user_message or not user_message.strip():
+                raise ValueError("Message cannot be empty")
+            if len(user_message) > 8000:
+                return {"success": False, "message": "Your message is quite long. Please shorten it and try again."}
+            
             # Get recent messages for context extraction
             recent_messages = Message.objects.filter(
                 conversation=self.conversation
@@ -199,6 +213,27 @@ class ConversationManager:
                 # Generate title from first message
                 self.conversation.title = user_message[:50] + "..." if len(user_message) > 50 else user_message
             self.conversation.save()
+            
+            # Security/PII guard: refuse disallowed requests proactively
+            if self._is_disallowed_request(user_message):
+                refusal = (
+                    "I can’t help with that request. For privacy and safety, I don’t access sensitive personal "
+                    "information (like email, DOB, passwords) or any other users’ data. I can help summarize your "
+                    "own health metrics, meal plan, nutrition, or goals instead."
+                )
+                assistant_msg = Message.objects.create(
+                    conversation=self.conversation,
+                    role="assistant",
+                    content=refusal,
+                    token_count=self._count_tokens(refusal)
+                )
+                return {
+                    "success": True,
+                    "message": refusal,
+                    "conversation_id": str(self.conversation.id),
+                    "message_id": str(assistant_msg.id),
+                    "function_called": None
+                }
             
             # Get conversation context
             messages, context_tokens = self._get_conversation_context()

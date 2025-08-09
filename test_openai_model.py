@@ -8,7 +8,7 @@ import django
 
 # Setup Django
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'wellness_tracker.settings')
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'wellness_project.settings')
 django.setup()
 
 from openai import OpenAI
