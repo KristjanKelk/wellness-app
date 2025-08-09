@@ -193,11 +193,16 @@ The application is deployed on Render.com with the following configuration:
 
 ### Authentication Endpoints
 ```
-POST /api/register/                    # User registration
-POST /api/token/                       # Login (JWT token)
+POST /api/register/                    # User registration (sends verification email)
+POST /api/token/                       # Login (JWT); returns 2FA challenge if enabled
+POST /api/token/2fa-verify/            # Complete login with TOTP code
 POST /api/token/refresh/               # Refresh access token
+POST /api/logout/                      # Logout (blacklists refresh token)
 POST /api/users/verify-email/          # Email verification
+POST /api/users/resend-verification/   # Resend verification email
 POST /api/users/2fa/generate/          # Generate 2FA QR code
+POST /api/users/2fa/verify/            # Enable 2FA
+POST /api/users/2fa/disable/           # Disable 2FA
 POST /api/oauth/google/                # Google OAuth
 POST /api/oauth/github/                # GitHub OAuth
 ```

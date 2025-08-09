@@ -214,8 +214,8 @@ export default {
           remember: remember.value
         });
 
-        // Check if 2FA is required
-        if (userData.two_factor_enabled) {
+        // Check if 2FA challenge is returned
+        if (userData.requires_2fa && userData.two_factor_token) {
           showTwoFactorForm.value = true;
           tempAuthData.value = userData;
           loading.value = false;
@@ -278,13 +278,18 @@ export default {
       console.error('Login error:', error);
 
       if (error.response?.data) {
-        if (error.response.data.detail) {
-          message.value = error.response.data.detail;
-        } else if (error.response.data.non_field_errors) {
-          message.value = error.response.data.non_field_errors.join(' ');
+        const data = error.response.data;
+        if (data.detail) {
+          message.value = data.detail;
+        } else if (data.message) {
+          message.value = data.message;
+        } else if (data.details?.detail) {
+          message.value = data.details.detail;
+        } else if (data.non_field_errors) {
+          message.value = data.non_field_errors.join(' ');
         } else {
           // Try to extract first error message
-          const firstError = Object.values(error.response.data)[0];
+          const firstError = Object.values(data)[0];
           if (Array.isArray(firstError)) {
             message.value = firstError[0];
           } else {

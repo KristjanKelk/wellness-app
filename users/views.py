@@ -21,6 +21,8 @@ from .serializers import (
 )
 from .auth import AuthHelper
 from utils.exceptions import ResilientThrottleMixin
+from rest_framework_simplejwt.tokens import RefreshToken, AccessToken
+from rest_framework.exceptions import AuthenticationFailed
 
 logger = logging.getLogger(__name__)
 
@@ -106,12 +108,22 @@ class RegisterView(ResilientThrottleMixin, APIView):
             serializer = UserRegistrationSerializer(data=request.data)
             if serializer.is_valid():
                 user = serializer.save()
+
+                # Enforce email verification: mark unverified and send token
+                user.email_verified = False
+                token = AuthHelper.generate_token()
+                user.email_verification_token = token
+                user.email_verification_sent_at = timezone.now()
+                user.save(update_fields=[
+                    'email_verified', 'email_verification_token', 'email_verification_sent_at'
+                ])
+
+                AuthHelper.send_verification_email(user, token)
                 
-                # Email verification removed - users can login immediately
                 logger.info(f"User registered successfully: {user.username}")
 
                 return Response(
-                    {"message": "User registered successfully. You can now login."},
+                    {"message": "Registration successful. Please check your email to verify your account."},
                     status=status.HTTP_201_CREATED
                 )
             
@@ -193,7 +205,7 @@ class VerifyEmailView(APIView, EmailManagementMixin):
 
         user.email_verified = True
         user.email_verification_token = None
-        user.save()
+        user.save(update_fields=['email_verified', 'email_verification_token'])
 
         return Response({"message": "Email verified successfully."})
 
@@ -227,7 +239,7 @@ class ResendVerificationEmailView(APIView):
         token = AuthHelper.generate_token()
         user.email_verification_token = token
         user.email_verification_sent_at = timezone.now()
-        user.save()
+        user.save(update_fields=['email_verification_token', 'email_verification_sent_at'])
 
         # Send verification email
         success = AuthHelper.send_verification_email(user, token)
@@ -281,7 +293,7 @@ class VerifyTwoFactorView(TwoFactorAuthView):
         # Verify the code
         if AuthHelper.verify_2fa_code(user, code):
             user.two_factor_enabled = True
-            user.save()
+            user.save(update_fields=['two_factor_enabled'])
             return Response({"message": "Two-factor authentication enabled successfully."})
         else:
             return Response(
@@ -305,7 +317,7 @@ class DisableTwoFactorView(TwoFactorAuthView):
 
         user.two_factor_enabled = False
         user.two_factor_secret = None
-        user.save()
+        user.save(update_fields=['two_factor_enabled', 'two_factor_secret'])
 
         return Response({"message": "Two-factor authentication disabled successfully."})
 
@@ -360,7 +372,7 @@ class ResetPasswordRequestView(APIView):
             token = AuthHelper.generate_token()
             user.password_reset_token = token
             user.password_reset_sent_at = timezone.now()
-            user.save()
+            user.save(update_fields=['password_reset_token', 'password_reset_sent_at'])
 
             # Send reset email
             AuthHelper.send_password_reset_email(user, token)
@@ -401,7 +413,7 @@ class ResetPasswordConfirmView(APIView, PasswordResetMixin):
         # Set new password
         user.set_password(new_password)
         user.password_reset_token = None
-        user.save()
+        user.save(update_fields=['password_reset_token', 'password'])
 
         return Response({"message": "Password has been reset successfully."})
 
@@ -421,20 +433,14 @@ class TwoFactorTokenView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        # Validate token
         try:
-            import jwt
-
-            # Decode token without verification
-            # (We're just extracting the user ID to look up the 2FA secret)
-            decoded_token = jwt.decode(token, options={"verify_signature": False}, algorithms=["HS256"])
-            user_id = decoded_token.get('user_id')
-
+            # Validate and decode the short-lived 2FA challenge token
+            access = AccessToken(token)
+            if not access.payload.get('2fa'):
+                raise AuthenticationFailed('Invalid 2FA token.')
+            user_id = access.payload.get('user_id')
             if not user_id:
-                return Response(
-                    {'detail': 'Invalid token.'},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
+                raise AuthenticationFailed('Invalid 2FA token payload.')
 
             # Get user
             try:
@@ -452,17 +458,25 @@ class TwoFactorTokenView(APIView):
                     status=status.HTTP_400_BAD_REQUEST
                 )
 
-            # Verify the code
             if AuthHelper.verify_2fa_code(user, code):
                 # Generate new token pair
                 tokens = AuthHelper.generate_tokens_for_user(user)
-                return Response(tokens)
+                response_data = {
+                    **tokens,
+                    'email_verified': user.email_verified,
+                    'two_factor_enabled': user.two_factor_enabled,
+                    'username': user.username,
+                    'user_id': user.id,
+                }
+                return Response(response_data)
             else:
                 return Response(
                     {'detail': 'Invalid verification code.'},
                     status=status.HTTP_400_BAD_REQUEST
                 )
 
+        except AuthenticationFailed as e:
+            return Response({'detail': str(e)}, status=status.HTTP_401_UNAUTHORIZED)
         except Exception as e:
             return Response(
                 {'detail': f'Failed to verify two-factor authentication: {str(e)}'},
@@ -532,3 +546,20 @@ class ExportUserDataView(APIView):
         user_data['ai_insights'] = AIInsightSerializer(insights, many=True).data
 
         return Response(user_data)
+
+
+class LogoutView(APIView):
+    """Logout by blacklisting the provided refresh token"""
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        refresh_token = request.data.get('refresh')
+        if not refresh_token:
+            return Response({'detail': 'Refresh token is required.'}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            token = RefreshToken(refresh_token)
+            token.blacklist()
+        except Exception:
+            # Do not leak details; treat as success to avoid token probing
+            pass
+        return Response(status=status.HTTP_205_RESET_CONTENT)

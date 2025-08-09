@@ -8,10 +8,10 @@ from rest_framework_simplejwt.views import TokenRefreshView, TokenVerifyView
 from health_profiles.views import HealthProfileViewSet, WeightHistoryViewSet, ActivityViewSet
 from analytics.views import AIInsightViewSet, WellnessScoreViewSet, MilestoneViewSet, HealthSummaryViewSet
 from users.views import (
-    RegisterView, UserProfileView,  # VerifyEmailView, ResendVerificationEmailView, - Email verification removed
+    RegisterView, UserProfileView, VerifyEmailView, ResendVerificationEmailView,
     GenerateTwoFactorView, VerifyTwoFactorView, DisableTwoFactorView,
     ChangePasswordView, ResetPasswordRequestView, ResetPasswordConfirmView,
-    NotificationSettingsView, ExportUserDataView, TwoFactorTokenView,
+    NotificationSettingsView, ExportUserDataView, TwoFactorTokenView, LogoutView,
     CorsTestView, HealthCheckView,
 )
 from users.jwt import CustomTokenObtainPairView
@@ -51,9 +51,9 @@ urlpatterns = [
     path('api/register/', RegisterView.as_view(), name='register'),
     path('api/users/me/', UserProfileView.as_view(), name='user-profile'),
 
-    # Email verification - disabled as email verification is no longer required
-    # path('api/users/verify-email/', VerifyEmailView.as_view(), name='verify-email'),
-    # path('api/users/resend-verification/', ResendVerificationEmailView.as_view(), name='resend-verification'),
+    # Email verification
+    path('api/users/verify-email/', VerifyEmailView.as_view(), name='verify-email'),
+    path('api/users/resend-verification/', ResendVerificationEmailView.as_view(), name='resend-verification'),
 
     # Two-factor authentication
     path('api/users/2fa/generate/', GenerateTwoFactorView.as_view(), name='generate-2fa'),
@@ -64,6 +64,9 @@ urlpatterns = [
     path('api/users/change-password/', ChangePasswordView.as_view(), name='change-password'),
     path('api/users/reset-password/', ResetPasswordRequestView.as_view(), name='reset-password-request'),
     path('api/users/reset-password/confirm/', ResetPasswordConfirmView.as_view(), name='reset-password-confirm'),
+
+    # Logout
+    path('api/logout/', LogoutView.as_view(), name='logout'),
 
     # User data management
     path('api/users/notification-settings/', NotificationSettingsView.as_view(), name='notification-settings'),

@@ -69,16 +69,9 @@ INSTALLED_APPS = [
 
     # Third-party apps
     'rest_framework',
-    'rest_framework.authtoken',
     'rest_framework_simplejwt.token_blacklist',
     'corsheaders',
     'rest_framework_simplejwt',
-    'allauth',
-    'allauth.account',
-    'allauth.socialaccount',
-    'dj_rest_auth',
-    'allauth.socialaccount.providers.google',
-    'allauth.socialaccount.providers.github',
 
     # My apps
     'users',
@@ -98,55 +91,10 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    'allauth.account.middleware.AccountMiddleware',
 ]
-
-# Django AllAuth settings
-AUTHENTICATION_BACKENDS = [
-    'django.contrib.auth.backends.ModelBackend',
-    'allauth.account.auth_backends.AuthenticationBackend',
-]
-
-SITE_ID = 1
-
-# OAuth configuration
-SOCIALACCOUNT_PROVIDERS = {
-    'google': {
-        'APP': {
-            'client_id': config('GOOGLE_CLIENT_ID', ''),
-            'secret': config('GOOGLE_CLIENT_SECRET', ''),
-            'key': ''
-        },
-        'SCOPE': [
-            'profile',
-            'email',
-        ],
-        'AUTH_PARAMS': {
-            'access_type': 'online',
-        }
-    },
-    'github': {
-        'APP': {
-            'client_id': config('GITHUB_CLIENT_ID', ''),
-            'secret': config('GITHUB_CLIENT_SECRET', ''),
-            'key': ''
-        },
-        'SCOPE': [
-            'user',
-            'email',
-        ],
-    }
-}
-
-ACCOUNT_UNIQUE_EMAIL = True
-ACCOUNT_EMAIL_VERIFICATION = 'none'
-ACCOUNT_LOGIN_METHODS = {'username', 'email'}
-ACCOUNT_SIGNUP_FIELDS = ['username*','email*','password1*','password2*']
 
 # CORS settings
-# Temporarily allow all origins for debugging hibernation issues
-# TODO: Set to False and use specific origins for production
-CORS_ALLOW_ALL_ORIGINS = True  # Temporarily True to debug service hibernation
+CORS_ALLOW_ALL_ORIGINS = False
 
 CORS_ALLOWED_ORIGINS = [
    'https://wellness-app-fronend.onrender.com',  # Keep the typo version for compatibility
@@ -178,9 +126,6 @@ CORS_EXPOSE_HEADERS = [
     'etag',
     'last-modified',
 ]
-
-# Note: CORS_REPLACE_HTTPS_REFERER has been removed in django-cors-headers 4.0+
-# Use CSRF_TRUSTED_ORIGINS instead (configured above)
 
 SESSION_COOKIE_SAMESITE = 'None'
 CSRF_COOKIE_SAMESITE    = 'None'
@@ -277,8 +222,8 @@ REST_FRAMEWORK = {
         'utils.throttling.ResilientAnonRateThrottle',
     ],
     'DEFAULT_THROTTLE_RATES': {
-        'user': '1000/minute',  # Increased for production
-        'anon': '100/minute',   # Increased for production
+        'user': '600/minute',  # Reasonable production rate
+        'anon': '60/minute',   # Reasonable production rate
     },
     'DEFAULT_PAGINATION_CLASS': 'utils.pagination.StandardResultsSetPagination',
     'DEFAULT_FILTER_BACKENDS': [
@@ -294,7 +239,7 @@ SIMPLE_JWT = {
     'ACCESS_TOKEN_LIFETIME': timedelta(minutes=30),
     'REFRESH_TOKEN_LIFETIME': timedelta(days=14),
     'ROTATE_REFRESH_TOKENS': True,
-    'BLACKLIST_AFTER_ROTATION': False,
+    'BLACKLIST_AFTER_ROTATION': True,
     'UPDATE_LAST_LOGIN': False,
 
     'ALGORITHM': 'HS256',
@@ -311,7 +256,6 @@ SIMPLE_JWT = {
 
     # Custom claims
     'JTI_CLAIM': 'jti',
-    'TOKEN_USER_CLASS': 'users.User',
 }
 
 ROOT_URLCONF = 'wellness_project.urls'
@@ -498,168 +442,5 @@ AI_PROMPT_TEMPLATES = {
     - Age: {age}, Gender: {gender}
     - Weight: {weight}kg, Height: {height}cm, BMI: {bmi}
     - Activity Level: {activity_level}
-    - Fitness Goal: {fitness_goal}
-    - Dietary Preferences: {dietary_preferences}
-    - Allergies/Intolerances: {allergies}
-    - Cuisine Preferences: {cuisine_preferences}
-    - Disliked Ingredients: {disliked_ingredients}
-    - Target Calories: {calorie_target}
-    - Target Macros: Protein {protein_target}g, Carbs {carb_target}g, Fat {fat_target}g
-    
-    Create a meal planning strategy that includes:
-    1. Recommended meal timing and distribution
-    2. Portion size guidelines
-    3. Key nutritional focus areas
-    4. Suggested meal types for each time of day
-    
-    Respond in JSON format.
-    """,
-
-    'meal_structure_generation': """
-    Based on this meal planning strategy, create a detailed daily meal structure:
-    
-    Strategy: {strategy}
-    Date: {date}
-    
-    Create meals that:
-    1. Meet the calorie target (±50 calories)
-    2. Balance macronutrients according to targets
-    3. Respect dietary preferences and restrictions
-    4. Include variety in ingredients and cuisines
-    5. Consider meal timing preferences
-    
-    For each meal, provide:
-    - Meal name and type (breakfast/lunch/dinner/snack)
-    - Brief description
-    - Estimated calories and macros
-    - Key ingredients
-    - Preparation time estimate
-    
-    Respond in JSON format with meal structure.
-    """,
-
-    'nutrition_analysis': """
-    Analyze this user's daily nutrition data and provide insights:
-    
-    Daily Intake:
-    - Calories: {calories} (Target: {calorie_target})
-    - Protein: {protein}g (Target: {protein_target}g)
-    - Carbs: {carbs}g (Target: {carb_target}g)
-    - Fat: {fat}g (Target: {fat_target}g)
-    
-    User Goals: {fitness_goal}
-    Recent Trends: {trends}
-    
-    Provide:
-    1. Key achievements and highlights
-    2. Areas for improvement
-    3. Specific recommendations
-    4. Meal timing or portion adjustments
-    
-    Keep response encouraging and actionable. Respond in JSON format.
     """
-}
-
-# Function calling schemas for OpenAI
-OPENAI_FUNCTIONS = {
-    'calculate_nutrition': {
-        'name': 'calculate_nutrition',
-        'description': 'Calculate nutritional information for ingredients or recipes',
-        'parameters': {
-            'type': 'object',
-            'properties': {
-                'ingredients': {
-                    'type': 'array',
-                    'description': 'List of ingredients with quantities',
-                    'items': {
-                        'type': 'object',
-                        'properties': {
-                            'name': {'type': 'string'},
-                            'quantity': {'type': 'number'},
-                            'unit': {'type': 'string'}
-                        }
-                    }
-                },
-                'servings': {
-                    'type': 'number',
-                    'description': 'Number of servings'
-                }
-            },
-            'required': ['ingredients', 'servings']
-        }
-    },
-    'validate_dietary_restrictions': {
-        'name': 'validate_dietary_restrictions',
-        'description': 'Check if recipe meets dietary restrictions',
-        'parameters': {
-            'type': 'object',
-            'properties': {
-                'ingredients': {
-                    'type': 'array',
-                    'items': {'type': 'string'}
-                },
-                'dietary_preferences': {
-                    'type': 'array',
-                    'items': {'type': 'string'}
-                },
-                'allergies': {
-                    'type': 'array',
-                    'items': {'type': 'string'}
-                }
-            },
-            'required': ['ingredients', 'dietary_preferences', 'allergies']
-        }
-    }
-}
-
-# Logging configuration with nutrition-specific loggers
-LOGGING = {
-    'version': 1,
-    'disable_existing_loggers': False,
-    'formatters': {
-        'verbose': {
-            'format': '{levelname} {asctime} {module} {message}',
-            'style': '{',
-        },
-    },
-    'handlers': {
-        'console': {
-            'class': 'logging.StreamHandler',
-            'formatter': 'verbose',
-        },
-        'file': {
-            'level': 'INFO',
-            'class': 'logging.FileHandler',
-            'filename': 'logs/nutrition.log',
-            'formatter': 'verbose',
-        },
-        'spoonacular': {
-            'level': 'DEBUG',
-            'class': 'logging.FileHandler',
-            'filename': 'logs/spoonacular_api.log',
-            'formatter': 'verbose',
-        },
-    },
-    'loggers': {
-        'django': {
-            'handlers': ['console'],
-            'level': 'ERROR',
-            'propagate': True,
-        },
-        'nutrition': {
-            'handlers': ['file'],
-            'level': 'INFO',
-            'propagate': True,
-        },
-        'nutrition.spoonacular': {
-            'handlers': ['spoonacular'],
-            'level': 'DEBUG',
-            'propagate': False,
-        },
-        'nutrition.ai': {
-            'handlers': ['file'],
-            'level': 'INFO',
-            'propagate': False,
-        },
-    },
 }

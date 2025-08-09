@@ -82,21 +82,21 @@ class OAuthService {
         { withCredentials: true }
       );
 
-      const { access, refresh, user } = response.data || {};
-      if (!access) {
+      const data = response.data || {};
+      if (!data.access) {
         console.error('Invalid backend response:', response.data);
         throw new Error('Invalid authentication response from server');
       }
 
-      // Save tokens & user profile however your AuthService expects
-      AuthService.storeUser({ access, refresh, user }, true);
+      // Store full user payload so flags are available
+      AuthService.storeUser(data, true);
 
       // Cleanup
       localStorage.removeItem('oauth_state');
       sessionStorage.removeItem('auth_in_progress');
       sessionStorage.removeItem('oauth_provider');
 
-      return response.data;
+      return data;
     } catch (err) {
       console.error('OAuth callback processing error:', err);
       localStorage.removeItem('oauth_state');
