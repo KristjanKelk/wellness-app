@@ -37,6 +37,49 @@ class ConversationManager:
         jailbreak_terms = ["ignore previous", "system prompt", "act as", "developer mode"]
         return any(t in lower for t in pii_terms + other_user_terms + jailbreak_terms)
     
+    # --- NEW: Targeted grounding helpers to avoid hallucinations for numeric metrics ---
+    def _detect_targeted_metrics_request(self, text: str) -> Dict[str, bool]:
+        lower = (text or "").lower()
+        return {
+            "weight": any(k in lower for k in ["weight", "kaal", "kaalu"]),
+            "bmi": any(k in lower for k in ["bmi", "body mass index", "kehamassiindeks"]),
+            "protein": any(k in lower for k in ["protein", "valk", "valgu", "proteiin"]),
+            "calories": any(k in lower for k in ["calorie", "calories", "kcal", "kalor"]),
+            "wellness_score": "wellness score" in lower,
+        }
+ 
+    def _pre_fetch_targeted_data(self, text: str) -> List[Dict[str, Any]]:
+        """Execute deterministic function calls for targeted metric questions to ground answers."""
+        requests = self._detect_targeted_metrics_request(text)
+        results: List[Dict[str, Any]] = []
+ 
+        try:
+            # If either weight or BMI is requested, fetch all health metrics (covers both)
+            if requests.get("weight") or requests.get("bmi") or requests.get("wellness_score"):
+                fn = "get_health_metrics"
+                args = {"metric_type": "all", "time_period": "current"}
+                res = self.service.execute_function(fn, args)
+                results.append({"function": fn, "args": args, "result": res})
+ 
+            # If protein specifically mentioned, fetch nutrition analysis for protein (today)
+            if requests.get("protein"):
+                fn = "get_nutrition_analysis"
+                args = {"period": "today", "nutrient": "protein"}
+                res = self.service.execute_function(fn, args)
+                results.append({"function": fn, "args": args, "result": res})
+ 
+            # If calories mentioned explicitly, fetch calorie data (today)
+            if requests.get("calories"):
+                fn = "get_nutrition_analysis"
+                args = {"period": "today", "nutrient": "calories"}
+                res = self.service.execute_function(fn, args)
+                results.append({"function": fn, "args": args, "result": res})
+        except Exception as e:
+            # If any prefetch fails, proceed without blocking the chat
+            results.append({"function": "prefetch_error", "args": {}, "result": {"success": False, "error": {"code": "PREFETCH_FAILED", "message": str(e)}}})
+ 
+        return results
+    
     def _get_or_create_conversation(self, conversation_id: Optional[str]) -> Conversation:
         """Get existing conversation or create new one"""
         if conversation_id:
@@ -237,13 +280,43 @@ class ConversationManager:
             
             # Get conversation context
             messages, context_tokens = self._get_conversation_context()
-            
+ 
+            # NEW: Deterministically pre-fetch targeted numeric data to avoid hallucinations
+            prefetch_results = self._pre_fetch_targeted_data(resolved_message)
+            if prefetch_results:
+                # Add strict instruction for numeric accuracy
+                strict_instruction = (
+                    "When answering numeric metric questions (weight/BMI/calories/protein), only use the provided "
+                    "function results. Do not guess or fabricate values. If a metric is missing, say it’s not available. "
+                    "If both weight and BMI are requested, include both in one concise answer with units."
+                )
+                messages.append({"role": "system", "content": strict_instruction})
+                 
+                # Persist each function call result and add to chat context
+                for item in prefetch_results:
+                    fn, args, res = item.get("function"), item.get("args"), item.get("result")
+                    if fn == "prefetch_error":
+                        continue
+                    Message.objects.create(
+                        conversation=self.conversation,
+                        role="function",
+                        content=f"Pre-fetched {fn}",
+                        function_name=fn,
+                        function_args=args,
+                        function_response=res
+                    )
+                    messages.append({
+                        "role": "function",
+                        "name": fn,
+                        "content": json.dumps(res)
+                    })
+             
             # Add the resolved message for better understanding
             messages.append({"role": "user", "content": resolved_message})
-            
+             
             # Get available functions
             functions = self.service.get_available_functions()
-            
+             
             # Call OpenAI
             try:
                 response = self.client.chat.completions.create(
@@ -251,7 +324,7 @@ class ConversationManager:
                     messages=messages,
                     functions=functions,
                     function_call="auto",
-                    temperature=self.temperature,
+                    temperature=0.2 if prefetch_results else self.temperature,
                     top_p=self.top_p,
                     max_tokens=min(2000, self.max_tokens - context_tokens)
                 )
@@ -263,18 +336,18 @@ class ConversationManager:
                 raise Exception(f"OpenAI API error: {str(e)}")
             except Exception as e:
                 raise Exception(f"Unexpected error calling OpenAI API: {str(e)}")
-            
+             
             # Process response
             assistant_message = response.choices[0].message
-            
+             
             # Handle function calls
             if assistant_message.function_call:
                 function_name = assistant_message.function_call.name
                 function_args = json.loads(assistant_message.function_call.arguments)
-                
+                 
                 # Execute function
                 function_result = self.service.execute_function(function_name, function_args)
-                
+                 
                 # Save function call message
                 func_msg = Message.objects.create(
                     conversation=self.conversation,
@@ -284,26 +357,26 @@ class ConversationManager:
                     function_args=function_args,
                     function_response=function_result
                 )
-                
+                 
                 # Add function result to context and get final response
                 messages.append({
                     "role": "function",
                     "name": function_name,
                     "content": json.dumps(function_result)
                 })
-                
+                 
                 # Get final response with function result
                 final_response = self.client.chat.completions.create(
                     model=self.model,
                     messages=messages,
-                    temperature=self.temperature,
+                    temperature=0.2 if prefetch_results else self.temperature,
                     top_p=self.top_p
                 )
-                
+                 
                 final_content = final_response.choices[0].message.content
             else:
                 final_content = assistant_message.content
-            
+             
             # Save assistant message
             assistant_msg = Message.objects.create(
                 conversation=self.conversation,
@@ -311,17 +384,17 @@ class ConversationManager:
                 content=final_content,
                 token_count=self._count_tokens(final_content)
             )
-            
+             
             # Check if we need to compress conversation
             self._compress_conversation_if_needed()
-            
+             
             return {
                 "message": final_content,
                 "conversation_id": str(self.conversation.id),
                 "message_id": str(assistant_msg.id),
                 "function_called": assistant_message.function_call.name if assistant_message.function_call else None
             }
-            
+             
         except Exception as e:
             # Log error
             error_msg = f"Error in conversation: {str(e)}"
