@@ -72,6 +72,7 @@ INSTALLED_APPS = [
     'rest_framework_simplejwt.token_blacklist',
     'corsheaders',
     'rest_framework_simplejwt',
+    'django_filters',
 
     # My apps
     'users',
@@ -158,6 +159,10 @@ CORS_ALLOW_METHODS = [
     'PUT',
 ]
 
+# Trust X-Forwarded-Proto so Django knows the original scheme behind Render's proxy
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+USE_X_FORWARDED_HOST = True
+X_FRAME_OPTIONS = 'SAMEORIGIN'
 
 REDIS_URL = config("REDIS_URL", default="")
 
@@ -271,6 +276,10 @@ TEMPLATES = [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
+                'django.template.context_processors.i18n',
+                'django.template.context_processors.media',
+                'django.template.context_processors.static',
+                'django.template.context_processors.tz',
             ],
         },
     },
@@ -281,7 +290,36 @@ WSGI_APPLICATION = 'wellness_project.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/4.2/ref/settings/#databases
 
-if config('PGDATABASE', default=None) and config('PGUSER', default=None):
+# Prefer DATABASE_URL if provided (Render convention), else PG* vars, else SQLite
+DATABASE_URL = config('DATABASE_URL', default=None)
+
+if DATABASE_URL:
+    try:
+        import dj_database_url  # type: ignore
+        DATABASES = {
+            'default': dj_database_url.parse(DATABASE_URL, conn_max_age=600, ssl_require=False)
+        }
+    except Exception:
+        # Fallback to manual parse for simple Postgres URLs without adding dependency
+        import re
+        match = re.match(r'postgresql://([^:]+):([^@]+)@([^:]+):(\d+)/(\w+)', DATABASE_URL)
+        if match:
+            user, password, host, port, name = match.groups()
+            DATABASES = {
+                'default': {
+                    'ENGINE': 'django.db.backends.postgresql',
+                    'NAME': name,
+                    'USER': user,
+                    'PASSWORD': password,
+                    'HOST': host,
+                    'PORT': port,
+                }
+            }
+        else:
+            # Last resort: keep existing PG* handling below
+            DATABASE_URL = None
+
+if not DATABASE_URL and config('PGDATABASE', default=None) and config('PGUSER', default=None):
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.postgresql',
@@ -292,7 +330,7 @@ if config('PGDATABASE', default=None) and config('PGUSER', default=None):
             'PORT':     config('PGPORT', default='5432'),
         }
     }
-else:
+elif not DATABASE_URL:
     # Safe local/test fallback to SQLite
     DATABASES = {
         'default': {
@@ -339,10 +377,38 @@ MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 AUTH_USER_MODEL = 'users.User'
+SITE_ID = 1
 
 # Email Settings
 EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'  # For development
 DEFAULT_FROM_EMAIL = 'noreply@wellnessplatform.com'
+
+# Basic logging to console for production visibility
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+        },
+    },
+    'root': {
+        'handlers': ['console'],
+        'level': 'INFO',
+    },
+    'loggers': {
+        'django': {
+            'handlers': ['console'],
+            'level': 'INFO',
+            'propagate': True,
+        },
+        'django.request': {
+            'handlers': ['console'],
+            'level': 'ERROR',
+            'propagate': False,
+        },
+    },
+}
 
 # ========================================
 # NUTRITION FEATURE CONFIGURATIONS
