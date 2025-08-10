@@ -21,14 +21,14 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/4.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = config('SECRET_KEY')
+SECRET_KEY = config('SECRET_KEY', default='dev-secret-not-for-production')
 
 #OpenAI api key
 OPENAI_API_KEY = config('OPENAI_API_KEY', default='')
 AI_INSIGHT_DAILY_LIMIT = 3
 
 # Spoonacular API Configuration (ADD THIS TO YOUR .env FILE)
-SPOONACULAR_API_KEY = config('SPOONACULAR_API_KEY')
+SPOONACULAR_API_KEY = config('SPOONACULAR_API_KEY', default='')
 SPOONACULAR_BASE_URL = 'https://api.spoonacular.com'
 
 # SECURITY WARNING: don't run with debug turned on in production!
@@ -281,16 +281,25 @@ WSGI_APPLICATION = 'wellness_project.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/4.2/ref/settings/#databases
 
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.postgresql',
-        'NAME':     config('PGDATABASE'),
-        'USER':     config('PGUSER'),
-        'PASSWORD': config('PGPASSWORD'),
-        'HOST':     config('PGHOST'),
-        'PORT':     config('PGPORT', default='5432'),
+if config('PGDATABASE', default=None) and config('PGUSER', default=None):
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.postgresql',
+            'NAME':     config('PGDATABASE'),
+            'USER':     config('PGUSER'),
+            'PASSWORD': config('PGPASSWORD', default=''),
+            'HOST':     config('PGHOST', default='localhost'),
+            'PORT':     config('PGPORT', default='5432'),
+        }
     }
-}
+else:
+    # Safe local/test fallback to SQLite
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': os.path.join(BASE_DIR, 'db.sqlite3'),
+        }
+    }
 
 # Password validation
 # https://docs.djangoproject.com/en/4.2/ref/settings/#auth-password-validators
