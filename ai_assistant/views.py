@@ -179,7 +179,11 @@ class VisualizationViewSet(viewsets.ViewSet):
             chart_data = viz_service.generate_chart(chart_request, time_period)
             
             if 'error' in chart_data:
-                return Response({"success": False, "message": chart_data.get('error')}, status=status.HTTP_400_BAD_REQUEST)
+                message = chart_data.get('error')
+                # Return 200 for no-data cases so frontend can show a friendly notice instead of an error toast
+                if isinstance(message, str) and message.lower().startswith('no '):
+                    return Response({"success": False, "message": message}, status=status.HTTP_200_OK)
+                return Response({"success": False, "message": message}, status=status.HTTP_400_BAD_REQUEST)
             
             return Response(chart_data)
             

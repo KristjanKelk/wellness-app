@@ -136,7 +136,7 @@ class VisualizationService:
             user=self.user,
             date__range=[start_date, end_date]
         ).values('date').annotate(
-            total_protein=Sum('protein')
+            total_protein=Sum('total_protein')
         ).order_by('date')
         
         if not logs:
@@ -193,9 +193,9 @@ class VisualizationService:
             user=self.user,
             date=today
         ).aggregate(
-            total_protein=Sum('protein'),
-            total_carbs=Sum('carbs'),
-            total_fat=Sum('fat')
+            total_protein=Sum('total_protein'),
+            total_carbs=Sum('total_carbs'),
+            total_fat=Sum('total_fat')
         )
         
         protein = float(logs['total_protein'] or 0)
@@ -374,7 +374,7 @@ class VisualizationService:
             user=self.user,
             date__range=[start_date, end_date]
         ).values('date').annotate(
-            total_calories=Sum('calories')
+            total_calories=Sum('total_calories')
         ).order_by('date')
         
         if not logs:
