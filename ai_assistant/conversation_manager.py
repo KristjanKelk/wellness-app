@@ -46,6 +46,11 @@ class ConversationManager:
             "protein": any(k in lower for k in ["protein", "valk", "valgu", "proteiin"]),
             "calories": any(k in lower for k in ["calorie", "calories", "kcal", "kalor"]),
             "wellness_score": "wellness score" in lower,
+            # NEW: Meal plan intent detection
+            "meal_plan": any(k in lower for k in [
+                "meal plan", "what's my meal plan", "whats my meal plan", "meals today", "today's meals",
+                "breakfast", "lunch", "dinner", "snack", "what's for", "whats for", "menu"
+            ]),
         }
  
     def _pre_fetch_targeted_data(self, text: str) -> List[Dict[str, Any]]:
@@ -72,6 +77,24 @@ class ConversationManager:
             if requests.get("calories"):
                 fn = "get_nutrition_analysis"
                 args = {"period": "today", "nutrient": "calories"}
+                res = self.service.execute_function(fn, args)
+                results.append({"function": fn, "args": args, "result": res})
+
+            # NEW: If meal plan intent detected, fetch today's meal plan
+            if requests.get("meal_plan"):
+                fn = "get_meal_plan"
+                # Try to infer specific meal type if asked e.g., "what's for lunch"
+                lower = (text or "").lower()
+                mt = "all"
+                if "breakfast" in lower:
+                    mt = "breakfast"
+                elif "lunch" in lower:
+                    mt = "lunch"
+                elif "dinner" in lower:
+                    mt = "dinner"
+                elif "snack" in lower:
+                    mt = "snack"
+                args = {"time_frame": "today", "meal_type": mt}
                 res = self.service.execute_function(fn, args)
                 results.append({"function": fn, "args": args, "result": res})
         except Exception as e:

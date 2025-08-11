@@ -160,8 +160,13 @@ class VisualizationViewSet(viewsets.ViewSet):
     @action(detail=False, methods=['post'])
     def generate(self, request):
         """Generate a visualization based on natural language request"""
-        chart_request = request.data.get('request', '').strip()
+        chart_request = (request.data.get('request') or '').strip()
         time_period = request.data.get('time_period', 'month')
+        
+        # Support direct chart_type to improve reliability from frontend
+        chart_type = (request.data.get('chart_type') or '').strip()
+        if chart_type and not chart_request:
+            chart_request = chart_type
         
         if not chart_request:
             return Response(
