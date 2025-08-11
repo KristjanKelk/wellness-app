@@ -23,12 +23,30 @@ class VisualizationService:
     
     def generate_chart(self, request_type: str, time_period: str = "month") -> Dict[str, Any]:
         """Generate chart based on request type"""
-        request_lower = request_type.lower()
+        request_lower = request_type.lower().strip() if request_type else ""
         
-        # Determine chart type based on request
+        # Direct chart type mapping support (allows frontend to pass a canonical type)
+        direct_map = {
+            "weight_trend": self._generate_weight_trend_chart,
+            "protein_comparison": self._generate_protein_comparison_chart,
+            "macronutrient_breakdown": lambda _: self._generate_macronutrient_breakdown_chart(),
+            "activity_summary": self._generate_activity_chart,
+            "wellness_score": self._generate_wellness_score_chart,
+            "calorie_trend": self._generate_calorie_trend_chart,
+        }
+        if request_lower in direct_map:
+            # macronutrient_breakdown ignores time_period
+            generator = direct_map[request_lower]
+            try:
+                # Handle callables that ignore time_period
+                return generator(time_period) if request_lower != "macronutrient_breakdown" else generator(None)
+            except Exception as e:
+                return {"error": f"Failed to generate {request_lower} chart: {str(e)}"}
+        
+        # Natural language keyword detection (backward compatible)
         if "weight" in request_lower and ("trend" in request_lower or "change" in request_lower):
             return self._generate_weight_trend_chart(time_period)
-        elif "protein" in request_lower and ("compare" in request_lower or "target" in request_lower):
+        elif "protein" in request_lower and ("compare" in request_lower or "target" in request_lower or "comparison" in request_lower):
             return self._generate_protein_comparison_chart(time_period)
         elif "macronutrient" in request_lower or "macro" in request_lower:
             return self._generate_macronutrient_breakdown_chart()

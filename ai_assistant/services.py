@@ -555,35 +555,60 @@ Remember to be helpful, accurate, and encouraging while maintaining appropriate 
         
         result: Dict[str, Any] = {"success": True, "time_frame": time_frame, "meals": []}
         
+        def _append_normalized_meal(date_key: str, mt: Optional[str], item: Dict[str, Any]):
+            norm_mt = (mt or item.get('meal_type') or item.get('type') or '').lower() or None
+            if meal_type != "all" and norm_mt != meal_type:
+                return
+            result["meals"].append({
+                "date": date_key,
+                "meal_type": norm_mt,
+                "title": item.get('title') or (item.get('recipe') or {}).get('title'),
+                "ready_in_minutes": item.get('readyInMinutes') or item.get('ready_in_minutes') or item.get('total_time_minutes') or (item.get('recipe') or {}).get('total_time_minutes'),
+                "servings": item.get('servings') or (item.get('recipe') or {}).get('servings'),
+                "nutrition_summary": {
+                    "calories": item.get('calories_per_serving') or item.get('calories') or (item.get('recipe') or {}).get('calories_per_serving'),
+                    "protein": item.get('protein_per_serving') or item.get('protein') or (item.get('recipe') or {}).get('protein_per_serving'),
+                    "carbs": item.get('carbs_per_serving') or item.get('carbs') or (item.get('recipe') or {}).get('carbs_per_serving'),
+                    "fat": item.get('fat_per_serving') or item.get('fat') or (item.get('recipe') or {}).get('fat_per_serving')
+                }
+            })
+        
         # Iterate plans and collect meals from JSON structure
         for plan in meal_plans:
             data = plan.meal_plan_data or {}
-            meals_by_date = data.get('meals', {})
-            if not isinstance(meals_by_date, dict):
+            meals_by_date = data.get('meals')
+            
+            if isinstance(meals_by_date, dict):
+                # New structure: { "meals": { "YYYY-MM-DD": [ {meal...}, ... ] } }
+                current = start_date
+                while current <= end_date:
+                    date_key = current.isoformat()
+                    day_meals = meals_by_date.get(date_key, [])
+                    for m in day_meals or []:
+                        _append_normalized_meal(date_key, (m.get('meal_type') or m.get('type')), m)
+                    current += timedelta(days=1)
                 continue
             
-            current = start_date
-            while current <= end_date:
-                date_key = current.isoformat()
-                day_meals = meals_by_date.get(date_key, [])
-                for m in day_meals:
-                    mt = (m.get('meal_type') or m.get('type') or '').lower()
-                    if meal_type != "all" and mt != meal_type:
-                        continue
-                    result["meals"].append({
-                        "date": date_key,
-                        "meal_type": mt or None,
-                        "title": m.get('title'),
-                        "ready_in_minutes": m.get('readyInMinutes') or m.get('ready_in_minutes') or m.get('total_time_minutes'),
-                        "servings": m.get('servings'),
-                        "nutrition_summary": {
-                            "calories": m.get('calories_per_serving') or m.get('calories'),
-                            "protein": m.get('protein_per_serving') or m.get('protein'),
-                            "carbs": m.get('carbs_per_serving') or m.get('carbs'),
-                            "fat": m.get('fat_per_serving') or m.get('fat')
-                        }
-                    })
-                current += timedelta(days=1)
+            # Legacy structure: top-level keys are dates with nested meal types { breakfast: {recipe: {...}}, ... }
+            # Example: meal_plan_data[date][meal_type] = { recipe: {...} }
+            # Detect legacy: keys look like dates
+            possible_dates = [k for k, v in (data.items() if isinstance(data, dict) else []) if isinstance(k, str) and len(k) == 10 and k[4] == '-' and k[7] == '-']
+            if possible_dates:
+                current = start_date
+                while current <= end_date:
+                    date_key = current.isoformat()
+                    day_block = data.get(date_key, {}) if isinstance(data, dict) else {}
+                    if isinstance(day_block, dict):
+                        for mt in ["breakfast", "lunch", "dinner", "snack"]:
+                            entry = day_block.get(mt)
+                            if isinstance(entry, dict):
+                                # Normalize legacy entry to common shape
+                                payload = {
+                                    "meal_type": mt,
+                                    **(({"recipe": entry.get('recipe')} if entry.get('recipe') else entry))
+                                }
+                                _append_normalized_meal(date_key, mt, payload)
+                    current += timedelta(days=1)
         
         if not result["meals"]:
             return {"success": True, "message": "No meals found for the selected time frame.", "time_frame": time_frame, "meals": []}
