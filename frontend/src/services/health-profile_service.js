@@ -102,7 +102,7 @@ class HealthProfileService {
      * @returns {Promise} - Promise resolving to nutrition log data
      */
     getNutritionLog(date) {
-        return apiClient.get(`meal-planning/api/nutrition-logs/${date}/`)
+        return apiClient.get(`/meal-planning/api/nutrition-logs/${date}/`)
             .catch(error => {
                 console.error(`Error fetching nutrition log for ${date}:`, error);
                 
@@ -136,7 +136,7 @@ class HealthProfileService {
      * @returns {Promise} - Promise resolving to nutrition logs data
      */
     getNutritionLogs(startDate, endDate) {
-        return apiClient.get('meal-planning/api/nutrition-logs/', {
+        return apiClient.get('/meal-planning/api/nutrition-logs/', {
             params: {
                 start_date: startDate,
                 end_date: endDate
@@ -161,7 +161,7 @@ class HealthProfileService {
      * @returns {Promise} - Promise resolving to created/updated nutrition log data
      */
     saveNutritionLog(date, logData) {
-        return apiClient.post(`meal-planning/api/nutrition-logs/${date}/`, logData)
+        return apiClient.post(`/meal-planning/api/nutrition-logs/${date}/`, logData)
             .catch(error => {
                 console.error(`Error saving nutrition log for ${date}:`, error);
                 throw error;
@@ -175,7 +175,7 @@ class HealthProfileService {
      * @returns {Promise} - Promise resolving to updated nutrition log data
      */
     updateNutritionLog(date, logData) {
-        return apiClient.put(`meal-planning/api/nutrition-logs/${date}/`, logData)
+        return apiClient.put(`/meal-planning/api/nutrition-logs/${date}/`, logData)
             .catch(error => {
                 console.error(`Error updating nutrition log for ${date}:`, error);
                 throw error;
@@ -188,7 +188,7 @@ class HealthProfileService {
      * @returns {Promise} - Promise resolving to deletion status
      */
     deleteNutritionLog(date) {
-        return apiClient.delete(`meal-planning/api/nutrition-logs/${date}/`)
+        return apiClient.delete(`/meal-planning/api/nutrition-logs/${date}/`)
             .catch(error => {
                 console.error(`Error deleting nutrition log for ${date}:`, error);
                 // For 404 errors (already deleted), return success
@@ -208,7 +208,7 @@ class HealthProfileService {
      * @returns {Promise} - Promise resolving to progress summary data
      */
     getNutritionProgressSummary(startDate, endDate) {
-        return apiClient.get('meal-planning/api/nutrition-logs/progress_summary/', {
+        return apiClient.get('/meal-planning/api/nutrition-logs/progress_summary/', {
             params: {
                 start_date: startDate,
                 end_date: endDate
@@ -235,7 +235,7 @@ class HealthProfileService {
      * @returns {Promise} - Promise resolving to weekly averages data
      */
     getWeeklyNutritionAverages(weekStart) {
-        return apiClient.get('meal-planning/api/nutrition-logs/weekly_averages/', {
+        return apiClient.get('/meal-planning/api/nutrition-logs/weekly_averages/', {
             params: {
                 week_start: weekStart
             }
@@ -262,7 +262,7 @@ class HealthProfileService {
      * @returns {Promise} - Promise resolving to goal achievement statistics
      */
     getNutritionGoalStats(startDate, endDate) {
-        return apiClient.get('meal-planning/api/nutrition-logs/goal_stats/', {
+        return apiClient.get('/meal-planning/api/nutrition-logs/goal_stats/', {
             params: {
                 start_date: startDate,
                 end_date: endDate
@@ -291,7 +291,7 @@ class HealthProfileService {
      * @returns {Promise} - Promise resolving to trend analysis data
      */
     getNutritionTrends(startDate, endDate, metric = 'calories') {
-        return apiClient.get('meal-planning/api/nutrition-logs/trends/', {
+        return apiClient.get('/meal-planning/api/nutrition-logs/trends/', {
             params: {
                 start_date: startDate,
                 end_date: endDate,
