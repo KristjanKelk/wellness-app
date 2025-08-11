@@ -1842,7 +1842,7 @@ class NutritionLogViewSet(viewsets.ModelViewSet):
         
         serializer.save(user=user, **log_data)
 
-    @action(detail=False, methods=['get'], url_path='(?P<date>[^/.]+)')
+    @action(detail=False, methods=['get'], url_path='by-date/(?P<date>[^/.]+)')
     def get_by_date(self, request, date=None):
         """Get nutrition log for a specific date"""
         try:
@@ -1883,7 +1883,7 @@ class NutritionLogViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
-    @action(detail=False, methods=['post', 'put'], url_path='(?P<date>[^/.]+)')
+    @action(detail=False, methods=['post', 'put'], url_path='by-date/(?P<date>[^/.]+)')
     def save_by_date(self, request, date=None):
         """Create or update nutrition log for a specific date"""
         try:
@@ -1932,7 +1932,7 @@ class NutritionLogViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
-    @action(detail=False, methods=['delete'], url_path='(?P<date>[^/.]+)')
+    @action(detail=False, methods=['delete'], url_path='by-date/(?P<date>[^/.]+)')
     def delete_by_date(self, request, date=None):
         """Delete nutrition log for a specific date"""
         try:
