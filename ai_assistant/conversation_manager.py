@@ -45,7 +45,15 @@ class ConversationManager:
             "bmi": any(k in lower for k in ["bmi", "body mass index", "kehamassiindeks"]),
             "protein": any(k in lower for k in ["protein", "valk", "valgu", "proteiin"]),
             "calories": any(k in lower for k in ["calorie", "calories", "kcal", "kalor"]),
+            "carbs": any(k in lower for k in ["carb", "carbs", "carbohydrate", "carbohydrates"]),
+            "fat": any(k in lower for k in ["fat", "fats", "lipid", "lipids"]),
+            "fiber": any(k in lower for k in ["fiber", "fibre"]),
+            "nutrition": any(k in lower for k in ["nutrition", "nutrient", "intake", "macro", "macros", "diet"]),
             "wellness_score": "wellness score" in lower,
+            # Period hints
+            "yesterday": "yesterday" in lower,
+            "week": any(k in lower for k in ["this week", "last week", "weekly", "week"]),
+            "month": any(k in lower for k in ["this month", "last month", "monthly", "month"]),
             # NEW: Meal plan intent detection
             "meal_plan": any(k in lower for k in [
                 "meal plan", "what's my meal plan", "whats my meal plan", "meals today", "today's meals",
@@ -57,7 +65,17 @@ class ConversationManager:
         """Execute deterministic function calls for targeted metric questions to ground answers."""
         requests = self._detect_targeted_metrics_request(text)
         results: List[Dict[str, Any]] = []
- 
+
+        # Helper to infer period from text
+        def infer_period() -> str:
+            if requests.get("yesterday"):
+                return "yesterday"
+            if requests.get("week"):
+                return "week"
+            if requests.get("month"):
+                return "month"
+            return "today"
+
         try:
             # If either weight or BMI is requested, fetch all health metrics (covers both)
             if requests.get("weight") or requests.get("bmi") or requests.get("wellness_score"):
@@ -65,22 +83,49 @@ class ConversationManager:
                 args = {"metric_type": "all", "time_period": "current"}
                 res = self.service.execute_function(fn, args)
                 results.append({"function": fn, "args": args, "result": res})
- 
-            # If protein specifically mentioned, fetch nutrition analysis for protein (today)
+
+            # Nutrition/macros requests
+            period = infer_period()
+
+            # Specific nutrients
             if requests.get("protein"):
                 fn = "get_nutrition_analysis"
-                args = {"period": "today", "nutrient": "protein"}
-                res = self.service.execute_function(fn, args)
-                results.append({"function": fn, "args": args, "result": res})
- 
-            # If calories mentioned explicitly, fetch calorie data (today)
-            if requests.get("calories"):
-                fn = "get_nutrition_analysis"
-                args = {"period": "today", "nutrient": "calories"}
+                args = {"period": period, "nutrient": "protein"}
                 res = self.service.execute_function(fn, args)
                 results.append({"function": fn, "args": args, "result": res})
 
-            # NEW: If meal plan intent detected, fetch today's meal plan
+            if requests.get("calories"):
+                fn = "get_nutrition_analysis"
+                args = {"period": period, "nutrient": "calories"}
+                res = self.service.execute_function(fn, args)
+                results.append({"function": fn, "args": args, "result": res})
+
+            if requests.get("carbs"):
+                fn = "get_nutrition_analysis"
+                args = {"period": period, "nutrient": "carbs"}
+                res = self.service.execute_function(fn, args)
+                results.append({"function": fn, "args": args, "result": res})
+
+            if requests.get("fat"):
+                fn = "get_nutrition_analysis"
+                args = {"period": period, "nutrient": "fat"}
+                res = self.service.execute_function(fn, args)
+                results.append({"function": fn, "args": args, "result": res})
+
+            if requests.get("fiber"):
+                fn = "get_nutrition_analysis"
+                args = {"period": period, "nutrient": "fiber"}
+                res = self.service.execute_function(fn, args)
+                results.append({"function": fn, "args": args, "result": res})
+
+            # Generic nutrition/macros intent -> fetch all for the inferred period
+            if requests.get("nutrition") and not any(requests.get(k) for k in ["protein", "calories", "carbs", "fat", "fiber"]):
+                fn = "get_nutrition_analysis"
+                args = {"period": period, "nutrient": "all"}
+                res = self.service.execute_function(fn, args)
+                results.append({"function": fn, "args": args, "result": res})
+
+            # NEW: If meal plan intent detected, fetch today's meal plan (or inferred period: we keep today)
             if requests.get("meal_plan"):
                 fn = "get_meal_plan"
                 # Try to infer specific meal type if asked e.g., "what's for lunch"
@@ -100,7 +145,7 @@ class ConversationManager:
         except Exception as e:
             # If any prefetch fails, proceed without blocking the chat
             results.append({"function": "prefetch_error", "args": {}, "result": {"success": False, "error": {"code": "PREFETCH_FAILED", "message": str(e)}}})
- 
+
         return results
     
     def _get_or_create_conversation(self, conversation_id: Optional[str]) -> Conversation:
