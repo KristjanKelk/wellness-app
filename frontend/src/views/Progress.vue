@@ -445,15 +445,21 @@ export default {
       try {
         const response = await HealthProfileService.getNutritionLog(selectedDate.value);
         if (response.data) {
-          dailyData.value = response.data;
-          
-          // Calculate deficit/surplus
+          const d = response.data;
+          const toNum = v => Number(v || 0);
+          dailyData.value = {
+            totalCalories: toNum(d.total_calories ?? d.totalCalories),
+            totalProtein: toNum(d.total_protein ?? d.totalProtein),
+            totalCarbs: toNum(d.total_carbs ?? d.totalCarbs),
+            totalFat: toNum(d.total_fat ?? d.totalFat),
+            totalFiber: toNum(d.total_fiber ?? d.totalFiber),
+            calorieDeficitSurplus: 0
+          };
           if (nutritionProfile.value?.calorie_target) {
             dailyData.value.calorieDeficitSurplus = 
               (dailyData.value.totalCalories || 0) - nutritionProfile.value.calorie_target;
           }
         } else {
-          // No data for this date
           dailyData.value = {
             totalCalories: 0,
             totalProtein: 0,
@@ -511,11 +517,15 @@ export default {
           weekInfo.startDate, 
           weekInfo.endDate
         );
-        
-        const logs = response.data || [];
-        
+        const logsRaw = response.data || [];
+        const logs = logsRaw.map(l => ({
+          totalCalories: Number(l.total_calories ?? l.totalCalories ?? 0),
+          totalProtein: Number(l.total_protein ?? l.totalProtein ?? 0),
+          totalCarbs: Number(l.total_carbs ?? l.totalCarbs ?? 0),
+          totalFat: Number(l.total_fat ?? l.totalFat ?? 0),
+          calorieDeficitSurplus: Number(l.calorie_deficit_surplus?.difference ?? l.calorie_deficit_surplus ?? l.calorieDeficitSurplus ?? 0)
+        }));
         if (logs.length > 0) {
-          // Calculate averages
           const totals = logs.reduce((acc, log) => ({
             calories: acc.calories + (log.totalCalories || 0),
             protein: acc.protein + (log.totalProtein || 0),
@@ -532,21 +542,22 @@ export default {
             totalDeficit: totals.deficit
           };
 
-          // Calculate stats
           const calorieTarget = nutritionProfile.value?.calorie_target || 0;
           const daysOnTarget = logs.filter(log => {
+            if (!calorieTarget) return false;
             const variance = Math.abs((log.totalCalories || 0) - calorieTarget) / calorieTarget;
-            return variance <= 0.1; // Within 10%
+            return variance <= 0.1;
           }).length;
 
           const totalVariance = logs.reduce((acc, log) => {
+            if (!calorieTarget) return acc;
             const variance = Math.abs((log.totalCalories || 0) - calorieTarget) / calorieTarget;
-            return acc + Math.min(variance, 1); // Cap at 100% variance
+            return acc + Math.min(variance, 1);
           }, 0);
 
           weeklyStats.value = {
             daysOnTarget,
-            consistencyScore: Math.max(0, 100 - (totalVariance / logs.length * 100))
+            consistencyScore: logs.length && calorieTarget ? Math.max(0, 100 - (totalVariance / logs.length * 100)) : 0
           };
         }
       } catch (err) {
@@ -558,14 +569,22 @@ export default {
       try {
         const endDate = new Date();
         const startDate = new Date();
-        startDate.setDate(endDate.getDate() - 30); // Last 30 days
+        startDate.setDate(endDate.getDate() - 30);
 
         const response = await HealthProfileService.getNutritionLogs(
           startDate.toISOString().split('T')[0],
           endDate.toISOString().split('T')[0]
         );
+        const logsRaw = response.data || [];
+        const normalized = logsRaw.map(l => ({
+          date: l.date,
+          totalCalories: Number(l.total_calories ?? l.totalCalories ?? 0),
+          totalProtein: Number(l.total_protein ?? l.totalProtein ?? 0),
+          totalCarbs: Number(l.total_carbs ?? l.totalCarbs ?? 0),
+          totalFat: Number(l.total_fat ?? l.totalFat ?? 0)
+        }));
 
-        progressHistory.value = (response.data || []).map(log => ({
+        progressHistory.value = normalized.map(log => ({
           ...log,
           calorieDeficitSurplus: (log.totalCalories || 0) - (nutritionProfile.value?.calorie_target || 0)
         }));
@@ -723,25 +742,25 @@ export default {
     const getCalorieProgressPercentage = () => {
       if (!nutritionProfile.value?.calorie_target) return 0;
       const percentage = (dailyData.value.totalCalories || 0) / nutritionProfile.value.calorie_target * 100;
-      return Math.min(percentage, 100);
+      return Math.min(100, Math.max(0, percentage));
     };
 
     const getProteinProgressPercentage = () => {
       if (!nutritionProfile.value?.protein_target) return 0;
       const percentage = (dailyData.value.totalProtein || 0) / nutritionProfile.value.protein_target * 100;
-      return Math.min(percentage, 100);
+      return Math.min(100, Math.max(0, percentage));
     };
 
     const getCarbsProgressPercentage = () => {
       if (!nutritionProfile.value?.carb_target) return 0;
       const percentage = (dailyData.value.totalCarbs || 0) / nutritionProfile.value.carb_target * 100;
-      return Math.min(percentage, 100);
+      return Math.min(100, Math.max(0, percentage));
     };
 
     const getFatProgressPercentage = () => {
       if (!nutritionProfile.value?.fat_target) return 0;
       const percentage = (dailyData.value.totalFat || 0) / nutritionProfile.value.fat_target * 100;
-      return Math.min(percentage, 100);
+      return Math.min(100, Math.max(0, percentage));
     };
 
     // Status methods
