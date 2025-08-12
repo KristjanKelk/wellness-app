@@ -7,6 +7,7 @@ from django.utils import timezone
 import openai
 from openai import OpenAI
 import tiktoken
+import re
 from .models import Conversation, Message
 from .services import AIAssistantService
 
@@ -61,7 +62,7 @@ class ConversationManager:
             ]),
         }
  
-    def _pre_fetch_targeted_data(self, text: str) -> List[Dict[str, Any]]:
+    def _pre_fetch_targeted_data(self, text: str, context: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
         """Execute deterministic function calls for targeted metric questions to ground answers."""
         requests = self._detect_targeted_metrics_request(text)
         results: List[Dict[str, Any]] = []
@@ -142,6 +143,44 @@ class ConversationManager:
                 args = {"time_frame": "today", "meal_type": mt}
                 res = self.service.execute_function(fn, args)
                 results.append({"function": fn, "args": args, "result": res})
+
+            # NEW: Protein sufficiency assessment for follow-up like "Is that enough protein?"
+            lower_text = (text or "").lower()
+            if (
+                requests.get("protein")
+                and ("enough" in lower_text or "sufficient" in lower_text)
+                and context
+                and context.get("last_meal_protein_g") is not None
+                and self.service.nutrition_profile
+            ):
+                protein_g = float(context.get("last_meal_protein_g") or 0)
+                meal_name = context.get("last_meal_name") or "this meal"
+                meals_per_day = max(int(getattr(self.service.nutrition_profile, "meals_per_day", 3) or 3), 1)
+                daily_target = float(getattr(self.service.nutrition_profile, "protein_target", 100) or 100)
+                per_meal_recommendation = daily_target / meals_per_day
+                percent_of_daily = (protein_g / daily_target) * 100 if daily_target > 0 else 0.0
+                percent_of_meal = (protein_g / per_meal_recommendation) * 100 if per_meal_recommendation > 0 else 0.0
+                is_enough = protein_g >= (0.9 * per_meal_recommendation)  # consider >=90% of per-meal target as "enough"
+
+                assessment = {
+                    "success": True,
+                    "assessment_type": "meal_protein_sufficiency",
+                    "meal_name": meal_name,
+                    "protein_grams": round(protein_g, 1),
+                    "meals_per_day": meals_per_day,
+                    "daily_target_g": round(daily_target, 1),
+                    "recommended_per_meal_g": round(per_meal_recommendation, 1),
+                    "percent_of_daily": round(percent_of_daily, 1),
+                    "percent_of_meal": round(percent_of_meal, 1),
+                    "is_enough": is_enough,
+                }
+
+                # Add assessment as prefetch result; it will be persisted alongside other function results
+                results.append({
+                    "function": "assess_protein_sufficiency",
+                    "args": {"meal_name": meal_name, "protein_grams": protein_g},
+                    "result": assessment,
+                })
         except Exception as e:
             # If any prefetch fails, proceed without blocking the chat
             results.append({"function": "prefetch_error", "args": {}, "result": {"success": False, "error": {"code": "PREFETCH_FAILED", "message": str(e)}}})
@@ -350,7 +389,7 @@ class ConversationManager:
             messages, context_tokens = self._get_conversation_context()
  
             # NEW: Deterministically pre-fetch targeted numeric data to avoid hallucinations
-            prefetch_results = self._pre_fetch_targeted_data(resolved_message)
+            prefetch_results = self._pre_fetch_targeted_data(resolved_message, context_info)
             if prefetch_results:
                 # Add strict instruction for numeric accuracy
                 strict_instruction = (
@@ -480,7 +519,10 @@ class ConversationManager:
             "mentioned_recipes": set(),
             "time_references": set(),
             "user_goals": set(),
-            "recent_topics": []
+            "recent_topics": [],
+            # NEW: carry last meal context for follow-up questions like "Is that enough protein?"
+            "last_meal_name": None,
+            "last_meal_protein_g": None,
         }
         
         # Analyze recent messages
@@ -498,6 +540,19 @@ class ConversationManager:
                 recipe_title = msg.function_response.get("recipe", {}).get("title")
                 if recipe_title:
                     key_info["mentioned_recipes"].add(recipe_title)
+                    key_info["last_meal_name"] = recipe_title
+
+                # Pull nutrition if available
+                nutrition_block = msg.function_response.get("nutrition") if isinstance(msg.function_response, dict) else None
+                if nutrition_block and isinstance(nutrition_block, dict):
+                    protein_val = nutrition_block.get("protein")
+                    if protein_val is None:
+                        protein_val = nutrition_block.get("protein_per_serving")
+                    try:
+                        if protein_val is not None:
+                            key_info["last_meal_protein_g"] = float(protein_val)
+                    except Exception:
+                        pass
             
             # Track time references
             time_refs = ["today", "tomorrow", "yesterday", "this week", "last week", "this month"]
@@ -514,6 +569,20 @@ class ConversationManager:
                     key_info["recent_topics"].append("nutrition")
                 if any(word in content_lower for word in ["exercise", "workout", "activity"]):
                     key_info["recent_topics"].append("fitness")
+
+            # Fallback parsing from assistant’s text for protein grams and meal name
+            if msg.role == "assistant":
+                try:
+                    # Extract protein grams like "Protein: 31.2 g"
+                    match = re.search(r"protein\s*:\s*([0-9]+(?:\.[0-9]+)?)\s*g", msg.content, flags=re.IGNORECASE)
+                    if match:
+                        key_info["last_meal_protein_g"] = float(match.group(1))
+                    # Extract a simple meal name pattern like "the Greek Yogurt Parfait"
+                    name_match = re.search(r"the\s+([A-Za-z][A-Za-z\s\-']{2,40})\s*,?\s*contains", msg.content, flags=re.IGNORECASE)
+                    if name_match:
+                        key_info["last_meal_name"] = name_match.group(1).strip()
+                except Exception:
+                    pass
         
         return key_info
     
