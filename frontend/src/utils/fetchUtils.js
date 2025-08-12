@@ -2,6 +2,19 @@
  * Utility functions for making robust fetch requests with proper error handling
  */
 
+const API_ROOT = (
+  process.env.VUE_APP_API_URL || 'https://wellness-app-tx2c.onrender.com/api'
+)
+  .replace(/\/+$/, '')
+  .replace(/\/api$/, '');
+
+function buildApiUrl(url) {
+  const isAbsolute = /^https?:\/\//i.test(url);
+  if (isAbsolute) return url;
+  if (url.startsWith('/')) return API_ROOT + url;
+  return API_ROOT + '/' + url;
+}
+
 /**
  * Makes a fetch request with robust JSON parsing and error handling
  * @param {string} url - The URL to fetch
@@ -11,7 +24,8 @@
  */
 export async function robustFetch(url, options = {}) {
   try {
-    const response = await fetch(url, options)
+    const finalUrl = buildApiUrl(url);
+    const response = await fetch(finalUrl, options)
     
     // Handle non-OK status codes
     if (!response.ok) {
@@ -71,7 +85,8 @@ export async function robustFetch(url, options = {}) {
  * @returns {Promise<object>} API response data
  */
 export async function makeShoppingListRequest(url, requestData, token) {
-  return robustFetch(url, {
+  const finalUrl = buildApiUrl(url);
+  return robustFetch(finalUrl, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
