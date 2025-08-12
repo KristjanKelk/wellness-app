@@ -137,7 +137,7 @@ class HealthProfileService {
      * @returns {Promise} - Promise resolving to nutrition logs data
      */
     getNutritionLogs(startDate, endDate) {
-        return mealPlanningApi.api.get('nutrition-logs/', {
+        return mealPlanningApi.api.get('nutrition-logs/date_range/', {
             params: {
                 start_date: startDate,
                 end_date: endDate
