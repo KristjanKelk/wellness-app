@@ -1842,125 +1842,86 @@ class NutritionLogViewSet(viewsets.ModelViewSet):
         
         serializer.save(user=user, **log_data)
 
-    @action(detail=False, methods=['get'], url_path='by-date/(?P<date>[^/.]+)')
-    def get_by_date(self, request, date=None):
-        """Get nutrition log for a specific date"""
+    @action(detail=False, methods=['get', 'post', 'put', 'delete'], url_path='by-date/(?P<date>[^/.]+)')
+    def by_date(self, request, date=None):
+        """Get, create/update, or delete a nutrition log for a specific date via the same endpoint."""
         try:
             # Parse date string
             if isinstance(date, str):
                 log_date = datetime.strptime(date, '%Y-%m-%d').date()
             else:
                 log_date = date
-            
-            try:
-                log = self.get_queryset().get(date=log_date)
-                serializer = self.get_serializer(log)
-                return Response(serializer.data)
-            except NutritionLog.DoesNotExist:
-                # Return empty log structure if no data exists for this date
-                return Response({
-                    'date': log_date.strftime('%Y-%m-%d'),
-                    'total_calories': 0,
-                    'total_protein': 0,
-                    'total_carbs': 0,
-                    'total_fat': 0,
-                    'total_fiber': 0,
-                    'calorie_deficit_surplus': 0,
-                    'macro_balance_score': 0,
-                    'meals_data': {},
-                    'ai_analysis': {}
-                }, status=status.HTTP_200_OK)
-                
-        except ValueError:
-            return Response(
-                {'error': 'Invalid date format. Use YYYY-MM-DD'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        except Exception as e:
-            logger.error(f"Error getting nutrition log by date: {str(e)}")
-            return Response(
-                {'error': 'Failed to get nutrition log', 'details': str(e)},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
 
-    @action(detail=False, methods=['post', 'put'], url_path='by-date/(?P<date>[^/.]+)')
-    def save_by_date(self, request, date=None):
-        """Create or update nutrition log for a specific date"""
-        try:
-            # Parse date string
-            if isinstance(date, str):
-                log_date = datetime.strptime(date, '%Y-%m-%d').date()
-            else:
-                log_date = date
-            
-            # Get or create nutrition log for this date
-            log, created = NutritionLog.objects.get_or_create(
-                user=request.user,
-                date=log_date,
-                defaults=request.data
-            )
-            
-            if not created:
-                # Update existing log
-                for field, value in request.data.items():
-                    if hasattr(log, field):
-                        setattr(log, field, value)
-                
-                # Calculate deficit/surplus
+            if request.method == 'GET':
                 try:
-                    nutrition_profile = NutritionProfile.objects.get(user=request.user)
-                    if nutrition_profile.calorie_target:
-                        total_calories = request.data.get('total_calories', log.total_calories)
-                        log.calorie_deficit_surplus = total_calories - nutrition_profile.calorie_target
-                except NutritionProfile.DoesNotExist:
-                    pass
-                
-                log.save()
-            
-            serializer = self.get_serializer(log)
-            return Response(serializer.data, status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
-                
-        except ValueError:
-            return Response(
-                {'error': 'Invalid date format. Use YYYY-MM-DD'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        except Exception as e:
-            logger.error(f"Error saving nutrition log by date: {str(e)}")
-            return Response(
-                {'error': 'Failed to save nutrition log', 'details': str(e)},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
+                    log = self.get_queryset().get(date=log_date)
+                    serializer = self.get_serializer(log)
+                    return Response(serializer.data)
+                except NutritionLog.DoesNotExist:
+                    # Return empty log structure if no data exists for this date
+                    return Response({
+                        'date': log_date.strftime('%Y-%m-%d'),
+                        'total_calories': 0,
+                        'total_protein': 0,
+                        'total_carbs': 0,
+                        'total_fat': 0,
+                        'total_fiber': 0,
+                        'calorie_deficit_surplus': 0,
+                        'macro_balance_score': 0,
+                        'meals_data': {},
+                        'ai_analysis': {}
+                    }, status=status.HTTP_200_OK)
 
-    @action(detail=False, methods=['delete'], url_path='by-date/(?P<date>[^/.]+)')
-    def delete_by_date(self, request, date=None):
-        """Delete nutrition log for a specific date"""
-        try:
-            # Parse date string
-            if isinstance(date, str):
-                log_date = datetime.strptime(date, '%Y-%m-%d').date()
-            else:
-                log_date = date
-            
-            try:
-                log = self.get_queryset().get(date=log_date)
-                log.delete()
-                return Response({'message': 'Nutrition log deleted successfully'}, status=status.HTTP_200_OK)
-            except NutritionLog.DoesNotExist:
-                return Response(
-                    {'error': 'No nutrition log found for this date'},
-                    status=status.HTTP_404_NOT_FOUND
+            if request.method in ['POST', 'PUT']:
+                # Get or create nutrition log for this date
+                log, created = NutritionLog.objects.get_or_create(
+                    user=request.user,
+                    date=log_date,
+                    defaults=request.data
                 )
-                
+
+                if not created:
+                    # Update existing log with provided fields
+                    for field, value in request.data.items():
+                        if hasattr(log, field):
+                            setattr(log, field, value)
+
+                    # Calculate deficit/surplus if possible
+                    try:
+                        nutrition_profile = NutritionProfile.objects.get(user=request.user)
+                        if nutrition_profile.calorie_target:
+                            total_calories = request.data.get('total_calories', log.total_calories)
+                            log.calorie_deficit_surplus = total_calories - nutrition_profile.calorie_target
+                    except NutritionProfile.DoesNotExist:
+                        pass
+
+                    log.save()
+
+                serializer = self.get_serializer(log)
+                return Response(serializer.data, status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
+
+            if request.method == 'DELETE':
+                try:
+                    log = self.get_queryset().get(date=log_date)
+                    log.delete()
+                    return Response({'message': 'Nutrition log deleted successfully'}, status=status.HTTP_200_OK)
+                except NutritionLog.DoesNotExist:
+                    return Response(
+                        {'error': 'No nutrition log found for this date'},
+                        status=status.HTTP_404_NOT_FOUND
+                    )
+
+            return Response({'error': 'Method not allowed'}, status=status.HTTP_405_METHOD_NOT_ALLOWED)
+
         except ValueError:
             return Response(
                 {'error': 'Invalid date format. Use YYYY-MM-DD'},
                 status=status.HTTP_400_BAD_REQUEST
             )
         except Exception as e:
-            logger.error(f"Error deleting nutrition log by date: {str(e)}")
+            logger.error(f"Error handling nutrition log by date: {str(e)}")
             return Response(
-                {'error': 'Failed to delete nutrition log', 'details': str(e)},
+                {'error': 'Failed to process nutrition log request', 'details': str(e)},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
