@@ -140,7 +140,15 @@ class ConversationManager:
                     mt = "dinner"
                 elif "snack" in lower:
                     mt = "snack"
-                args = {"time_frame": "today", "meal_type": mt}
+                # Infer time frame from detected period hints
+                inferred_period = infer_period()
+                if inferred_period == "week":
+                    tf = "week"
+                elif "tomorrow" in lower:
+                    tf = "tomorrow"
+                else:
+                    tf = "today"
+                args = {"time_frame": tf, "meal_type": mt}
                 res = self.service.execute_function(fn, args)
                 results.append({"function": fn, "args": args, "result": res})
 
@@ -573,14 +581,39 @@ class ConversationManager:
             # Fallback parsing from assistant’s text for protein grams and meal name
             if msg.role == "assistant":
                 try:
-                    # Extract protein grams like "Protein: 31.2 g"
-                    match = re.search(r"protein\s*:\s*([0-9]+(?:\.[0-9]+)?)\s*g", msg.content, flags=re.IGNORECASE)
-                    if match:
-                        key_info["last_meal_protein_g"] = float(match.group(1))
-                    # Extract a simple meal name pattern like "the Greek Yogurt Parfait"
-                    name_match = re.search(r"the\s+([A-Za-z][A-Za-z\s\-']{2,40})\s*,?\s*contains", msg.content, flags=re.IGNORECASE)
-                    if name_match:
-                        key_info["last_meal_name"] = name_match.group(1).strip()
+                    # Extract protein grams robustly from variants like:
+                    # "Protein: 31.2 g", "Protein 31.2 g", "31.2 g protein", "31.2g protein"
+                    patterns = [
+                        r"protein\s*:?\s*([0-9]+(?:\.[0-9]+)?)\s*g",
+                        r"([0-9]+(?:\.[0-9]+)?)\s*g\s*protein",
+                        r"([0-9]+(?:\.[0-9]+)?)\s*gprotein",
+                        r"protein\s*:?\s*([0-9]+(?:\.[0-9]+)?)\s*grams",
+                    ]
+                    extracted = None
+                    for rx in patterns:
+                        m = re.search(rx, msg.content, flags=re.IGNORECASE)
+                        if m:
+                            extracted = m.group(1)
+                            break
+                    if extracted is not None:
+                        key_info["last_meal_protein_g"] = float(extracted)
+
+                    # Extract meal name from common phrasings, e.g.:
+                    # "Your breakfast, Greek Yogurt Parfait, contains ..."
+                    # "the Greek Yogurt Parfait contains ..."
+                    # "Greek Yogurt Parfait contains the following nutrients"
+                    name_patterns = [
+                        r"your\s+(?:breakfast|lunch|dinner|snack)\s*,\s*([A-Za-z][A-Za-z\s\-']{2,60})\s*,?\s*contains",
+                        r"the\s+([A-Za-z][A-Za-z\s\-']{2,60})\s*,?\s*contains",
+                        r"\b([A-Z][A-Za-z\s\-']{2,60})\b\s*contains\s+the\s+following\s+nutrients",
+                    ]
+                    for nrx in name_patterns:
+                        nm = re.search(nrx, msg.content, flags=re.IGNORECASE)
+                        if nm:
+                            # Keep original casing by extracting from original content using span
+                            start, end = nm.span(1)
+                            key_info["last_meal_name"] = msg.content[start:end].strip()
+                            break
                 except Exception:
                     pass
         
