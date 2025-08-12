@@ -335,7 +335,7 @@ export default {
     const healthProfile = ref(null);
     const nutritionProfile = ref(null);
     const selectedDate = ref(new Date().toISOString().split('T')[0]);
-    const selectedWeek = ref('current');
+    const selectedWeek = ref('week-0');
     const chartType = ref('deficit');
     const chartPeriod = ref('week');
 

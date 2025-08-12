@@ -163,6 +163,21 @@ Remember to be helpful, accurate, and encouraging while maintaining appropriate 
             context_parts.append(f"- Dietary preferences: {', '.join(self.nutrition_profile.dietary_preferences) if self.nutrition_profile.dietary_preferences else 'None specified'}")
             if self.nutrition_profile.allergies_intolerances:
                 context_parts.append(f"- Allergies/Intolerances: {', '.join(self.nutrition_profile.allergies_intolerances)}")
+            
+            # NEW: Include today's nutrition intake snapshot if available
+            try:
+                today = timezone.now().date()
+                today_log = NutritionLog.objects.filter(user=self.user, date=today).first()
+                if today_log:
+                    context_parts.append("- Today's intake (so far):")
+                    context_parts.append(f"  • Calories: {int(today_log.total_calories or 0)} kcal")
+                    context_parts.append(f"  • Protein: {int(today_log.total_protein or 0)} g")
+                    context_parts.append(f"  • Carbs: {int(today_log.total_carbs or 0)} g")
+                    context_parts.append(f"  • Fat: {int(today_log.total_fat or 0)} g")
+                    if getattr(today_log, 'total_fiber', None) is not None:
+                        context_parts.append(f"  • Fiber: {int(today_log.total_fiber or 0)} g")
+            except Exception:
+                pass
         
         return '\n'.join(context_parts) if context_parts else ""
     
