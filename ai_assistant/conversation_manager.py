@@ -38,6 +38,46 @@ class ConversationManager:
         jailbreak_terms = ["ignore previous", "system prompt", "act as", "developer mode"]
         return any(t in lower for t in pii_terms + other_user_terms + jailbreak_terms)
     
+    # --- NEW: Medical safety detection and guard ---
+    def _detect_medical_concern(self, text: str) -> Dict[str, bool]:
+        """Detect medical-advice seeking or symptom descriptions; flag emergencies.
+        This is conservative by design to prevent the assistant from providing medical advice.
+        """
+        lower = (text or "").lower()
+        if not lower:
+            return {"is_medical": False, "is_emergency": False}
+        
+        # General medical intent terms
+        medical_terms = [
+            "diagnose", "diagnosis", "symptom", "symptoms", "prescribe", "prescription", "medicine",
+            "medication", "drug", "dose", "dosage", "side effect", "treat", "treatment", "cure",
+            "what should i do about", "should i see a doctor", "see a doctor", "medical advice", "urgent care",
+            "er", "emergency", "hospital", "paramedic", "nurse", "physician", "specialist"
+        ]
+        
+        # Red-flag/emergency indicators
+        emergency_triggers = [
+            "chest pain", "pressure in my chest", "tightness in my chest", "pain in my chest",
+            "shortness of breath", "trouble breathing", "difficulty breathing", "severe headache",
+            "fainting", "passed out", "confusion", "weakness on one side", "slurred speech",
+            "uncontrolled bleeding", "bleeding won't stop", "suicidal", "overdose", "allergic reaction",
+            "anaphylaxis", "severe", "worst ever"
+        ]
+        
+        is_medical = any(term in lower for term in medical_terms) or any(term in lower for term in emergency_triggers)
+        
+        # Specific emergency logic: chest pain during/after exercise or chest pain with red flags
+        chest_pain = any(k in lower for k in ["chest pain", "pressure in my chest", "tightness in my chest", "pain in my chest"]) 
+        exertion = any(k in lower for k in ["during exercise", "while exercising", "after exercise", "exertion", "workout"])
+        red_flags = any(k in lower for k in ["shortness of breath", "sweating", "nausea", "vomit", "dizziness", "lightheaded", "faint", "jaw", "arm", "neck", "back"]) 
+        is_emergency = chest_pain and (exertion or red_flags)
+        
+        # Also treat explicit emergency words as emergency
+        if any(k in lower for k in ["call 911", "er", "emergency", "paramedic", "ambulance"]):
+            is_emergency = True
+        
+        return {"is_medical": bool(is_medical), "is_emergency": bool(is_emergency)}
+    
     # --- NEW: Targeted grounding helpers to avoid hallucinations for numeric metrics ---
     def _detect_targeted_metrics_request(self, text: str) -> Dict[str, bool]:
         lower = (text or "").lower()
@@ -388,6 +428,38 @@ class ConversationManager:
                 return {
                     "success": True,
                     "message": refusal,
+                    "conversation_id": str(self.conversation.id),
+                    "message_id": str(assistant_msg.id),
+                    "function_called": None
+                }
+            
+            # NEW: Medical safety guard - refuse medical advice and direct to professional care
+            med = self._detect_medical_concern(user_message)
+            if med.get("is_medical"):
+                if med.get("is_emergency"):
+                    content = (
+                        "I can’t diagnose or provide medical advice. Chest pain during or after exercise can be serious. "
+                        "If you have chest pain now, or it’s new, severe, or comes with shortness of breath, sweating, "
+                        "nausea, dizziness, or pain in your arm, jaw, neck, or back: call emergency services immediately. "
+                        "If the pain has resolved but occurs with exertion, avoid exercise and seek urgent, same‑day "
+                        "medical care. For personalized guidance, please contact a qualified healthcare professional."
+                    )
+                else:
+                    content = (
+                        "I can share general information, but I can’t diagnose or provide medical advice. For symptoms or "
+                        "health concerns, please consult a qualified healthcare professional. If you think it may be urgent, "
+                        "seek emergency care."
+                    )
+                assistant_msg = Message.objects.create(
+                    conversation=self.conversation,
+                    role="assistant",
+                    content=content,
+                    token_count=self._count_tokens(content)
+                )
+                # Return early without calling the LLM
+                return {
+                    "success": True,
+                    "message": content,
                     "conversation_id": str(self.conversation.id),
                     "message_id": str(assistant_msg.id),
                     "function_called": None
