@@ -427,6 +427,32 @@ class ConversationManager:
         ]
         return any(topic in lower for topic in allowed_topics)
     
+    def _is_followup_in_scope(self, text: str, context: Dict[str, Any]) -> bool:
+        """Allow generic follow-ups (e.g., 'tell me more') if recent context is clearly in-scope."""
+        lower = (text or "").lower().strip()
+        if not lower:
+            return False
+        followup_phrases = [
+            "tell me more", "more", "more details", "details", "go on", "continue",
+            "what about", "and then", "elaborate", "expand", "explain more",
+            "what else", "anything else", "ok and", "okay and"
+        ]
+        is_followup = any(lower == p or lower.startswith(p) for p in followup_phrases)
+        if not is_followup:
+            # Vague pronouns or generic clarification
+            vague_markers = [" that ", " this ", " it ", " those ", " them "]
+            generic_questions = ["why", "how so", "how is that", "what does that mean"]
+            is_followup = any(m in f" {lower} " for m in vague_markers) or any(g in lower for g in generic_questions)
+        if not is_followup:
+            return False
+        # Recent in-scope context signals collected by _extract_key_information
+        recent_topics = set(context.get("recent_topics") or [])
+        discussed_metrics = set(context.get("discussed_metrics") or [])
+        mentioned_recipes = set(context.get("mentioned_recipes") or [])
+        time_refs = set(context.get("time_references") or [])
+        has_in_scope_context = bool(recent_topics or discussed_metrics or mentioned_recipes or time_refs)
+        return has_in_scope_context
+
     def send_message(self, user_message: str) -> Dict[str, Any]:
         """Send a message to the AI assistant and get response"""
         try:
@@ -513,22 +539,24 @@ class ConversationManager:
             
             # NEW: Off-topic guard — only answer app-related questions
             if not self._is_in_scope_request(user_message):
-                scope_refusal = (
-                    "I can’t help with that. I only answer app‑related questions about training/workouts, meal plans, and nutrition."
-                )
-                assistant_msg = Message.objects.create(
-                    conversation=self.conversation,
-                    role="assistant",
-                    content=scope_refusal,
-                    token_count=self._count_tokens(scope_refusal)
-                )
-                return {
-                    "success": True,
-                    "message": scope_refusal,
-                    "conversation_id": str(self.conversation.id),
-                    "message_id": str(assistant_msg.id),
-                    "function_called": None
-                }
+                # Allow generic follow-ups if recent context is clearly in-scope (e.g., meal plan/training)
+                if not self._is_followup_in_scope(user_message, context_info):
+                    scope_refusal = (
+                        "I can’t help with that. I only answer app‑related questions about training/workouts, meal plans, and nutrition."
+                    )
+                    assistant_msg = Message.objects.create(
+                        conversation=self.conversation,
+                        role="assistant",
+                        content=scope_refusal,
+                        token_count=self._count_tokens(scope_refusal)
+                    )
+                    return {
+                        "success": True,
+                        "message": scope_refusal,
+                        "conversation_id": str(self.conversation.id),
+                        "message_id": str(assistant_msg.id),
+                        "function_called": None
+                    }
             
             # Get conversation context
             messages, context_tokens = self._get_conversation_context()
