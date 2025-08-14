@@ -40,42 +40,64 @@ class ConversationManager:
     
     # --- NEW: Medical safety detection and guard ---
     def _detect_medical_concern(self, text: str) -> Dict[str, bool]:
-        """Detect medical-advice seeking or symptom descriptions; flag emergencies.
-        This is conservative by design to prevent the assistant from providing medical advice.
+        """Detect medical-advice seeking or red‑flag emergencies.
+        This is conservative, but avoids triggering on normal wellness/nutrition queries.
         """
         lower = (text or "").lower()
         if not lower:
             return {"is_medical": False, "is_emergency": False}
-        
-        # General medical intent terms
-        medical_terms = [
-            "diagnose", "diagnosis", "symptom", "symptoms", "prescribe", "prescription", "medicine",
-            "medication", "drug", "dose", "dosage", "side effect", "treat", "treatment", "cure",
-            "what should i do about", "should i see a doctor", "see a doctor", "medical advice", "urgent care",
-            "er", "emergency", "hospital", "paramedic", "nurse", "physician", "specialist"
+
+        # Explicit medical advice/diagnosis/medication intents (word-boundary where applicable)
+        explicit_medical_phrases = [
+            "medical advice", "diagnose", "diagnosis", "prescribe", "prescription",
+            "medication", "medicine", "side effect", "dose", "dosage",
+            "see a doctor", "should i see a doctor", "urgent care", "physician"
         ]
-        
-        # Red-flag/emergency indicators
+
+        # Red-flag/emergency indicators (narrow, high-signal)
         emergency_triggers = [
             "chest pain", "pressure in my chest", "tightness in my chest", "pain in my chest",
-            "shortness of breath", "trouble breathing", "difficulty breathing", "severe headache",
-            "fainting", "passed out", "confusion", "weakness on one side", "slurred speech",
-            "uncontrolled bleeding", "bleeding won't stop", "suicidal", "overdose", "allergic reaction",
-            "anaphylaxis", "severe", "worst ever"
+            "shortness of breath", "trouble breathing", "difficulty breathing",
+            "fainting", "passed out", "weakness on one side", "slurred speech",
+            "uncontrolled bleeding", "bleeding won't stop", "suicidal", "overdose",
+            "allergic reaction", "anaphylaxis"
         ]
-        
-        is_medical = any(term in lower for term in medical_terms) or any(term in lower for term in emergency_triggers)
-        
-        # Specific emergency logic: chest pain during/after exercise or chest pain with red flags
-        chest_pain = any(k in lower for k in ["chest pain", "pressure in my chest", "tightness in my chest", "pain in my chest"]) 
-        exertion = any(k in lower for k in ["during exercise", "while exercising", "after exercise", "exertion", "workout"])
-        red_flags = any(k in lower for k in ["shortness of breath", "sweating", "nausea", "vomit", "dizziness", "lightheaded", "faint", "jaw", "arm", "neck", "back"]) 
+
+        # Emergency logic: chest pain during/after exercise or with red flags
+        chest_pain = any(k in lower for k in [
+            "chest pain", "pressure in my chest", "tightness in my chest", "pain in my chest"
+        ])
+        exertion = any(k in lower for k in [
+            "during exercise", "while exercising", "after exercise", "exertion", "workout"
+        ])
+        red_flags = any(k in lower for k in [
+            "shortness of breath", "sweating", "nausea", "vomit", "dizziness", "lightheaded",
+            "faint", "jaw", "arm", "neck", "back"
+        ])
         is_emergency = chest_pain and (exertion or red_flags)
-        
-        # Also treat explicit emergency words as emergency
-        if any(k in lower for k in ["call 911", "er", "emergency", "paramedic", "ambulance"]):
+
+        # Explicit emergency words imply emergency even without chest pain pattern
+        if any(k in lower for k in ["call 911", "ambulance", "emergency room", "er (emergency room)", "go to the er", "go to er"]):
             is_emergency = True
-        
+        if any(k in lower for k in ["er", "emergency"]) and ("room" in lower or "go to" in lower or "call" in lower):
+            is_emergency = True
+
+        # Medical intent if explicit medical phrasing or any emergency trigger present
+        explicit_medical = any(term in lower for term in explicit_medical_phrases)
+        emergency_intent = any(term in lower for term in emergency_triggers)
+        is_medical = bool(explicit_medical or emergency_intent or is_emergency)
+
+        # Safe-topic bypass: common wellness/nutrition/fitness topics should not be treated as medical
+        if not is_medical:
+            safe_topics = [
+                "meal plan", "meal", "recipe", "nutrition", "calorie", "calories", "protein",
+                "carb", "carbs", "fat", "fiber", "macro", "diet", "bmi", "body mass index",
+                "weight", "wellness score", "steps", "activity", "exercise", "workout",
+                "running", "walking", "hydration", "sleep"
+            ]
+            if any(k in lower for k in safe_topics):
+                return {"is_medical": False, "is_emergency": False}
+
         return {"is_medical": bool(is_medical), "is_emergency": bool(is_emergency)}
     
     # --- NEW: Targeted grounding helpers to avoid hallucinations for numeric metrics ---

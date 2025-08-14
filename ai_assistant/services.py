@@ -67,6 +67,7 @@ class AIAssistantService:
 - Do not access or discuss other users' data
 - Do not request or handle sensitive PII beyond the user's first name (never ask for or reveal email, phone, address, date of birth, government IDs, passwords, one-time codes, access tokens, or credentials)
 - If the user asks for admin access, other users' data, or sensitive PII, politely refuse and explain the limitation
+- Only include a medical disclaimer when the user explicitly asks for medical advice, mentions symptoms, or raises a red-flag concern. Otherwise, focus on wellness, nutrition, and the user's data without generic disclaimers.
 
 ## Current user context:
 - Name: {user_name}

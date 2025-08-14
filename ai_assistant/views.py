@@ -57,7 +57,7 @@ class ConversationViewSet(viewsets.ModelViewSet):
             logger.error(f"Error in send_message: {str(e)}", exc_info=True)
             
             return Response(
-                {"success": False, "message": f"An error occurred: {str(e)}"},
+                {"success": False, "message": "Sorry, something went wrong while processing your message. Please try again."},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
     
@@ -81,7 +81,7 @@ class ConversationViewSet(viewsets.ModelViewSet):
             
         except Exception as e:
             return Response(
-                {"success": False, "message": str(e)},
+                {"success": False, "message": "Sorry, we couldn't load your conversation history. Please try again."},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
     
@@ -189,7 +189,7 @@ class VisualizationViewSet(viewsets.ViewSet):
             
         except Exception as e:
             return Response(
-                {"success": False, "message": f"Failed to generate chart: {str(e)}"},
+                {"success": False, "message": "Sorry, we couldn't generate that chart right now. Please try again."},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
     
