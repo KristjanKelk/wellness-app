@@ -20,30 +20,18 @@
       <div v-if="isChatOpen" class="chat-window">
         <!-- Chat Header -->
         <div class="chat-header">
-          <div class="header-content">
-            <h3>Wellness Assistant</h3>
-            <p class="header-subtitle">Ask me about your health & nutrition</p>
+          <div class="header-left">
+            <div class="assistant-avatar" aria-hidden="true">
+              <i class="fa-solid fa-heart-pulse"></i>
+            </div>
+            <div class="header-content">
+              <h3>Wellness Assistant</h3>
+              <p class="header-subtitle">Ask me about your health & nutrition</p>
+            </div>
           </div>
           <div class="header-actions">
-            <button @click="toggleResponseMode" class="mode-toggle" :title="`Response mode: ${preferences.response_mode}`">
-              <svg v-if="preferences.response_mode === 'concise'" width="16" height="16" viewBox="0 0 16 16" fill="none">
-                <rect x="2" y="4" width="12" height="2" fill="currentColor"/>
-                <rect x="2" y="8" width="8" height="2" fill="currentColor"/>
-                <rect x="2" y="12" width="10" height="2" fill="currentColor"/>
-              </svg>
-              <svg v-else width="16" height="16" viewBox="0 0 16 16" fill="none">
-                <rect x="2" y="2" width="12" height="2" fill="currentColor"/>
-                <rect x="2" y="5" width="12" height="2" fill="currentColor"/>
-                <rect x="2" y="8" width="12" height="2" fill="currentColor"/>
-                <rect x="2" y="11" width="12" height="2" fill="currentColor"/>
-                <rect x="2" y="14" width="12" height="2" fill="currentColor"/>
-              </svg>
-            </button>
-            <button @click="clearConversation" class="clear-button" title="Clear conversation">
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                <path d="M14 1L1 14M1 1L14 14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-              </svg>
-            </button>
+            <button @click="toggleResponseMode" class="mode-toggle" :title="preferences.response_mode === 'concise' ? 'Response mode: concise (fast summaries)' : 'Response mode: detailed (in-depth answers)'"><i v-if="preferences.response_mode === 'concise'" class="fa-solid fa-bolt"></i><i v-else class="fa-solid fa-file-lines"></i></button>
+            <button @click="clearConversation" class="clear-button" title="Delete conversation"><i class="fa-solid fa-trash-can"></i></button>
             <button @click="closeChat" class="close-button" aria-label="Close chat">
               <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
                 <path d="M6 14L14 6M6 6L14 14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
@@ -458,6 +446,24 @@ export default {
   display: flex;
   justify-content: space-between;
   align-items: center;
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.assistant-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 18px;
 }
 
 .header-content h3 {
