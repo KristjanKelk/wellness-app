@@ -322,7 +322,8 @@ export default {
             if (chartDiv) {
               Plotly.newPlot(chartDiv, chartMessage.chart.config.data, chartMessage.chart.config.layout, {
                 responsive: true,
-                displayModeBar: false
+                displayModeBar: false,
+                displaylogo: false
               });
             }
             this.scrollToBottom();
@@ -636,11 +637,12 @@ export default {
   padding: 16px;
   margin-bottom: 16px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  border: 1px solid #e5e7eb;
 }
 
 .chart {
   width: 100%;
-  height: 300px;
+  height: 340px;
 }
 
 .chart-summary {
