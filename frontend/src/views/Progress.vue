@@ -700,15 +700,19 @@ export default {
         options: {
           responsive: true,
           maintainAspectRatio: false,
+          interaction: { mode: 'index', intersect: false },
+          animation: { duration: 600, easing: 'easeOutQuart' },
           scales: {
             y: {
               beginAtZero: chartType.value === 'intake',
+              grid: { color: 'rgba(0,0,0,0.06)' },
               title: {
                 display: true,
                 text: chartType.value === 'deficit' ? 'Calories (Deficit/Surplus)' : 'Calories'
               }
             },
             x: {
+              grid: { display: false },
               title: {
                 display: true,
                 text: 'Date'
@@ -722,7 +726,15 @@ export default {
             },
             tooltip: {
               mode: 'index',
-              intersect: false
+              intersect: false,
+              backgroundColor: 'rgba(31, 41, 55, 0.9)',
+              callbacks: {
+                label: function(context) {
+                  const label = context.dataset.label || '';
+                  const value = context.parsed.y ?? 0;
+                  return `${label}: ${Math.round(value)}`;
+                }
+              }
             }
           }
         }

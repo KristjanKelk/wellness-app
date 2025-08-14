@@ -110,7 +110,9 @@ class VisualizationService:
             xaxis_title="Date",
             yaxis_title="Weight (kg)",
             template="plotly_white",
-            height=400
+            height=420,
+            margin=dict(l=40, r=20, t=60, b=40),
+            hovermode="x unified",
         )
         
         return {
@@ -171,8 +173,10 @@ class VisualizationService:
             xaxis_title="Date",
             yaxis_title="Protein (g)",
             template="plotly_white",
-            height=400,
-            showlegend=True
+            height=420,
+            showlegend=True,
+            margin=dict(l=40, r=20, t=60, b=40),
+            hovermode="x unified",
         )
         
         avg_protein = sum(protein_values) / len(protein_values) if protein_values else 0
@@ -222,8 +226,9 @@ class VisualizationService:
         fig.update_layout(
             title="Macronutrient Breakdown - Today",
             template="plotly_white",
-            height=400,
-            showlegend=True
+            height=420,
+            showlegend=True,
+            margin=dict(l=40, r=20, t=60, b=40),
         )
         
         total_grams = protein + carbs + fat
@@ -276,7 +281,8 @@ class VisualizationService:
             xaxis_title="Activity Type",
             yaxis_title="Total Duration (minutes)",
             template="plotly_white",
-            height=400
+            height=420,
+            margin=dict(l=40, r=20, t=60, b=40),
         )
         
         total_duration = sum(durations)
@@ -345,9 +351,11 @@ class VisualizationService:
             xaxis_title="Date",
             yaxis_title="Score",
             template="plotly_white",
-            height=400,
+            height=420,
             showlegend=True,
-            yaxis=dict(range=[0, 100])
+            yaxis=dict(range=[0, 100]),
+            margin=dict(l=40, r=20, t=60, b=40),
+            hovermode="x unified",
         )
         
         latest_score = scores.last()
@@ -410,8 +418,10 @@ class VisualizationService:
             xaxis_title="Date",
             yaxis_title="Calories",
             template="plotly_white",
-            height=400,
-            showlegend=True
+            height=420,
+            showlegend=True,
+            margin=dict(l=40, r=20, t=60, b=40),
+            hovermode="x unified",
         )
         
         avg_calories = sum(calorie_values) / len(calorie_values) if calorie_values else 0

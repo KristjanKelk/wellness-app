@@ -411,16 +411,22 @@ class ConversationManager:
     
     # --- NEW: Scope detection to keep answers app-related only ---
     def _is_in_scope_request(self, text: str) -> bool:
-        """Return True if the request is about the app's supported domains: training/workouts, meal plans, nutrition, health metrics/progress, recipes, or app usage."""
+        """Return True if the request is about the app's supported domains: training/workouts, meal plans, nutrition, health metrics/progress, recipes, visualizations, or app usage."""
         lower = (text or "").lower()
         if not lower:
             return True
         allowed_topics = [
             # Core app domains
-            "meal plan", "meal", "meals", "recipe", "recipes", "nutrition", "macro", "macros", "calorie", "calories",
-            "protein", "carb", "carbs", "fat", "fiber", "diet", "bmi", "body mass index", "weight", "wellness score",
-            "steps", "activity", "exercise", "workout", "training", "run", "running", "walk", "walking", "hydration", "sleep",
-            "progress", "trend", "goal", "targets",
+            "meal plan", "meal", "meals", "recipe", "recipes", "nutrition", "macro", "macros",
+            "calorie", "calories", "protein", "carb", "carbs", "fat", "fiber", "diet", "bmi",
+            "body mass index", "weight", "wellness score", "steps", "activity", "exercise", "workout",
+            "training", "run", "running", "walk", "walking", "hydration", "sleep", "progress", "trend",
+            "goal", "targets",
+            # Meal intent phrasing
+            "eat", "what can i eat", "what i can eat", "breakfast", "lunch", "dinner", "snack", "today",
+            "morning", "evening",
+            # Visualizations / charts
+            "chart", "charts", "visualization", "visualisation", "graph", "plot", "show me a chart",
             # App feature/usage
             "profile", "health profile", "nutrition profile", "update profile", "set goal", "change goal",
             "meal plan for", "what's for", "whats for", "today's meals", "this week"
@@ -450,7 +456,9 @@ class ConversationManager:
         discussed_metrics = set(context.get("discussed_metrics") or [])
         mentioned_recipes = set(context.get("mentioned_recipes") or [])
         time_refs = set(context.get("time_references") or [])
-        has_in_scope_context = bool(recent_topics or discussed_metrics or mentioned_recipes or time_refs)
+        has_in_scope_context = bool(context.get("has_in_scope_context")) or bool(
+            recent_topics or discussed_metrics or mentioned_recipes or time_refs
+        )
         return has_in_scope_context
 
     def send_message(self, user_message: str) -> Dict[str, Any]:
@@ -696,9 +704,12 @@ class ConversationManager:
             # NEW: carry last meal context for follow-up questions like "Is that enough protein?"
             "last_meal_name": None,
             "last_meal_protein_g": None,
+            # NEW: overall in-scope context signal for permissive follow-ups like "tell me more"
+            "has_in_scope_context": False,
         }
         
         # Analyze recent messages
+        in_scope_signals = 0
         for msg in messages[-10:]:  # Look at last 10 messages
             content_lower = msg.content.lower()
             
@@ -743,45 +754,19 @@ class ConversationManager:
                 if any(word in content_lower for word in ["exercise", "workout", "activity"]):
                     key_info["recent_topics"].append("fitness")
 
-            # Fallback parsing from assistant’s text for protein grams and meal name
-            if msg.role == "assistant":
-                try:
-                    # Extract protein grams robustly from variants like:
-                    # "Protein: 31.2 g", "Protein 31.2 g", "31.2 g protein", "31.2g protein"
-                    patterns = [
-                        r"protein\s*:?\s*([0-9]+(?:\.[0-9]+)?)\s*g",
-                        r"([0-9]+(?:\.[0-9]+)?)\s*g\s*protein",
-                        r"([0-9]+(?:\.[0-9]+)?)\s*gprotein",
-                        r"protein\s*:?\s*([0-9]+(?:\.[0-9]+)?)\s*grams",
-                    ]
-                    extracted = None
-                    for rx in patterns:
-                        m = re.search(rx, msg.content, flags=re.IGNORECASE)
-                        if m:
-                            extracted = m.group(1)
-                            break
-                    if extracted is not None:
-                        key_info["last_meal_protein_g"] = float(extracted)
-
-                    # Extract meal name from common phrasings, e.g.:
-                    # "Your breakfast, Greek Yogurt Parfait, contains ..."
-                    # "the Greek Yogurt Parfait contains ..."
-                    # "Greek Yogurt Parfait contains the following nutrients"
-                    name_patterns = [
-                        r"your\s+(?:breakfast|lunch|dinner|snack)\s*,\s*([A-Za-z][A-Za-z\s\-']{2,60})\s*,?\s*contains",
-                        r"the\s+([A-Za-z][A-Za-z\s\-']{2,60})\s*,?\s*contains",
-                        r"\b([A-Z][A-Za-z\s\-']{2,60})\b\s*contains\s+the\s+following\s+nutrients",
-                    ]
-                    for nrx in name_patterns:
-                        nm = re.search(nrx, msg.content, flags=re.IGNORECASE)
-                        if nm:
-                            # Keep original casing by extracting from original content using span
-                            start, end = nm.span(1)
-                            key_info["last_meal_name"] = msg.content[start:end].strip()
-                            break
-                except Exception:
-                    pass
+            # NEW: accumulate general in-scope signals from any recent message
+            allowed_topics_probe = [
+                "meal plan", "meal", "meals", "recipe", "recipes", "nutrition", "macro", "macros",
+                "calorie", "calories", "protein", "carb", "carbs", "fat", "fiber", "diet", "bmi",
+                "body mass index", "weight", "wellness score", "steps", "activity", "exercise", "workout",
+                "training", "run", "running", "walk", "walking", "hydration", "sleep", "progress", "trend",
+                "goal", "targets", "eat", "breakfast", "lunch", "dinner", "snack", "today", "morning",
+                "evening", "chart", "charts", "visualization", "visualisation", "graph", "plot"
+            ]
+            if any(topic in content_lower for topic in allowed_topics_probe):
+                in_scope_signals += 1
         
+        key_info["has_in_scope_context"] = in_scope_signals > 0
         return key_info
     
     def _resolve_references(self, user_message: str, context: Dict[str, Any]) -> str:
