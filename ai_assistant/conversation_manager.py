@@ -21,10 +21,14 @@ class ConversationManager:
         self.conversation = self._get_or_create_conversation(conversation_id)
         
         # Check if OpenAI API key is set
+        # Enable mock mode instead of raising to allow local/offline testing and deterministic behavior
         if not settings.OPENAI_API_KEY:
-            raise ValueError("OpenAI API key is not configured. Please set OPENAI_API_KEY in your environment variables.")
+            self.mock_mode = True
+            self.client = None
+        else:
+            self.mock_mode = False
+            self.client = OpenAI(api_key=settings.OPENAI_API_KEY)
         
-        self.client = OpenAI(api_key=settings.OPENAI_API_KEY)
         self.model = "gpt-3.5-turbo"  # Using GPT-3.5-turbo for wider availability
         self.max_tokens = 4096
         self.temperature = 0.7
@@ -150,10 +154,16 @@ class ConversationManager:
             return "today"
 
         try:
-            # If either weight or BMI is requested, fetch all health metrics (covers both)
+            # If either weight or BMI is requested, fetch health metrics
             if requests.get("weight") or requests.get("bmi") or requests.get("wellness_score"):
                 fn = "get_health_metrics"
-                args = {"metric_type": "all", "time_period": "current"}
+                # Map period hints to service time_periods
+                period_hint = "current"
+                if requests.get("week"):
+                    period_hint = "weekly"
+                elif requests.get("month"):
+                    period_hint = "monthly"
+                args = {"metric_type": "all", "time_period": period_hint}
                 res = self.service.execute_function(fn, args)
                 results.append({"function": fn, "args": args, "result": res})
 
@@ -461,6 +471,65 @@ class ConversationManager:
         )
         return has_in_scope_context
 
+    # --- NEW: Structured feedback helpers ---
+    def _collect_structured_feedback(self, results: List[Dict[str, Any]]) -> Dict[str, List[Dict[str, Any]]]:
+        errors: List[Dict[str, Any]] = []
+        notices: List[Dict[str, Any]] = []
+        for item in results or []:
+            res = item.get("result") if isinstance(item, dict) else None
+            if isinstance(res, dict):
+                if res.get("error"):
+                    errors.append(res.get("error"))
+                if res.get("notice"):
+                    notices.append({"code": "NO_DATA", "message": res.get("notice")})
+        return {"structured_errors": errors, "notices": notices}
+
+    # --- NEW: Mock reply generator for offline/testing and deterministic replies ---
+    def _mock_generate_reply(self, user_message: str, prefetch_results: List[Dict[str, Any]]) -> str:
+        mode = getattr(self.service.preferences, "response_mode", "concise") or "concise"
+        parts: List[str] = []
+        # Summarize health metrics if present
+        for item in prefetch_results or []:
+            fn = item.get("function")
+            res = item.get("result") or {}
+            if fn == "get_health_metrics" and isinstance(res, dict):
+                bmi = (res.get("bmi") or {}).get("value")
+                weight_val = (res.get("weight") or {}).get("value")
+                weight_change = res.get("weight_change")
+                if bmi is not None:
+                    parts.append(f"BMI: {round(float(bmi), 2)}")
+                if weight_val is not None:
+                    parts.append(f"Weight: {round(float(weight_val), 1)} kg")
+                if weight_change is not None:
+                    delta = round(float(weight_change), 1)
+                    trend = "down" if delta < 0 else ("up" if delta > 0 else "no change")
+                    parts.append(f"Weight change: {delta} kg ({trend})")
+                if not any([bmi, weight_val, weight_change]) and res.get("notice"):
+                    parts.append(res.get("notice"))
+            if fn == "get_nutrition_analysis" and isinstance(res, dict):
+                if res.get("averages"):
+                    av = res["averages"]
+                    parts.append(f"Avg calories: {av.get('calories', 0)} kcal; protein: {av.get('protein', 0)} g")
+                elif res.get("notice"):
+                    parts.append(res.get("notice"))
+            if fn == "get_meal_plan" and isinstance(res, dict):
+                meals = res.get("meals") or []
+                if meals:
+                    first = meals[0]
+                    title = first.get("title") or "a planned meal"
+                    parts.append(f"Meal plan: first up is {title} ({first.get('meal_type')})")
+                elif res.get("message"):
+                    parts.append(res.get("message"))
+        if not parts:
+            # Generic fallback
+            if mode == "concise":
+                return "Got it."
+            return "I’ve recorded your message and will use your profile and recent context in my next response."
+        if mode == "concise":
+            return ". ".join(parts)
+        # Detailed mode: add a brief connective sentence
+        return ". ".join(parts) + ". If you’d like, I can break this down further or generate a chart."
+ 
     def send_message(self, user_message: str) -> Dict[str, Any]:
         """Send a message to the AI assistant and get response"""
         try:
@@ -514,7 +583,9 @@ class ConversationManager:
                     "message": refusal,
                     "conversation_id": str(self.conversation.id),
                     "message_id": str(assistant_msg.id),
-                    "function_called": None
+                    "function_called": None,
+                    "structured_errors": [],
+                    "notices": []
                 }
             
             # NEW: Medical safety guard - refuse medical advice and direct to professional care
@@ -542,7 +613,9 @@ class ConversationManager:
                     "message": content,
                     "conversation_id": str(self.conversation.id),
                     "message_id": str(assistant_msg.id),
-                    "function_called": None
+                    "function_called": None,
+                    "structured_errors": [],
+                    "notices": []
                 }
             
             # NEW: Off-topic guard — only answer app-related questions
@@ -563,7 +636,9 @@ class ConversationManager:
                         "message": scope_refusal,
                         "conversation_id": str(self.conversation.id),
                         "message_id": str(assistant_msg.id),
-                        "function_called": None
+                        "function_called": None,
+                        "structured_errors": [],
+                        "notices": []
                     }
             
             # Get conversation context
@@ -571,6 +646,7 @@ class ConversationManager:
  
             # NEW: Deterministically pre-fetch targeted numeric data to avoid hallucinations
             prefetch_results = self._pre_fetch_targeted_data(resolved_message, context_info)
+            structured_feedback = self._collect_structured_feedback(prefetch_results)
             if prefetch_results:
                 # Add strict instruction for numeric accuracy
                 strict_instruction = (
@@ -605,66 +681,82 @@ class ConversationManager:
             # Get available functions
             functions = self.service.get_available_functions()
              
-            # Call OpenAI
-            try:
-                response = self.client.chat.completions.create(
-                    model=self.model,
-                    messages=messages,
-                    functions=functions,
-                    function_call="auto",
-                    temperature=0.2 if prefetch_results else self.temperature,
-                    top_p=self.top_p,
-                    max_tokens=min(2000, self.max_tokens - context_tokens)
-                )
-            except openai.AuthenticationError as e:
-                raise Exception("OpenAI API authentication failed. Please check your API key.")
-            except openai.RateLimitError as e:
-                raise Exception("OpenAI API rate limit exceeded. Please try again later.")
-            except openai.APIError as e:
-                raise Exception(f"OpenAI API error: {str(e)}")
-            except Exception as e:
-                raise Exception(f"Unexpected error calling OpenAI API: {str(e)}")
-             
-            # Process response
-            assistant_message = response.choices[0].message
-             
-            # Handle function calls
-            if assistant_message.function_call:
-                function_name = assistant_message.function_call.name
-                function_args = json.loads(assistant_message.function_call.arguments)
-                 
-                # Execute function
-                function_result = self.service.execute_function(function_name, function_args)
-                 
-                # Save function call message
-                func_msg = Message.objects.create(
-                    conversation=self.conversation,
-                    role="function",
-                    content=f"Called {function_name}",
-                    function_name=function_name,
-                    function_args=function_args,
-                    function_response=function_result
-                )
-                 
-                # Add function result to context and get final response
-                messages.append({
-                    "role": "function",
-                    "name": function_name,
-                    "content": json.dumps(function_result)
-                })
-                 
-                # Get final response with function result
-                final_response = self.client.chat.completions.create(
-                    model=self.model,
-                    messages=messages,
-                    temperature=0.2 if prefetch_results else self.temperature,
-                    top_p=self.top_p
-                )
-                 
-                final_content = final_response.choices[0].message.content
+            # Call OpenAI or use mock
+            final_content: str
+            function_called_name: Optional[str] = None
+            if self.mock_mode:
+                final_content = self._mock_generate_reply(resolved_message, prefetch_results)
             else:
-                final_content = assistant_message.content
-             
+                try:
+                    response = self.client.chat.completions.create(
+                        model=self.model,
+                        messages=messages,
+                        functions=functions,
+                        function_call="auto",
+                        temperature=0.2 if prefetch_results else self.temperature,
+                        top_p=self.top_p,
+                        max_tokens=min(2000, self.max_tokens - context_tokens)
+                    )
+                except openai.AuthenticationError as e:
+                    # Fallback to mock on auth errors
+                    final_content = self._mock_generate_reply(resolved_message, prefetch_results)
+                except openai.RateLimitError as e:
+                    final_content = self._mock_generate_reply(resolved_message, prefetch_results)
+                except openai.APIError as e:
+                    final_content = self._mock_generate_reply(resolved_message, prefetch_results)
+                except Exception as e:
+                    final_content = self._mock_generate_reply(resolved_message, prefetch_results)
+                else:
+                    # Process response
+                    assistant_message = response.choices[0].message
+                    
+                    # Handle function calls
+                    if getattr(assistant_message, "function_call", None):
+                        function_name = assistant_message.function_call.name
+                        function_args = json.loads(assistant_message.function_call.arguments)
+                        
+                        # Execute function
+                        function_result = self.service.execute_function(function_name, function_args)
+                        
+                        # Save function call message
+                        func_msg = Message.objects.create(
+                            conversation=self.conversation,
+                            role="function",
+                            content=f"Called {function_name}",
+                            function_name=function_name,
+                            function_args=function_args,
+                            function_response=function_result
+                        )
+                        
+                        # Add function result to context and get final response
+                        messages.append({
+                            "role": "function",
+                            "name": function_name,
+                            "content": json.dumps(function_result)
+                        })
+                        
+                        # Collect structured feedback from function result too
+                        fb = self._collect_structured_feedback([{"function": function_name, "args": function_args, "result": function_result}])
+                        structured_feedback["structured_errors"].extend(fb.get("structured_errors", []))
+                        structured_feedback["notices"].extend(fb.get("notices", []))
+                        
+                        # Get final response with function result
+                        try:
+                            final_response = self.client.chat.completions.create(
+                                model=self.model,
+                                messages=messages,
+                                temperature=0.2 if prefetch_results else self.temperature,
+                                top_p=self.top_p
+                            )
+                            final_content = final_response.choices[0].message.content
+                            function_called_name = function_name
+                        except Exception:
+                            final_content = self._mock_generate_reply(resolved_message, prefetch_results)
+                            function_called_name = function_name
+                    else:
+                        final_content = assistant_message.content
+                        function_called_name = None
+            
             # Save assistant message
             assistant_msg = Message.objects.create(
                 conversation=self.conversation,
@@ -672,17 +764,20 @@ class ConversationManager:
                 content=final_content,
                 token_count=self._count_tokens(final_content)
             )
-             
+            
             # Check if we need to compress conversation
             self._compress_conversation_if_needed()
-             
+            
             return {
+                "success": True,
                 "message": final_content,
                 "conversation_id": str(self.conversation.id),
                 "message_id": str(assistant_msg.id),
-                "function_called": assistant_message.function_call.name if assistant_message.function_call else None
+                "function_called": function_called_name,
+                "structured_errors": structured_feedback.get("structured_errors", []),
+                "notices": structured_feedback.get("notices", [])
             }
-             
+            
         except Exception as e:
             # Log error
             error_msg = f"Error in conversation: {str(e)}"

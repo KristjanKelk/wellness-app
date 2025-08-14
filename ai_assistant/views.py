@@ -76,7 +76,7 @@ class ConversationViewSet(viewsets.ModelViewSet):
             serializer = MessageSerializer(messages, many=True)
             return Response({
                 "conversation_id": str(conversation.id),
-                "messages": reversed(serializer.data)
+                "messages": list(reversed(serializer.data))
             })
             
         except Exception as e:
