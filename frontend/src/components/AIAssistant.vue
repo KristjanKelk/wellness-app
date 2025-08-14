@@ -62,6 +62,10 @@
           <div v-for="message in messages" :key="message.id" :class="['message', message.role]">
             <div class="message-content">
               <div v-html="formatMessage(message.content)" class="message-text"></div>
+              <div v-if="message.chart" class="chart-container">
+                <div :id="'chart-' + message.chart.id" class="chart"></div>
+                <p class="chart-summary">{{ message.chart.summary }}</p>
+              </div>
               <div class="message-time">{{ formatTime(message.created_at) }}</div>
             </div>
           </div>
@@ -79,11 +83,7 @@
             </button>
           </div>
 
-          <!-- Chart Display -->
-          <div v-if="currentChart" class="chart-container">
-            <div :id="'chart-' + currentChart.id" class="chart"></div>
-            <p class="chart-summary">{{ currentChart.summary }}</p>
-          </div>
+
 
           <!-- Loading Indicator -->
           <div v-if="isLoading" class="loading-message">
@@ -140,7 +140,6 @@ export default {
       },
       exampleCategories: [],
       visualizationSuggestions: [],
-      currentChart: null,
       chartIdCounter: 0
     };
   },
@@ -180,7 +179,6 @@ export default {
         }
         this.messages = [];
         this.visualizationSuggestions = [];
-        this.currentChart = null;
       } catch (error) {
         console.error('Error clearing conversation:', error);
       }
@@ -306,16 +304,23 @@ export default {
         
         if (chartData.chart_config) {
           this.chartIdCounter++;
-          this.currentChart = {
-            id: this.chartIdCounter,
-            config: chartData.chart_config,
-            summary: chartData.summary
+          const chartMessage = {
+            id: Date.now() + this.chartIdCounter,
+            role: 'assistant',
+            content: chartData.description || 'Here’s your visualization.',
+            created_at: new Date().toISOString(),
+            chart: {
+              id: this.chartIdCounter,
+              config: chartData.chart_config,
+              summary: chartData.summary
+            }
           };
+          this.messages.push(chartMessage);
           
           this.$nextTick(() => {
-            const chartDiv = document.getElementById(`chart-${this.currentChart.id}`);
+            const chartDiv = document.getElementById(`chart-${chartMessage.chart.id}`);
             if (chartDiv) {
-              Plotly.newPlot(chartDiv, chartData.chart_config.data, chartData.chart_config.layout, {
+              Plotly.newPlot(chartDiv, chartMessage.chart.config.data, chartMessage.chart.config.layout, {
                 responsive: true,
                 displayModeBar: false
               });
