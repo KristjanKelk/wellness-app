@@ -47,6 +47,16 @@ class ConversationManager:
         if not lower:
             return {"is_medical": False, "is_emergency": False}
 
+        # Tech/programming context bypass to avoid false medical triggers for API/programming questions
+        tech_terms = [
+            " api", "http", "https", "endpoint", "json", "xml", "graphql", "sdk", "library", "framework",
+            "server", "client", "database", "sql", "nosql", "docker", "kubernetes", "k8s", "aws", "azure", "gcp",
+            "code", "coding", "program", "programming", "algorithm", "function(", "class ", "typescript", "javascript", "python",
+            "java", "kotlin", "swift", "c#", "golang", "rust", "react", "vue", "angular", "node", "express"
+        ]
+        if any(term in lower for term in tech_terms):
+            return {"is_medical": False, "is_emergency": False}
+
         # Explicit medical advice/diagnosis/medication intents (word-boundary where applicable)
         explicit_medical_phrases = [
             "medical advice", "diagnose", "diagnosis", "prescribe", "prescription",
@@ -399,6 +409,24 @@ class ConversationManager:
         
         return " | ".join(summary_parts)
     
+    # --- NEW: Scope detection to keep answers app-related only ---
+    def _is_in_scope_request(self, text: str) -> bool:
+        """Return True if the request is about the app's supported domains: training/workouts, meal plans, nutrition, health metrics/progress, recipes, or app usage."""
+        lower = (text or "").lower()
+        if not lower:
+            return True
+        allowed_topics = [
+            # Core app domains
+            "meal plan", "meal", "meals", "recipe", "recipes", "nutrition", "macro", "macros", "calorie", "calories",
+            "protein", "carb", "carbs", "fat", "fiber", "diet", "bmi", "body mass index", "weight", "wellness score",
+            "steps", "activity", "exercise", "workout", "training", "run", "running", "walk", "walking", "hydration", "sleep",
+            "progress", "trend", "goal", "targets",
+            # App feature/usage
+            "profile", "health profile", "nutrition profile", "update profile", "set goal", "change goal",
+            "meal plan for", "what's for", "whats for", "today's meals", "this week"
+        ]
+        return any(topic in lower for topic in allowed_topics)
+    
     def send_message(self, user_message: str) -> Dict[str, Any]:
         """Send a message to the AI assistant and get response"""
         try:
@@ -460,17 +488,13 @@ class ConversationManager:
             if med.get("is_medical"):
                 if med.get("is_emergency"):
                     content = (
-                        "I can’t diagnose or provide medical advice. Chest pain during or after exercise can be serious. "
-                        "If you have chest pain now, or it’s new, severe, or comes with shortness of breath, sweating, "
-                        "nausea, dizziness, or pain in your arm, jaw, neck, or back: call emergency services immediately. "
-                        "If the pain has resolved but occurs with exertion, avoid exercise and seek urgent, same‑day "
-                        "medical care. For personalized guidance, please contact a qualified healthcare professional."
+                        "I can’t diagnose or provide medical advice. If you’re experiencing concerning symptoms or think this may be urgent, "
+                        "call emergency services and seek urgent care from a healthcare professional."
                     )
                 else:
                     content = (
-                        "I can share general information, but I can’t diagnose or provide medical advice. For symptoms or "
-                        "health concerns, please consult a qualified healthcare professional. If you think it may be urgent, "
-                        "seek emergency care."
+                        "I can’t diagnose or provide medical advice. For symptoms or health concerns, please contact a qualified healthcare professional. "
+                        "I can help with training/workouts or meal‑plan questions."
                     )
                 assistant_msg = Message.objects.create(
                     conversation=self.conversation,
@@ -482,6 +506,25 @@ class ConversationManager:
                 return {
                     "success": True,
                     "message": content,
+                    "conversation_id": str(self.conversation.id),
+                    "message_id": str(assistant_msg.id),
+                    "function_called": None
+                }
+            
+            # NEW: Off-topic guard — only answer app-related questions
+            if not self._is_in_scope_request(user_message):
+                scope_refusal = (
+                    "I can’t help with that. I only answer app‑related questions about training/workouts, meal plans, and nutrition."
+                )
+                assistant_msg = Message.objects.create(
+                    conversation=self.conversation,
+                    role="assistant",
+                    content=scope_refusal,
+                    token_count=self._count_tokens(scope_refusal)
+                )
+                return {
+                    "success": True,
+                    "message": scope_refusal,
                     "conversation_id": str(self.conversation.id),
                     "message_id": str(assistant_msg.id),
                     "function_called": None
