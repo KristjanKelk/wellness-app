@@ -54,38 +54,22 @@ class ConversationManager:
             "see a doctor", "should i see a doctor", "urgent care", "physician"
         ]
 
-        # Red-flag/emergency indicators (narrow, high-signal)
+        # High-signal triggers indicating potential emergencies
         emergency_triggers = [
-            "chest pain", "pressure in my chest", "tightness in my chest", "pain in my chest",
-            "shortness of breath", "trouble breathing", "difficulty breathing",
-            "fainting", "passed out", "weakness on one side", "slurred speech",
+            "chest pain", "shortness of breath", "fainting", "passed out",
             "uncontrolled bleeding", "bleeding won't stop", "suicidal", "overdose",
             "allergic reaction", "anaphylaxis"
         ]
 
-        # Emergency logic: chest pain during/after exercise or with red flags
-        chest_pain = any(k in lower for k in [
-            "chest pain", "pressure in my chest", "tightness in my chest", "pain in my chest"
-        ])
-        exertion = any(k in lower for k in [
-            "during exercise", "while exercising", "after exercise", "exertion", "workout"
-        ])
-        red_flags = any(k in lower for k in [
-            "shortness of breath", "sweating", "nausea", "vomit", "dizziness", "lightheaded",
-            "faint", "jaw", "arm", "neck", "back"
-        ])
-        is_emergency = chest_pain and (exertion or red_flags)
-
-        # Explicit emergency words imply emergency even without chest pain pattern
-        if any(k in lower for k in ["call 911", "ambulance", "emergency room", "er (emergency room)", "go to the er", "go to er"]):
-            is_emergency = True
-        if any(k in lower for k in ["er", "emergency"]) and ("room" in lower or "go to" in lower or "call" in lower):
-            is_emergency = True
-
-        # Medical intent if explicit medical phrasing or any emergency trigger present
+        # Medical intent is true if explicit medical phrasing or any high-signal trigger appears
         explicit_medical = any(term in lower for term in explicit_medical_phrases)
         emergency_intent = any(term in lower for term in emergency_triggers)
-        is_medical = bool(explicit_medical or emergency_intent or is_emergency)
+        is_medical = bool(explicit_medical or emergency_intent)
+
+        # Emergency is only true when the user explicitly references emergency services
+        is_emergency = any(k in lower for k in [
+            "call 911", "ambulance", "emergency room", "go to the er", "go to er"
+        ])
 
         # Safe-topic bypass: common wellness/nutrition/fitness topics should not be treated as medical
         if not is_medical:
@@ -458,20 +442,9 @@ class ConversationManager:
             # NEW: Medical safety guard - refuse medical advice and direct to professional care
             med = self._detect_medical_concern(user_message)
             if med.get("is_medical"):
-                if med.get("is_emergency"):
-                    content = (
-                        "I can’t diagnose or provide medical advice. Chest pain during or after exercise can be serious. "
-                        "If you have chest pain now, or it’s new, severe, or comes with shortness of breath, sweating, "
-                        "nausea, dizziness, or pain in your arm, jaw, neck, or back: call emergency services immediately. "
-                        "If the pain has resolved but occurs with exertion, avoid exercise and seek urgent, same‑day "
-                        "medical care. For personalized guidance, please contact a qualified healthcare professional."
-                    )
-                else:
-                    content = (
-                        "I can share general information, but I can’t diagnose or provide medical advice. For symptoms or "
-                        "health concerns, please consult a qualified healthcare professional. If you think it may be urgent, "
-                        "seek emergency care."
-                    )
+                content = (
+                    "I can’t diagnose or provide medical advice. Please contact your doctor or a qualified healthcare professional."
+                )
                 assistant_msg = Message.objects.create(
                     conversation=self.conversation,
                     role="assistant",

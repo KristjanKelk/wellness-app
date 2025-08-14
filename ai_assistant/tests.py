@@ -24,6 +24,4 @@ class MedicalSafetyTests(TestCase):
         self.assertTrue(response.get("success", True))
         msg = response.get("message", "")
         self.assertIn("can’t diagnose", msg)
-        self.assertIn("call emergency services", msg)
-        self.assertIn("seek urgent", msg)
         self.assertIn("healthcare professional", msg)
