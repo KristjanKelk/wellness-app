@@ -31,6 +31,7 @@
           </div>
           <div class="header-actions">
             <button @click="toggleResponseMode" class="mode-toggle" :title="preferences.response_mode === 'concise' ? 'Response mode: concise (fast summaries)' : 'Response mode: detailed (in-depth answers)'"><i v-if="preferences.response_mode === 'concise'" class="fa-solid fa-bolt"></i><i v-else class="fa-solid fa-file-lines"></i></button>
+            <button @click="compareThisPrompt" class="compare-button" title="Compare concise vs detailed for this prompt"><i class="fa-solid fa-columns"></i></button>
             <button @click="clearConversation" class="clear-button" title="Delete conversation"><i class="fa-solid fa-trash-can"></i></button>
             <button @click="closeChat" class="close-button" aria-label="Close chat">
               <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
@@ -140,7 +141,8 @@ export default {
       },
       exampleCategories: [],
       visualizationSuggestions: [],
-      chartIdCounter: 0
+      chartIdCounter: 0,
+      compareNextSend: false
     };
   },
   computed: {
@@ -225,6 +227,16 @@ export default {
         console.error('Error updating preferences:', error);
       }
     },
+
+    compareThisPrompt() {
+      // Toggle one-shot compare for the next send
+      this.compareNextSend = true;
+      if (!this.inputMessage.trim()) {
+        // Provide a gentle template to nudge users
+        this.inputMessage = 'Ask the same question in both modes and verify the difference in details and verbosity: What are 3 breakfast ideas today?';
+      }
+      this.$nextTick(() => this.scrollToBottom());
+    },
     
     handleEnterKey(event) {
       if (!event.shiftKey) {
@@ -250,6 +262,7 @@ export default {
       };
       
       this.messages.push(userMessage);
+      const outgoingContent = this.inputMessage;
       this.inputMessage = '';
       this.isLoading = true;
       this.visualizationSuggestions = [];
@@ -257,9 +270,16 @@ export default {
       
       try {
         const response = await aiAssistantService.sendMessage(
-          userMessage.content,
-          this.conversationId
+          outgoingContent,
+          this.conversationId,
+          {
+            responseMode: this.preferences.response_mode,
+            compareModes: this.compareNextSend === true
+          }
         );
+        
+        // Reset compare flag after one use
+        this.compareNextSend = false;
         
         if (response.success) {
           this.conversationId = response.conversation_id;

@@ -26,6 +26,9 @@ class ConversationViewSet(viewsets.ModelViewSet):
         """Send a message to the AI assistant"""
         message = request.data.get('message', '').strip()
         conversation_id = request.data.get('conversation_id')
+        # Optional runtime behavior controls (do not persist)
+        response_mode = (request.data.get('response_mode') or '').strip().lower() or None
+        compare_modes = bool(request.data.get('compare_modes'))
         
         if not message:
             return Response(
@@ -38,7 +41,7 @@ class ConversationViewSet(viewsets.ModelViewSet):
             manager = ConversationManager(request.user, conversation_id)
             
             # Send message
-            result = manager.send_message(message)
+            result = manager.send_message(message, response_mode_override=response_mode, compare_modes=compare_modes)
             
             # Check for visualization suggestions
             viz_service = VisualizationService(request.user)
