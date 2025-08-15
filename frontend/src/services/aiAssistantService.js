@@ -10,11 +10,18 @@ export default {
     return response.data;
   },
 
-  async sendMessage(message, conversationId = null) {
-    const response = await api.post(`${AI_ASSISTANT_BASE_URL}/conversations/send_message/`, {
+  async sendMessage(message, conversationId = null, options = {}) {
+    const payload = {
       message,
       conversation_id: conversationId
-    });
+    };
+    if (options.responseMode && (options.responseMode === 'concise' || options.responseMode === 'detailed')) {
+      payload.response_mode = options.responseMode;
+    }
+    if (options.compareModes === true) {
+      payload.compare_modes = true;
+    }
+    const response = await api.post(`${AI_ASSISTANT_BASE_URL}/conversations/send_message/`, payload);
     return response.data;
   },
 

@@ -439,8 +439,16 @@ class ConversationManager:
             "chart", "charts", "visualization", "visualisation", "graph", "plot", "show me a chart",
             # App feature/usage
             "profile", "health profile", "nutrition profile", "update profile", "set goal", "change goal",
-            "meal plan for", "what's for", "whats for", "today's meals", "this week"
+            "meal plan for", "what's for", "whats for", "today's meals", "this week",
+            # Generic in-scope help/suggestions queries
+            "tip", "tips", "advice", "suggest", "suggests", "suggestion", "suggestions",
+            "recommend", "recommendation", "recommendations", "help", "help me", "assist", "assistance",
+            "what can you do", "what can u do", "what can you help", "what u can help", "capabilities",
+            "app related", "app-related"
         ]
+        # Allow the single keyword "app" only when paired with generic help words to avoid false positives
+        if "app" in lower and any(k in lower for k in ["help", "suggest", "advice", "recommend", "what can"]):
+            return True
         return any(topic in lower for topic in allowed_topics)
     
     def _is_followup_in_scope(self, text: str, context: Dict[str, Any]) -> bool:
@@ -485,9 +493,35 @@ class ConversationManager:
         return {"structured_errors": errors, "notices": notices}
 
     # --- NEW: Mock reply generator for offline/testing and deterministic replies ---
-    def _mock_generate_reply(self, user_message: str, prefetch_results: List[Dict[str, Any]]) -> str:
-        mode = getattr(self.service.preferences, "response_mode", "concise") or "concise"
+    def _mock_generate_reply(self, user_message: str, prefetch_results: List[Dict[str, Any]], mode: Optional[str] = None) -> str:
+        mode = (mode or getattr(self.service.preferences, "response_mode", "concise") or "concise").lower()
         parts: List[str] = []
+        lower_um = (user_message or "").lower()
+        # Handle generic capability/suggestion requests up front
+        if any(q in lower_um for q in [
+            "suggestion", "suggestions", "recommend", "recommendation", "help", "what can you do",
+            "what can u do", "what can you help", "what u can help", "capabilities", "app related", "app-related"
+        ]):
+            if mode == "concise":
+                return (
+                    "Here’s what I can help with (app-related):\n"
+                    "- Training/workouts: quick plans, session ideas, weekly split\n"
+                    "- Meal plans: today/tomorrow/week, by meal type\n"
+                    "- Nutrition: calories/macros today or this week\n"
+                    "- Progress: BMI, weight change, wellness score\n\n"
+                    "Try: 'What’s on my meal plan today?' or 'Give me 3 high‑protein breakfast ideas'"
+                )
+            else:
+                return (
+                    "I can assist with your health and nutrition in these ways:\n"
+                    "- Training/workouts: personalized splits, 30–45 min sessions, and progression tips based on your goal\n"
+                    "- Meal plans: daily or weekly menus aligned to your calorie/macros targets and preferences\n"
+                    "- Nutrition tracking: calories and macros for today, yesterday, or this week, plus gaps vs targets\n"
+                    "- Recipes: ingredients, instructions, and nutrition for planned meals or ideas on request\n"
+                    "- Progress insights: BMI, weight change over time, and wellness score trends with context\n"
+                    "- Visualizations: quick charts for weight trend, macros breakdown, or protein vs target\n\n"
+                    "Examples: 'Show my weight trend this month', 'What’s for lunch tomorrow?', 'How many calories have I had today?'"
+                )
         # Summarize health metrics if present
         for item in prefetch_results or []:
             fn = item.get("function")
@@ -523,14 +557,22 @@ class ConversationManager:
         if not parts:
             # Generic fallback
             if mode == "concise":
-                return "Got it."
-            return "I’ve recorded your message and will use your profile and recent context in my next response."
+                return (
+                    "I can help with workouts, meal plans, nutrition, and progress.\n"
+                    "Try: 'What’s my BMI?', 'What’s on my meal plan today?', or 'How many calories today?'"
+                )
+            return (
+                "I help with training/workouts, meal plans and recipes, nutrition analysis, and progress insights.\n"
+                "Ask for specific metrics or ideas and I’ll tailor them to your profile.\n"
+                "Examples: 'Am I meeting my protein target?', 'Suggest a 3‑day workout split', 'Show my macros breakdown for today'"
+            )
         if mode == "concise":
-            return ". ".join(parts)
-        # Detailed mode: add a brief connective sentence
+            # Keep it tight: 2–5 short bullets joined by periods
+            return ". ".join(parts[:5])
+        # Detailed mode: add connective summary and offer next action
         return ". ".join(parts) + ". If you’d like, I can break this down further or generate a chart."
  
-    def send_message(self, user_message: str) -> Dict[str, Any]:
+    def send_message(self, user_message: str, response_mode_override: Optional[str] = None, compare_modes: bool = False) -> Dict[str, Any]:
         """Send a message to the AI assistant and get response"""
         try:
             # Pre-validate input
@@ -538,6 +580,14 @@ class ConversationManager:
                 raise ValueError("Message cannot be empty")
             if len(user_message) > 8000:
                 return {"success": False, "message": "Your message is quite long. Please shorten it and try again."}
+            
+            # Detect explicit compare-modes intent from the message text
+            lower_msg = (user_message or "").lower()
+            if any(p in lower_msg for p in [
+                "both mode", "both modes", "compare mode", "compare modes", "concise and detailed",
+                "concise vs detailed", "concise versus detailed", "in both modes"
+            ]):
+                compare_modes = True
             
             # Get recent messages for context extraction
             recent_messages = Message.objects.filter(
@@ -623,7 +673,8 @@ class ConversationManager:
                 # Allow generic follow-ups if recent context is clearly in-scope (e.g., meal plan/training)
                 if not self._is_followup_in_scope(user_message, context_info):
                     scope_refusal = (
-                        "I can’t help with that. I only answer app‑related questions about training/workouts, meal plans, and nutrition."
+                        "I can’t help with that topic. I answer app‑related questions about training/workouts, meal plans, and nutrition.\n"
+                        "Try one of these: 'What’s on my meal plan today?', 'Suggest a 30‑minute workout', or 'How many calories have I had today?'"
                     )
                     assistant_msg = Message.objects.create(
                         conversation=self.conversation,
@@ -641,10 +692,10 @@ class ConversationManager:
                         "notices": []
                     }
             
-            # Get conversation context
+            # Get conversation context (system prompt + history)
             messages, context_tokens = self._get_conversation_context()
- 
-            # NEW: Deterministically pre-fetch targeted numeric data to avoid hallucinations
+            
+            # Deterministically pre-fetch targeted numeric/data to avoid hallucinations
             prefetch_results = self._pre_fetch_targeted_data(resolved_message, context_info)
             structured_feedback = self._collect_structured_feedback(prefetch_results)
             if prefetch_results:
@@ -655,7 +706,7 @@ class ConversationManager:
                     "If both weight and BMI are requested, include both in one concise answer with units."
                 )
                 messages.append({"role": "system", "content": strict_instruction})
-                 
+                
                 # Persist each function call result and add to chat context
                 for item in prefetch_results:
                     fn, args, res = item.get("function"), item.get("args"), item.get("result")
@@ -674,23 +725,103 @@ class ConversationManager:
                         "name": fn,
                         "content": json.dumps(res)
                     })
-             
+            
             # Add the resolved message for better understanding
             messages.append({"role": "user", "content": resolved_message})
-             
+            
+            # Compute mode for this turn (override does not persist)
+            mode_for_this_turn = (response_mode_override or getattr(self.service.preferences, "response_mode", "concise") or "concise").lower()
+            
+            # Style hints to amplify differences between modes
+            concise_hint = (
+                "Respond in concise mode: Limit to 2–5 short bullet points, 80–120 words max. "
+                "Focus only on key metrics, actions, and next steps. Avoid background or explanations."
+            )
+            detailed_hint = (
+                "Respond in detailed mode: Provide 5–9 bullet points or short paragraphs (180–350 words). "
+                "Include rationale, comparisons to goals/trends, and specific recommendations tailored to the user's profile."
+            )
+            
             # Get available functions
             functions = self.service.get_available_functions()
-             
-            # Call OpenAI or use mock
+            
+            # Compare both modes path
+            if compare_modes:
+                if self.mock_mode:
+                    concise_text = self._mock_generate_reply(resolved_message, prefetch_results, mode="concise")
+                    detailed_text = self._mock_generate_reply(resolved_message, prefetch_results, mode="detailed")
+                else:
+                    # Build base messages without style hint, then add per-mode hint and disable further function calls
+                    base_messages = list(messages)
+                    try:
+                        # Concise
+                        concise_messages = base_messages + [{"role": "system", "content": concise_hint}]
+                        concise_response = self.client.chat.completions.create(
+                            model=self.model,
+                            messages=concise_messages,
+                            temperature=0.2 if prefetch_results else self.temperature,
+                            top_p=self.top_p,
+                            max_tokens=min(1200, self.max_tokens - context_tokens),
+                            functions=[],
+                        )
+                        concise_text = concise_response.choices[0].message.content
+                    except Exception:
+                        concise_text = self._mock_generate_reply(resolved_message, prefetch_results, mode="concise")
+                    try:
+                        # Detailed
+                        detailed_messages = base_messages + [{"role": "system", "content": detailed_hint}]
+                        detailed_response = self.client.chat.completions.create(
+                            model=self.model,
+                            messages=detailed_messages,
+                            temperature=0.2 if prefetch_results else self.temperature,
+                            top_p=self.top_p,
+                            max_tokens=min(1600, self.max_tokens - context_tokens),
+                            functions=[],
+                        )
+                        detailed_text = detailed_response.choices[0].message.content
+                    except Exception:
+                        detailed_text = self._mock_generate_reply(resolved_message, prefetch_results, mode="detailed")
+                
+                final_content = (
+                    "Concise:\n" + concise_text.strip() + "\n\n" +
+                    "Detailed:\n" + detailed_text.strip()
+                )
+                
+                assistant_msg = Message.objects.create(
+                    conversation=self.conversation,
+                    role="assistant",
+                    content=final_content,
+                    token_count=self._count_tokens(final_content)
+                )
+                
+                # Check if we need to compress conversation
+                self._compress_conversation_if_needed()
+                
+                return {
+                    "success": True,
+                    "message": final_content,
+                    "conversation_id": str(self.conversation.id),
+                    "message_id": str(assistant_msg.id),
+                    "function_called": None,
+                    "structured_errors": structured_feedback.get("structured_errors", []),
+                    "notices": structured_feedback.get("notices", [])
+                }
+            
+            # Single-mode path
             final_content: str
             function_called_name: Optional[str] = None
             if self.mock_mode:
-                final_content = self._mock_generate_reply(resolved_message, prefetch_results)
+                final_content = self._mock_generate_reply(resolved_message, prefetch_results, mode=mode_for_this_turn)
             else:
                 try:
+                    # Add style hint for the active mode
+                    messages_with_style = list(messages) + [{
+                        "role": "system",
+                        "content": concise_hint if mode_for_this_turn == "concise" else detailed_hint
+                    }]
                     response = self.client.chat.completions.create(
                         model=self.model,
-                        messages=messages,
+                        messages=messages_with_style,
                         functions=functions,
                         function_call="auto",
                         temperature=0.2 if prefetch_results else self.temperature,
@@ -699,13 +830,13 @@ class ConversationManager:
                     )
                 except openai.AuthenticationError as e:
                     # Fallback to mock on auth errors
-                    final_content = self._mock_generate_reply(resolved_message, prefetch_results)
+                    final_content = self._mock_generate_reply(resolved_message, prefetch_results, mode=mode_for_this_turn)
                 except openai.RateLimitError as e:
-                    final_content = self._mock_generate_reply(resolved_message, prefetch_results)
+                    final_content = self._mock_generate_reply(resolved_message, prefetch_results, mode=mode_for_this_turn)
                 except openai.APIError as e:
-                    final_content = self._mock_generate_reply(resolved_message, prefetch_results)
+                    final_content = self._mock_generate_reply(resolved_message, prefetch_results, mode=mode_for_this_turn)
                 except Exception as e:
-                    final_content = self._mock_generate_reply(resolved_message, prefetch_results)
+                    final_content = self._mock_generate_reply(resolved_message, prefetch_results, mode=mode_for_this_turn)
                 else:
                     # Process response
                     assistant_message = response.choices[0].message
@@ -744,14 +875,17 @@ class ConversationManager:
                         try:
                             final_response = self.client.chat.completions.create(
                                 model=self.model,
-                                messages=messages,
+                                messages=list(messages) + [{
+                                    "role": "system",
+                                    "content": concise_hint if mode_for_this_turn == "concise" else detailed_hint
+                                }],
                                 temperature=0.2 if prefetch_results else self.temperature,
                                 top_p=self.top_p
                             )
                             final_content = final_response.choices[0].message.content
                             function_called_name = function_name
                         except Exception:
-                            final_content = self._mock_generate_reply(resolved_message, prefetch_results)
+                            final_content = self._mock_generate_reply(resolved_message, prefetch_results, mode=mode_for_this_turn)
                             function_called_name = function_name
                     else:
                         final_content = assistant_message.content

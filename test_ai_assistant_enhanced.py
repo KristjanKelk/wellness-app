@@ -246,3 +246,20 @@ def test_ai_assistant():
 
 if __name__ == "__main__":
     test_ai_assistant()
+    
+    # Quick sanity check for compare-modes feature (non-fatal)
+    try:
+        print("\n\nTesting compare-modes (concise vs detailed)...")
+        user = User.objects.get(username='test_ai_user')
+        manager = ConversationManager(user)
+        resp = manager.send_message(
+            "Ask the same question in both modes and verify the difference in details and verbosity: What are 3 high-protein breakfast ideas?",
+            compare_modes=True
+        )
+        content = resp.get('message', '')
+        has_concise = 'Concise:' in content
+        has_detailed = 'Detailed:' in content
+        print("Contains Concise section:", has_concise)
+        print("Contains Detailed section:", has_detailed)
+    except Exception as e:
+        print("Compare-modes check skipped due to error:", e)
